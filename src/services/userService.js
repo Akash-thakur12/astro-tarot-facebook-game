@@ -149,9 +149,9 @@ export const checkPremiumExpiry = async (user) => {
 };
 
 /**
- * Handles the logic for using the daily free question or deducting coins securely
+ * Handles the logic for using the daily free personal reading/compatibility check or deducting coins securely
  */
-export const executePanditAI = async (uid, isFree = false) => {
+export const executePanditAI = async (uid, isFree = false, type = 'personal') => {
   if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
 
@@ -166,13 +166,23 @@ export const executePanditAI = async (uid, isFree = false) => {
       if (userData.premium) return;
 
       if (isFree) {
-        if (userData.dailyQuestionUsed) {
-          throw new Error("Free question already used today");
+        if (type === 'personal') {
+          if (userData.dailyQuestionUsed) {
+            throw new Error("Free personal reading already used today");
+          }
+          transaction.update(userRef, {
+            dailyQuestionUsed: true,
+            lastQuestionDate: serverTimestamp()
+          });
+        } else if (type === 'compatibility') {
+          if (userData.dailyCompUsed) {
+            throw new Error("Free compatibility reading already used today");
+          }
+          transaction.update(userRef, {
+            dailyCompUsed: true,
+            lastCompDate: serverTimestamp()
+          });
         }
-        transaction.update(userRef, {
-          dailyQuestionUsed: true,
-          lastQuestionDate: serverTimestamp()
-        });
       } else {
         if ((userData.coins || 0) < 10) {
           throw new Error("Not enough coins");
@@ -192,21 +202,41 @@ export const executePanditAI = async (uid, isFree = false) => {
  * Resets the daily question status if a new day has started
  */
 export const resetDailyQuestionIfNewDay = async (user) => {
-  if (!user?.uid || !user.lastQuestionDate || typeof user.lastQuestionDate.toDate !== 'function') return;
+  if (!user?.uid) return;
   
-  const lastDate = user.lastQuestionDate.toDate();
+  let needsUpdate = false;
+  const updates = {};
   const now = new Date();
-  
-  const isNewDay = 
-    lastDate.getDate() !== now.getDate() || 
-    lastDate.getMonth() !== now.getMonth() || 
-    lastDate.getFullYear() !== now.getFullYear();
 
-  if (isNewDay && user.dailyQuestionUsed) {
+  if (user.lastQuestionDate && typeof user.lastQuestionDate.toDate === 'function') {
+    const lastDate = user.lastQuestionDate.toDate();
+    const isNewDay = 
+      lastDate.getDate() !== now.getDate() || 
+      lastDate.getMonth() !== now.getMonth() || 
+      lastDate.getFullYear() !== now.getFullYear();
+
+    if (isNewDay && user.dailyQuestionUsed) {
+      updates.dailyQuestionUsed = false;
+      needsUpdate = true;
+    }
+  }
+
+  if (user.lastCompDate && typeof user.lastCompDate.toDate === 'function') {
+    const lastDateComp = user.lastCompDate.toDate();
+    const isNewDayComp = 
+      lastDateComp.getDate() !== now.getDate() || 
+      lastDateComp.getMonth() !== now.getMonth() || 
+      lastDateComp.getFullYear() !== now.getFullYear();
+
+    if (isNewDayComp && user.dailyCompUsed) {
+      updates.dailyCompUsed = false;
+      needsUpdate = true;
+    }
+  }
+
+  if (needsUpdate) {
     const userRef = doc(db, COLLECTION, user.uid);
-    await updateDoc(userRef, {
-      dailyQuestionUsed: false
-    });
+    await updateDoc(userRef, updates);
   }
 };
 
