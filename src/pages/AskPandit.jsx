@@ -203,10 +203,12 @@ const AskPandit = () => {
   // ASTROLOGY FILTER
   const checkIsAstrology = (text) => {
     if (!text) return true;
-    const allowed = /astrology|horoscope|zodiac|marriage|love|career|future|remedy|kundli|kundali|din|rahega|shadi|shaadi|paisa|finance|health|lucky|spiritual|god|planet|star|prediction|vyah|bhalobasha|biye/i;
-    const denied = /coding|politics|news|science|math|general knowledge|modi|biden|trump|react|javascript|python|css|html|computer/i;
+    const allowed = /astrology|horoscope|zodiac|marriage|love|compatibility|kundli|kundali|din|rahega|shadi|shaadi|paisa|finance|health|lucky|spiritual|god|planet|star|prediction|vyah|bhalobasha|biye|future guidance|remedies/i;
+    const denied = /coding|programming|politics|news|science|math|general knowledge|technology support|modi|biden|trump|react|javascript|python|css|html|computer/i;
+    
     if (denied.test(text)) return false;
-    return allowed.test(text) || true;
+    // Returns boolean true if a match is found, false otherwise.
+    return allowed.test(text);
   };
 
   const validateDate = (day, month, year) => {
@@ -281,12 +283,9 @@ const AskPandit = () => {
     setResult(null);
 
     try {
-      if (!user?.premium) {
-        await executePanditAI(user.uid, isFree, mode);
-      }
-      
       console.log("Question:", mode === 'personal' ? personalForm.question : "Compatibility Check");
 
+      // 1. Call Gemini API FIRST
       const response = await fetch('/api/pandit-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -302,6 +301,11 @@ const AskPandit = () => {
 
       if (data.error) {
         throw new Error(data.error);
+      }
+
+      // 2. Process deduction ONLY after successful generation
+      if (!user?.premium) {
+        await executePanditAI(user.uid, isFree, mode);
       }
 
       setResult(data);

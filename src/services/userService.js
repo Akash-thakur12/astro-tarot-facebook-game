@@ -242,6 +242,17 @@ export const resetDailyQuestionIfNewDay = async (user) => {
 
 /**
  * Upgrades user to premium
+ * 
+ * TODO: SECURITY RISK - CURRENTLY DEVELOPMENT ONLY
+ * Premium must be granted only after verified payment on a secure backend.
+ * The frontend must never be treated as trusted to write premium status directly.
+ * 
+ * Required Future Architecture:
+ * 1. User clicks "Upgrade".
+ * 2. Frontend calls Vercel Serverless Function to create a Checkout Session (e.g. Stripe/Razorpay).
+ * 3. Payment Gateway processes payment.
+ * 4. Payment Gateway sends a secure Webhook back to Vercel.
+ * 5. Vercel backend securely verifies the signature and updates Firestore `premium: true`.
  */
 export const purchasePremium = async (uid) => {
   if (!uid) return;
