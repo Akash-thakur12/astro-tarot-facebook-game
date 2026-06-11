@@ -21,6 +21,8 @@ export const mockKundaliData = {
     love_hi: "रिश्तों में सामंजस्य बना रहेगा। अपने साथी के साथ संबंधों को मजबूत करने का यह अच्छा समय है।",
     health_en: "Energy levels will be high, but maintain a balanced diet and regular exercise routine.",
     health_hi: "ऊर्जा का स्तर ऊंचा रहेगा, लेकिन संतुलित आहार और नियमित व्यायाम दिनचर्या बनाए रखें।",
+    finance_en: "Financial stability is on the horizon. Unexpected gains from past investments might appear.",
+    finance_hi: "वित्तीय स्थिरता जल्द ही आने वाली है। पिछले निवेशों से अप्रत्याशित लाभ मिल सकता है।"
   },
   remedies: [
     {
@@ -35,5 +37,10 @@ export const mockKundaliData = {
       en: "Donate yellow items on Thursdays.",
       hi: "गुरुवार को पीली वस्तुओं का दान करें।"
     }
-  ]
+  ],
+  luckyColor: {
+    en: "Golden Yellow",
+    hi: "सुनहरा पीला"
+  },
+  luckyNumber: 7
 };

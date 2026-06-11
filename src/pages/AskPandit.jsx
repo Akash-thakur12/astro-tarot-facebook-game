@@ -160,9 +160,16 @@ const AskPandit = () => {
   return (
     <div className="flex flex-col w-full pb-20 animate-fade-in kundali-grid min-h-screen">
       <div className="px-6 pt-12 pb-8 text-center space-y-4">
-        <h1 className="text-4xl font-bold premium-gradient-text text-white">{ta.title}</h1>
-        <p className="text-white/60 text-sm max-w-[280px] mx-auto italic">
-          {ta.subtitle}
+        <div className="inline-block px-3 py-1 bg-gradient-to-r from-mystic-gold to-amber-600 text-mystic-indigo text-[10px] font-black rounded-full shadow-[0_0_15px_rgba(251,191,36,0.4)] mb-2 uppercase tracking-widest">
+           ⭐ {isHindi ? 'सबसे लोकप्रिय' : 'Most Popular'}
+        </div>
+        <h1 className="text-4xl md:text-5xl font-black premium-gradient-text text-white leading-tight">
+          {ta.title}
+        </h1>
+        <p className="text-white/80 text-sm max-w-[280px] mx-auto font-medium">
+          {isHindi 
+            ? 'करियर, प्रेम, विवाह, वित्त और भविष्य मार्गदर्शन के बारे में असीमित प्रश्न पूछें।' 
+            : 'Ask unlimited questions about career, love, marriage, finance and future guidance.'}
         </p>
       </div>
 

@@ -5,45 +5,29 @@ import { mockKundaliData } from "../data/mockKundaliData";
  */
 
 /**
- * Generates a full Kundali report via secure Vercel Serverless Function
+ * Generates a full Kundali report
+ * Note: Real API integration is marked as 'Coming Soon'.
+ * Returning mock AI-generated predictions directly.
  */
 export const generateKundali = async (userData) => {
-  try {
-    const response = await fetch('/api/kundali', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'API request failed');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Astrology Service Error (Prokerala):", error.message);
-    console.log("Falling back to mock data...");
-    
-    // Simulate slight delay even for fallback to keep UX consistent
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return mockKundaliData;
-  }
+  // Simulate slight delay for AI calculation feel
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  return {
+    ...mockKundaliData,
+    name: userData.fullName || mockKundaliData.name
+  };
 };
 
 /**
  * Fetches planetary positions for the chart
- * (Note: Now mostly handled by the unified generateKundali call)
  */
 export const getPlanetPositions = async (uid) => {
   return mockKundaliData.planets;
 };
 
 /**
- * Fetches future analysis (Career, Love, Health)
+ * Fetches future analysis (Career, Love, Health, Finance)
  */
 export const getFutureAnalysis = async (uid) => {
   return mockKundaliData.future;
