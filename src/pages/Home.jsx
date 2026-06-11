@@ -39,9 +39,9 @@ const Home = () => {
     pickCard: isHindi ? 'अपना कार्ड चुनें' : 'Pick Your Card',
     predictions: isHindi ? 'भविष्यवाणियां' : 'Predictions',
     kundaliTitle: isHindi ? '🕉️ वैदिक कुंडली' : '🕉️ Vedic Kundali',
-    kundaliAnalysis: isHindi ? 'कुंडली विश्लेषण' : 'Kundali Analysis',
-    detailedChart: isHindi ? 'विस्तृत जन्म कुंडली' : 'Detailed Birth Chart',
-    generateKundali: isHindi ? 'कुंडली बनाएं' : 'Generate Kundali',
+    kundaliAnalysis: isHindi ? 'एआई भाग्य विश्लेषण' : 'AI Destiny Analysis',
+    detailedChart: isHindi ? 'व्यक्तिगत एआई-संचालित भविष्य मार्गदर्शन' : 'Personalized AI-powered future guidance',
+    generateKundali: isHindi ? '✨ एआई रीडिंग बनाएं' : '✨ GENERATE AI READING',
     monetization: isHindi ? 'मुद्रीकरण' : 'Monetization',
     unlockDestiny: isHindi ? 'अपना संपूर्ण भाग्य अनलॉक करें' : 'Unlock Your Complete Destiny',
     oneTimeAccess: isHindi ? 'एक बार पहुंच' : 'ONE TIME ACCESS',
@@ -305,7 +305,6 @@ const Home = () => {
                        {[
                          isHindi ? 'असीमित पंडित प्रश्न' : 'Unlimited Ask Pandit', 
                          isHindi ? 'प्रीमियम टैरो' : 'Premium Tarot', 
-                         isHindi ? 'पूर्ण कुंडली रिपोर्ट' : 'Full Kundali Report', 
                          isHindi ? 'प्रेम अनुकूलता' : 'Love Compatibility'
                        ].map((f) => (
                          <li key={f} className="text-[11px] font-black flex items-center gap-2 uppercase tracking-tight">
