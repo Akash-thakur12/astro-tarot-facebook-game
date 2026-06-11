@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
@@ -17,12 +17,15 @@ const AskPandit = () => {
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [showLowCoinsModal, setShowLowCoinsModal] = useState(false);
+  const [pickerConfig, setPickerConfig] = useState(null);
 
   // Forms
-  const [personalForm, setPersonalForm] = useState({ name: '', dob: '', tob: '', pob: '', question: '' });
+  const [personalForm, setPersonalForm] = useState({ 
+    name: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '', question: '' 
+  });
   const [compForm, setCompForm] = useState({
-    p1: { name: '', dob: '', tob: '', pob: '' },
-    p2: { name: '', dob: '', tob: '', pob: '' }
+    p1: { name: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' },
+    p2: { name: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' }
   });
 
   useEffect(() => {
@@ -40,12 +43,19 @@ const AskPandit = () => {
     dob: isHindi ? 'जन्म तिथि' : 'Date of Birth',
     tob: isHindi ? 'जन्म समय' : 'Time of Birth',
     pob: isHindi ? 'जन्म स्थान' : 'Place of Birth',
+    day: isHindi ? 'दिन' : 'Day',
+    month: isHindi ? 'महीना' : 'Month',
+    year: isHindi ? 'वर्ष' : 'Year',
+    hour: isHindi ? 'घंटा' : 'Hour',
+    min: isHindi ? 'मिनट' : 'Min',
+    period: 'AM/PM',
     question: isHindi ? 'अपना प्रश्न पूछें (जैसे: 2026 कैसा रहेगा?)' : 'Ask your question (e.g. How will 2026 be?)',
     person1: isHindi ? 'पहला व्यक्ति' : 'Person 1',
     person2: isHindi ? 'दूसरा व्यक्ति' : 'Person 2',
     generateBtn: isHindi ? 'विश्लेषण करें' : 'Analyze Energies',
     loadingText: isHindi ? '🔮 पंडित जी ब्रह्मांडीय ऊर्जा का विश्लेषण कर रहे हैं...' : '🔮 Pandit AI is analyzing celestial energies...',
     notAstrology: isHindi ? '🙏 पंडित एआई केवल ज्योतिष और आध्यात्मिक मार्गदर्शन प्रदान करता है।' : '🙏 Pandit AI only provides astrology and spiritual guidance.',
+    invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
     tenCoins: isHindi ? '10 सिक्के' : '10 Coins',
@@ -57,17 +67,89 @@ const AskPandit = () => {
     back: isHindi ? 'नया प्रश्न पूछें' : 'Ask Another Question'
   };
 
+  // Selectors Data
+  const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const months = [
+    { name: isHindi ? 'जनवरी' : 'January', value: '01' },
+    { name: isHindi ? 'फ़रवरी' : 'February', value: '02' },
+    { name: isHindi ? 'मार्च' : 'March', value: '03' },
+    { name: isHindi ? 'अप्रैल' : 'April', value: '04' },
+    { name: isHindi ? 'मई' : 'May', value: '05' },
+    { name: isHindi ? 'जून' : 'June', value: '06' },
+    { name: isHindi ? 'जुलाई' : 'July', value: '07' },
+    { name: isHindi ? 'अगस्त' : 'August', value: '08' },
+    { name: isHindi ? 'सितंबर' : 'September', value: '09' },
+    { name: isHindi ? 'अक्टूबर' : 'October', value: '10' },
+    { name: isHindi ? 'नवंबर' : 'November', value: '11' },
+    { name: isHindi ? 'दिसंबर' : 'December', value: '12' },
+  ];
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 1940 + 1 }, (_, i) => (currentYear - i).toString());
+
+  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+  const periods = ['AM', 'PM'];
+
   // ASTROLOGY FILTER
   const checkIsAstrology = (text) => {
-    if (!text) return true; // Empty text in compatibility is fine
+    if (!text) return true;
     const allowed = /astrology|horoscope|zodiac|marriage|love|career|future|remedy|kundli|kundali|din|rahega|shadi|paisa|finance|health|lucky|spiritual|god|planet|star|prediction/i;
     const denied = /coding|politics|news|science|math|general knowledge|modi|biden|trump|react|javascript|python|css/i;
     if (denied.test(text)) return false;
-    return allowed.test(text) || true; // Broadly accept if no strict deny, since it's an MVP.
+    return allowed.test(text) || true;
   };
 
+  const validateDate = (day, month, year) => {
+    if (!day || !month || !year) return null; // Incomplete
+    const d = parseInt(day, 10);
+    const m = parseInt(month, 10) - 1;
+    const y = parseInt(year, 10);
+    const date = new Date(y, m, d);
+    
+    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
+      return false; // Invalid date
+    }
+    
+    const now = new Date();
+    if (date > now) {
+      return false; // Future
+    }
+    
+    let age = now.getFullYear() - date.getFullYear();
+    const mDiff = now.getMonth() - date.getMonth();
+    if (mDiff < 0 || (mDiff === 0 && now.getDate() < date.getDate())) {
+      age--;
+    }
+    
+    if (age < 13 || age > 120) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  const isPersonalDateValid = validateDate(personalForm.dobDay, personalForm.dobMonth, personalForm.dobYear);
+  const isP1DateValid = validateDate(compForm.p1.dobDay, compForm.p1.dobMonth, compForm.p1.dobYear);
+  const isP2DateValid = validateDate(compForm.p2.dobDay, compForm.p2.dobMonth, compForm.p2.dobYear);
+
+  const isPersonalValid = mode === 'personal' && personalForm.name && personalForm.question && isPersonalDateValid === true;
+  const isCompValid = mode === 'compatibility' && compForm.p1.name && compForm.p2.name && isP1DateValid === true && isP2DateValid === true;
+  const isValid = mode === 'personal' ? isPersonalValid : isCompValid;
+
+  const getPersonalError = () => {
+    if (isPersonalDateValid === false) return t.invalidDate;
+    return '';
+  };
+
+  const getCompError = () => {
+    if (isP1DateValid === false || isP2DateValid === false) return t.invalidDate;
+    return '';
+  };
+
+  const displayError = errorMsg || (mode === 'personal' ? getPersonalError() : getCompError());
+
   // MOCK GENERATORS
-  const generatePersonal = (q) => {
+  const generatePersonal = () => {
     return {
       type: 'personal',
       overall: isHindi ? "ग्रहों का गोचर आपके पक्ष में है। आने वाला समय सकारात्मक है।" : "Planetary transits are in your favor. The coming period is highly positive.",
@@ -100,27 +182,16 @@ const AskPandit = () => {
   };
 
   const handleGenerate = async () => {
-    if (loading || !user) return;
+    if (loading || !user || !isValid) return;
     setErrorMsg('');
 
-    // Validation & Filtering
     if (mode === 'personal') {
-      if (!personalForm.name || !personalForm.question) {
-        setErrorMsg('Please fill name and question.');
-        return;
-      }
       if (!checkIsAstrology(personalForm.question)) {
         setErrorMsg(t.notAstrology);
         return;
       }
-    } else {
-      if (!compForm.p1.name || !compForm.p2.name) {
-        setErrorMsg('Please fill both names.');
-        return;
-      }
     }
 
-    // Monetization Check
     const isFree = !user?.premium && (mode === 'personal' ? !user?.dailyQuestionUsed : !user?.dailyCompUsed);
     const hasEnoughCoins = (user?.coins || 0) >= 10;
 
@@ -132,14 +203,13 @@ const AskPandit = () => {
     setLoading(true);
     setResult(null);
 
-    // Simulate API Call
     setTimeout(async () => {
       try {
         if (!user?.premium) {
           await executePanditAI(user.uid, isFree, mode);
         }
         
-        const data = mode === 'personal' ? generatePersonal(personalForm.question) : generateComp();
+        const data = mode === 'personal' ? generatePersonal() : generateComp();
         setResult(data);
       } catch (error) {
         console.error("AI Error:", error);
@@ -150,11 +220,11 @@ const AskPandit = () => {
     }, 2000);
   };
 
-  const InputField = ({ label, type = 'text', value, onChange, placeholder }) => (
+  const InputField = ({ label, value, onChange, placeholder }) => (
     <div className="flex flex-col gap-1 w-full">
       <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{label}</label>
       <input 
-        type={type} 
+        type="text" 
         value={value} 
         onChange={onChange}
         placeholder={placeholder}
@@ -163,9 +233,126 @@ const AskPandit = () => {
     </div>
   );
 
+  const SelectorButton = ({ value, options, placeholder, title, onSelect }) => {
+    const selectedOption = options.find(opt => (typeof opt === 'object' ? opt.value : opt) === value);
+    const displayValue = selectedOption ? (typeof selectedOption === 'object' ? selectedOption.name : selectedOption) : placeholder;
+
+    return (
+      <button
+        type="button"
+        onClick={() => setPickerConfig({ options, title, value, onSelect })}
+        className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl px-3 py-3 text-white text-sm transition-all hover:border-mystic-gold/50"
+      >
+        <span className={`truncate mr-1 ${value ? 'text-white' : 'text-white/40'}`}>
+          {displayValue}
+        </span>
+        <span className="text-[10px] flex-shrink-0 text-mystic-gold">▼</span>
+      </button>
+    );
+  };
+
+  const PickerModal = () => {
+    if (!pickerConfig) return null;
+
+    return (
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0" onClick={() => setPickerConfig(null)} />
+        <div className="glass-card w-full max-w-sm rounded-[32px] border border-mystic-gold/30 flex flex-col max-h-[70vh] relative z-10 overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
+          <div className="p-6 text-center border-b border-white/5">
+            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-mystic-gold">{pickerConfig.title}</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {pickerConfig.options.map((opt, i) => {
+              const optValue = typeof opt === 'object' ? opt.value : opt;
+              const optName = typeof opt === 'object' ? opt.name : opt;
+              const isSelected = pickerConfig.value === optValue;
+              return (
+                <div
+                  key={i}
+                  onClick={() => {
+                    pickerConfig.onSelect(optValue);
+                    setPickerConfig(null);
+                  }}
+                  className={`px-8 py-5 text-center transition-all cursor-pointer ${
+                    isSelected ? 'bg-mystic-gold text-mystic-indigo font-black text-xl' : 'text-white/60 hover:text-white hover:bg-white/5 text-lg'
+                  }`}
+                >
+                  {optName}
+                </div>
+              );
+            })}
+          </div>
+          <div className="p-4 bg-white/5 text-center">
+             <button onClick={() => setPickerConfig(null)} className="py-2 text-[10px] font-black uppercase tracking-widest text-white/40">
+               {isHindi ? 'रद्द करें' : 'Cancel'}
+             </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDateSelectors = (formState, updateForm) => (
+    <div className="space-y-2">
+      <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
+      <div className="grid grid-cols-3 gap-2">
+        <SelectorButton 
+          value={formState.dobDay} 
+          options={days} 
+          placeholder={t.day} 
+          title="Select Day" 
+          onSelect={(val) => updateForm({ dobDay: val })} 
+        />
+        <SelectorButton 
+          value={formState.dobMonth} 
+          options={months} 
+          placeholder={t.month} 
+          title="Select Month" 
+          onSelect={(val) => updateForm({ dobMonth: val })} 
+        />
+        <SelectorButton 
+          value={formState.dobYear} 
+          options={years} 
+          placeholder={t.year} 
+          title="Select Year" 
+          onSelect={(val) => updateForm({ dobYear: val })} 
+        />
+      </div>
+    </div>
+  );
+
+  const renderTimeSelectors = (formState, updateForm) => (
+    <div className="space-y-2">
+      <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.tob}</label>
+      <div className="grid grid-cols-3 gap-2">
+        <SelectorButton 
+          value={formState.tobHour} 
+          options={hours} 
+          placeholder={t.hour} 
+          title="Select Hour" 
+          onSelect={(val) => updateForm({ tobHour: val })} 
+        />
+        <SelectorButton 
+          value={formState.tobMinute} 
+          options={minutes} 
+          placeholder={t.min} 
+          title="Select Minute" 
+          onSelect={(val) => updateForm({ tobMinute: val })} 
+        />
+        <SelectorButton 
+          value={formState.tobPeriod} 
+          options={periods} 
+          placeholder={t.period} 
+          title="Select AM/PM" 
+          onSelect={(val) => updateForm({ tobPeriod: val })} 
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col w-full pb-20 animate-fade-in kundali-grid min-h-screen bg-[#020617]">
-      
+      <PickerModal />
       {/* Header */}
       <div className="px-6 pt-12 pb-6 text-center space-y-3 relative z-10">
         <div className="inline-block px-3 py-1 bg-gradient-to-r from-mystic-gold to-amber-600 text-mystic-indigo text-[10px] font-black rounded-full shadow-[0_0_15px_rgba(251,191,36,0.4)] uppercase tracking-widest">
@@ -179,7 +366,7 @@ const AskPandit = () => {
           {/* Tabs */}
           <div className="flex glass-card p-1 rounded-2xl border-white/5 overflow-hidden">
             <button
-              onClick={() => setMode('personal')}
+              onClick={() => { setMode('personal'); setErrorMsg(''); }}
               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all rounded-xl ${
                 mode === 'personal' ? 'bg-mystic-gold text-mystic-indigo' : 'text-white/40'
               }`}
@@ -187,7 +374,7 @@ const AskPandit = () => {
               🔮 {t.personalTab}
             </button>
             <button
-              onClick={() => setMode('compatibility')}
+              onClick={() => { setMode('compatibility'); setErrorMsg(''); }}
               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all rounded-xl ${
                 mode === 'compatibility' ? 'bg-mystic-gold text-mystic-indigo' : 'text-white/40'
               }`}
@@ -200,12 +387,10 @@ const AskPandit = () => {
           <div className="glass-card p-6 rounded-[2rem] border-white/5 space-y-5">
             {mode === 'personal' ? (
               <div className="space-y-4 animate-fade-in">
-                <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="Rahul" />
-                <div className="grid grid-cols-2 gap-3">
-                  <InputField label={t.dob} type="date" value={personalForm.dob} onChange={e => setPersonalForm({...personalForm, dob: e.target.value})} />
-                  <InputField label={t.tob} type="time" value={personalForm.tob} onChange={e => setPersonalForm({...personalForm, tob: e.target.value})} />
-                </div>
-                <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="Delhi" />
+                <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="e.g. Rahul" />
+                {renderDateSelectors(personalForm, (updates) => setPersonalForm(prev => ({ ...prev, ...updates })))}
+                {renderTimeSelectors(personalForm, (updates) => setPersonalForm(prev => ({ ...prev, ...updates })))}
+                <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="e.g. New Delhi" />
                 <div className="flex flex-col gap-1 w-full pt-2">
                   <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">❓ Question</label>
                   <textarea 
@@ -220,28 +405,26 @@ const AskPandit = () => {
               <div className="space-y-6 animate-fade-in">
                 <div className="space-y-4 p-4 rounded-3xl bg-white/5 border border-white/5">
                   <h3 className="text-xs font-black text-mystic-gold uppercase tracking-widest">{t.person1}</h3>
-                  <InputField label={t.name} value={compForm.p1.name} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, name: e.target.value}})} placeholder="Romeo" />
-                  <div className="grid grid-cols-2 gap-3">
-                    <InputField label={t.dob} type="date" value={compForm.p1.dob} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, dob: e.target.value}})} />
-                    <InputField label={t.tob} type="time" value={compForm.p1.tob} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, tob: e.target.value}})} />
-                  </div>
+                  <InputField label={t.name} value={compForm.p1.name} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, name: e.target.value}})} placeholder="e.g. Rahul" />
+                  {renderDateSelectors(compForm.p1, (updates) => setCompForm(prev => ({ ...prev, p1: { ...prev.p1, ...updates } })))}
+                  {renderTimeSelectors(compForm.p1, (updates) => setCompForm(prev => ({ ...prev, p1: { ...prev.p1, ...updates } })))}
+                  <InputField label={t.pob} value={compForm.p1.pob} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, pob: e.target.value}})} placeholder="e.g. New Delhi" />
                 </div>
                 <div className="text-center text-2xl animate-pulse">💕</div>
                 <div className="space-y-4 p-4 rounded-3xl bg-white/5 border border-white/5">
                   <h3 className="text-xs font-black text-mystic-gold uppercase tracking-widest">{t.person2}</h3>
-                  <InputField label={t.name} value={compForm.p2.name} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, name: e.target.value}})} placeholder="Juliet" />
-                  <div className="grid grid-cols-2 gap-3">
-                    <InputField label={t.dob} type="date" value={compForm.p2.dob} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, dob: e.target.value}})} />
-                    <InputField label={t.tob} type="time" value={compForm.p2.tob} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, tob: e.target.value}})} />
-                  </div>
+                  <InputField label={t.name} value={compForm.p2.name} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, name: e.target.value}})} placeholder="e.g. Priya" />
+                  {renderDateSelectors(compForm.p2, (updates) => setCompForm(prev => ({ ...prev, p2: { ...prev.p2, ...updates } })))}
+                  {renderTimeSelectors(compForm.p2, (updates) => setCompForm(prev => ({ ...prev, p2: { ...prev.p2, ...updates } })))}
+                  <InputField label={t.pob} value={compForm.p2.pob} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, pob: e.target.value}})} placeholder="e.g. Mumbai" />
                 </div>
               </div>
             )}
           </div>
 
-          {errorMsg && (
+          {displayError && (
             <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-xs text-center font-bold">
-              {errorMsg}
+              {displayError}
             </div>
           )}
 
@@ -258,7 +441,7 @@ const AskPandit = () => {
                   )}
                </div>
             </div>
-            <Button fullWidth variant="gold" onClick={handleGenerate} className="h-16 text-lg tracking-widest">
+            <Button fullWidth variant="gold" onClick={handleGenerate} disabled={!isValid} className="h-16 text-lg tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
               {t.generateBtn}
             </Button>
           </div>
@@ -276,7 +459,6 @@ const AskPandit = () => {
 
       {result && !loading && (
         <div className="px-6 space-y-6 animate-fade-in pb-10">
-          
           {result.type === 'personal' ? (
             <div className="glass-card p-6 rounded-[2.5rem] border-mystic-gold/20 space-y-6">
               <div className="text-center space-y-2 mb-8">
@@ -323,7 +505,6 @@ const AskPandit = () => {
                 <h2 className="text-xl font-black text-white">{compForm.p1.name} & {compForm.p2.name}</h2>
               </div>
 
-              {/* Progress Bars */}
               <div className="space-y-4 bg-white/5 p-5 rounded-3xl">
                  <div className="space-y-1">
                    <div className="flex justify-between">
