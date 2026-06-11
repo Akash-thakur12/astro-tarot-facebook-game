@@ -22,14 +22,17 @@ export default async function handler(req, res) {
 
     const availableModels = data.models.map(m => m.name);
     
-    // Attempt a quick test with 'gemini-1.5-flash' again just in case it was a transient error, 
-    // but also look for 'gemini-pro' or 'gemini-1.5-pro'
+    // Attempt a quick test with newer models
     let testResult = "Not tested";
-    let selectedModel = "gemini-pro"; // Fallback safe bet usually
+    let selectedModel = "None"; 
 
     const genAI = new GoogleGenerativeAI(API_KEY);
     
-    const candidateModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-1.0-pro"];
+    const candidateModels = [
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gemini-2.0-flash"
+    ];
     
     for (const modelName of candidateModels) {
       if (availableModels.includes(`models/${modelName}`)) {
