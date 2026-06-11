@@ -8,15 +8,14 @@ import {
   collection,
   addDoc,
   query,
-  where,
   orderBy,
   limit,
-  getDocs
+  getDocs,
+  runTransaction
 } from "firebase/firestore";
 import { db } from "./firebase";
 
 const COLLECTION = "users";
-const HISTORY_COLLECTION = "tarotHistory";
 
 /**
  * Creates a new user document with default values
@@ -41,6 +40,7 @@ export const createUser = async (uid) => {
  * Retrieves user data from Firestore
  */
 export const getUser = async (uid) => {
+  if (!uid) return null;
   const userRef = doc(db, COLLECTION, uid);
   const userSnap = await getDoc(userRef);
 
@@ -54,6 +54,7 @@ export const getUser = async (uid) => {
  * Updates user coin balance
  */
 export const updateCoins = async (uid, amount) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
   await updateDoc(userRef, {
     coins: increment(amount)
@@ -64,6 +65,7 @@ export const updateCoins = async (uid, amount) => {
  * Updates premium status and expiry
  */
 export const updatePremium = async (uid, isPremium, expiry = null) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
   await updateDoc(userRef, {
     premium: isPremium,
@@ -75,6 +77,7 @@ export const updatePremium = async (uid, isPremium, expiry = null) => {
  * Increments ads watched count and rewards user with coins
  */
 export const watchRewardAds = async (uid, rewardAmount = 50) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
   await updateDoc(userRef, {
     adsWatchedToday: increment(1),
@@ -83,14 +86,45 @@ export const watchRewardAds = async (uid, rewardAmount = 50) => {
 };
 
 /**
- * Claims daily bonus
+ * Claims daily bonus using a secure Firestore transaction
  */
 export const claimDailyBonus = async (uid, rewardAmount = 25) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
-  await updateDoc(userRef, {
-    coins: increment(rewardAmount),
-    lastDailyClaim: serverTimestamp()
-  });
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists()) {
+        throw new Error("User does not exist");
+      }
+
+      const userData = userDoc.data();
+      const lastClaim = userData.lastDailyClaim;
+
+      if (lastClaim && typeof lastClaim.toDate === 'function') {
+        const lastClaimDate = lastClaim.toDate();
+        const now = new Date();
+
+        const isSameDay = 
+          lastClaimDate.getDate() === now.getDate() &&
+          lastClaimDate.getMonth() === now.getMonth() &&
+          lastClaimDate.getFullYear() === now.getFullYear();
+
+        if (isSameDay) {
+          throw new Error("Already claimed today");
+        }
+      }
+
+      transaction.update(userRef, {
+        coins: increment(rewardAmount),
+        lastDailyClaim: serverTimestamp()
+      });
+    });
+  } catch (error) {
+    console.error("Secure Claim Error:", error.message);
+    throw error;
+  }
 };
 
 /**
@@ -98,6 +132,7 @@ export const claimDailyBonus = async (uid, rewardAmount = 25) => {
  */
 export const checkPremiumExpiry = async (user) => {
   if (!user?.premium || !user?.subscriptionExpiry) return false;
+  if (typeof user.subscriptionExpiry.toDate !== 'function') return true;
 
   const expiryDate = user.subscriptionExpiry.toDate();
   const now = new Date();
@@ -114,32 +149,55 @@ export const checkPremiumExpiry = async (user) => {
 };
 
 /**
- * Handles the logic for using the daily free question or deducting coins
+ * Handles the logic for using the daily free question or deducting coins securely
  */
 export const executePanditAI = async (uid, isFree = false) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
-  const updates = {};
 
-  if (isFree) {
-    updates.dailyQuestionUsed = true;
-    updates.lastQuestionDate = serverTimestamp();
-  } else {
-    updates.coins = increment(-10);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists()) {
+        throw new Error("User does not exist");
+      }
+
+      const userData = userDoc.data();
+      if (userData.premium) return;
+
+      if (isFree) {
+        if (userData.dailyQuestionUsed) {
+          throw new Error("Free question already used today");
+        }
+        transaction.update(userRef, {
+          dailyQuestionUsed: true,
+          lastQuestionDate: serverTimestamp()
+        });
+      } else {
+        if ((userData.coins || 0) < 10) {
+          throw new Error("Not enough coins");
+        }
+        transaction.update(userRef, {
+          coins: increment(-10)
+        });
+      }
+    });
+  } catch (error) {
+    console.error("AI Secure Deduction Error:", error.message);
+    throw error;
   }
-
-  await updateDoc(userRef, updates);
 };
 
 /**
  * Resets the daily question status if a new day has started
  */
 export const resetDailyQuestionIfNewDay = async (user) => {
-  if (!user?.uid) return;
+  if (!user?.uid || !user.lastQuestionDate || typeof user.lastQuestionDate.toDate !== 'function') return;
   
-  const lastDate = user.lastQuestionDate?.toDate();
+  const lastDate = user.lastQuestionDate.toDate();
   const now = new Date();
   
-  const isNewDay = !lastDate || 
+  const isNewDay = 
     lastDate.getDate() !== now.getDate() || 
     lastDate.getMonth() !== now.getMonth() || 
     lastDate.getFullYear() !== now.getFullYear();
@@ -156,6 +214,7 @@ export const resetDailyQuestionIfNewDay = async (user) => {
  * Upgrades user to premium
  */
 export const purchasePremium = async (uid) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
   const thirtyDaysFromNow = new Date();
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
@@ -167,31 +226,43 @@ export const purchasePremium = async (uid) => {
 };
 
 /**
- * Records a tarot reading and sets the date
+ * Saves a detailed tarot reading to the user's history sub-collection
  */
-export const recordTarotReading = async (uid, cardName) => {
-  const userRef = doc(db, COLLECTION, uid);
-  await updateDoc(userRef, {
-    lastTarotReadingDate: serverTimestamp(),
-    dailyTarotUsed: true
-  });
+export const saveTarotReading = async (uid, readingData) => {
+  if (!uid) return;
+  try {
+    const historyRef = collection(db, COLLECTION, uid, "tarotHistory");
+    const docRef = await addDoc(historyRef, {
+      cardName: readingData.cardName,
+      date: new Date().toLocaleDateString(),
+      timestamp: serverTimestamp(),
+      lovePrediction: readingData.lovePrediction || "",
+      careerPrediction: readingData.careerPrediction || "",
+      healthPrediction: readingData.healthPrediction || "",
+    });
 
-  // Save to history
-  await addDoc(collection(db, HISTORY_COLLECTION), {
-    userId: uid,
-    cardName,
-    timestamp: serverTimestamp()
-  });
+    const userRef = doc(db, COLLECTION, uid);
+    await updateDoc(userRef, {
+      lastTarotReadingDate: serverTimestamp(),
+      dailyTarotUsed: true
+    });
+
+    console.log("Tarot reading saved successfully! ID:", docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error saving tarot reading:", error);
+    throw error;
+  }
 };
 
 /**
- * Retrieves the last 5 tarot readings for a user
+ * Retrieves the last 5 tarot readings for a user from their sub-collection
  */
 export const getTarotHistory = async (uid) => {
-  const historyRef = collection(db, HISTORY_COLLECTION);
+  if (!uid) return [];
+  const historyRef = collection(db, COLLECTION, uid, "tarotHistory");
   const q = query(
     historyRef, 
-    where("userId", "==", uid), 
     orderBy("timestamp", "desc"), 
     limit(5)
   );
@@ -204,23 +275,43 @@ export const getTarotHistory = async (uid) => {
  * Unlocks one extra reading via ad
  */
 export const unlockExtraTarotReading = async (uid) => {
+  if (!uid) return;
   const userRef = doc(db, COLLECTION, uid);
   await updateDoc(userRef, {
-    dailyTarotUsed: false, // Reset only for this session/day
+    dailyTarotUsed: false,
     adsWatchedToday: increment(1)
   });
+};
+
+/**
+ * Helper to check if user can take a free tarot reading today
+ */
+export const canReadTarotToday = (user) => {
+  if (!user) return false;
+  if (user.premium) return true;
+  if (!user.dailyTarotUsed) return true;
+  if (!user.lastTarotReadingDate || typeof user.lastTarotReadingDate.toDate !== 'function') return false;
+
+  const lastReadDate = user.lastTarotReadingDate.toDate();
+  const now = new Date();
+
+  return (
+    lastReadDate.getDate() !== now.getDate() ||
+    lastReadDate.getMonth() !== now.getMonth() ||
+    lastReadDate.getFullYear() !== now.getFullYear()
+  );
 };
 
 /**
  * Resets tarot daily status if new day
  */
 export const resetTarotDailyIfNewDay = async (user) => {
-  if (!user?.uid) return;
-  
-  const lastDate = user.lastTarotReadingDate?.toDate();
+  if (!user?.uid || !user.lastTarotReadingDate || typeof user.lastTarotReadingDate.toDate !== 'function') return;
+
+  const lastDate = user.lastTarotReadingDate.toDate();
   const now = new Date();
   
-  const isNewDay = !lastDate || 
+  const isNewDay = 
     lastDate.getDate() !== now.getDate() || 
     lastDate.getMonth() !== now.getMonth() || 
     lastDate.getFullYear() !== now.getFullYear();

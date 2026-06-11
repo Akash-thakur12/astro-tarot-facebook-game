@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/useAuth';
+import { useLanguage } from '../context/useLanguage';
 import { watchRewardAds } from '../services/userService';
 
 const RewardCenter = () => {
   const { user } = useAuth();
+  const { currentLanguage } = useLanguage();
   const [isWatching, setIsWatching] = useState(false);
   
   const adsWatched = user?.adsWatchedToday || 0;
@@ -13,7 +15,7 @@ const RewardCenter = () => {
   const handleWatchAd = async () => {
     if (!canWatch || isWatching) return;
     
-    setIsWatching(true);
+    setIsWatchingAd(true);
     
     // Simulate Ad watching duration
     setTimeout(async () => {
@@ -22,10 +24,24 @@ const RewardCenter = () => {
       } catch (error) {
         console.error("Ad Reward Error:", error);
       } finally {
-        setIsWatching(false);
+        setIsWatchingAd(false);
       }
     }, 2000);
   };
+
+  const isHindi = currentLanguage === 'Hindi';
+
+  // Translations
+  const tr = {
+    title: isHindi ? 'निःशुल्क सिक्के कमाएं' : 'Earn Free Coins',
+    subtitle: isHindi ? 'आध्यात्मिक ऊर्जा' : 'Spirit Boost',
+    energy: isHindi ? 'ऊर्जा:' : 'ENERGY:',
+    watchButton: isHindi ? 'देखें और 50 सिक्के कमाएं' : 'WATCH & EARN 50 🪙',
+    transmitting: isHindi ? 'प्रसारण हो रहा है...' : 'TRANSMITTING...',
+    limit: isHindi ? 'आज की सीमा समाप्त' : 'LIMIT REACHED TODAY',
+  };
+
+  const setIsWatchingAd = (val) => setIsWatching(val);
 
   return (
     <div className="w-full glass-card p-5 rounded-[2rem] border-white/5 space-y-4 relative overflow-hidden group">
@@ -33,13 +49,17 @@ const RewardCenter = () => {
 
       <div className="flex justify-between items-start relative z-10">
         <div className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400 font-black mb-1">Spirit Boost</span>
-          <h3 className="text-xl font-black tracking-tight text-white/90">Earn Free Coins</h3>
+          <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400 font-black mb-1">
+            {tr.subtitle}
+          </span>
+          <h3 className="text-xl font-black tracking-tight text-white/90">
+            {tr.title}
+          </h3>
         </div>
         <div className="flex flex-col items-end">
            <div className="px-2 py-0.5 glass rounded-md border border-white/10 bg-white/5">
              <span className={`text-[10px] font-black tracking-tighter ${canWatch ? 'text-blue-400' : 'text-red-400/80'}`}>
-               ENERGY: {adsWatched} / {maxAds}
+               {tr.energy} {adsWatched} / {maxAds}
              </span>
            </div>
         </div>
@@ -57,18 +77,18 @@ const RewardCenter = () => {
         {isWatching ? (
           <div className="flex items-center gap-3">
             <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            <span className="tracking-widest text-sm">TRANSMITTING...</span>
+            <span className="tracking-widest text-sm">{tr.transmitting}</span>
           </div>
         ) : canWatch ? (
           <>
             <span className="text-2xl transition-transform group-hover:scale-110 group-hover:rotate-12">📺</span>
-            <span className="tracking-tight uppercase">WATCH & EARN 50 🪙</span>
+            <span className="tracking-tight uppercase">{tr.watchButton}</span>
             <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
           </>
         ) : (
           <>
             <span className="text-xl opacity-40">🚫</span>
-            <span className="uppercase font-bold tracking-widest text-xs">LIMIT REACHED TODAY</span>
+            <span className="uppercase font-bold tracking-widest text-xs">{tr.limit}</span>
           </>
         )}
       </button>

@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Layout from './components/layout/Layout';
 import Home from './pages/Home';
 import Tarot from './pages/Tarot';
@@ -9,20 +10,23 @@ import AskPandit from './pages/AskPandit';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/tarot" element={<Tarot />} />
-            <Route path="/kundali" element={<Kundali />} />
-            <Route path="/premium" element={<Premium />} />
-            <Route path="/ask-pandit" element={<AskPandit />} />
-          </Routes>
-        </Layout>
-      </Router>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <Router>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/tarot" element={<Tarot />} />
+              <Route path="/kundali" element={<Kundali />} />
+              <Route path="/premium" element={<Premium />} />
+              <Route path="/ask-pandit" element={<AskPandit />} />
+            </Routes>
+          </Layout>
+        </Router>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
+
 
 export default App;

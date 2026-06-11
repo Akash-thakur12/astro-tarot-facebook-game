@@ -1,11 +1,15 @@
 import { useAuth } from '../context/useAuth';
+import { useLanguage } from '../context/useLanguage';
 import { useNavigate } from 'react-router-dom';
 
 const CoinBar = () => {
   const { user } = useAuth();
+  const { currentLanguage } = useLanguage();
   const navigate = useNavigate();
 
   if (!user) return null;
+
+  const isHindi = currentLanguage === 'Hindi';
 
   return (
     <div className="sticky top-0 z-[100] w-full max-w-md mx-auto px-4 py-3 flex justify-between items-center bg-[#020617]/40 backdrop-blur-xl border-b border-white/5">
@@ -13,14 +17,18 @@ const CoinBar = () => {
         <div className="relative group cursor-pointer">
           <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
           <div className="relative w-9 h-9 rounded-full bg-mystic-indigo flex items-center justify-center text-lg border border-white/10">
-            👤
+            <span className="text-white">👤</span>
           </div>
         </div>
         <div className="flex flex-col">
-          <span className="text-[11px] font-black text-white/90 leading-none">Seeker</span>
+          <span className="text-[11px] font-black text-white/90 leading-none">
+            {isHindi ? 'साधक' : 'Seeker'}
+          </span>
           <div className="flex items-center gap-1 mt-0.5">
             <span className="text-orange-500 text-[10px]">🔥</span>
-            <span className="text-[10px] font-bold text-orange-400/90 tracking-tight">{user.streak} DAY STREAK</span>
+            <span className="text-[10px] font-bold text-orange-400/90 tracking-tight">
+              {user.streak} {isHindi ? 'दिवसीय सिलसिला' : 'DAY STREAK'}
+            </span>
           </div>
         </div>
       </div>
