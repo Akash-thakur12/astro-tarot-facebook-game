@@ -2,7 +2,7 @@ import axios from 'axios';
 
 /**
  * Vercel Serverless Function: api/kundali.js
- * Securely handles Prokerala API requests without exposing secrets to the frontend.
+ * Securely handles Prokerala API requests using Nominatim for geocoding.
  */
 
 export default async function handler(req, res) {
@@ -29,7 +29,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Get OAuth2 Access Token
+    // 1. Resolve Location (Geocoding via OpenStreetMap Nominatim)
+    // Adding User-Agent as required by Nominatim usage policy
+    const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(pob)}&format=json&limit=1`;
+    const locationResponse = await axios.get(nominatimUrl, {
+      headers: { 'User-Agent': 'AstroTarotGame/1.0' }
+    });
+
+    if (!locationResponse.data || locationResponse.data.length === 0) {
+      return res.status(400).json({ error: `Location not found: ${pob}. Please enter a valid city name.` });
+    }
+
+    const { lat, lon } = locationResponse.data[0];
+    const coordinates = `${lat},${lon}`;
+    const datetime = `${dobYear}-${dobMonth}-${dobDay}T${formatTime(birthHour, birthMinute, birthPeriod)}:00Z`;
+
+    // 2. Get OAuth2 Access Token for Prokerala
     const tokenResponse = await axios.post('https://api.prokerala.com/token', {
       grant_type: 'client_credentials',
       client_id: CLIENT_ID,
@@ -38,35 +53,20 @@ export default async function handler(req, res) {
 
     const accessToken = tokenResponse.data.access_token;
 
-    // 2. Resolve Location (Geocoding)
-    // Note: In a production app, you might want to use Prokerala's location API or Google Maps.
-    // For now, we'll use a placeholder or assume the first result from Prokerala Location API.
-    const locationResponse = await axios.get(`https://api.prokerala.com/v2/location?name=${encodeURIComponent(pob)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    if (!locationResponse.data.data || locationResponse.data.data.length === 0) {
-      throw new Error('Location not found');
-    }
-
-    const location = locationResponse.data.data[0];
-    const coordinates = `${location.latitude},${location.longitude}`;
-    const datetime = `${dobYear}-${dobMonth}-${dobDay}T${formatTime(birthHour, birthMinute, birthPeriod)}:00Z`;
-
-    // 3. Fetch Astrology Data (Planet Positions)
-    const astrologyResponse = await axios.get(`https://api.prokerala.com/v2/astrology/kundli?datetime=${datetime}&coordinates=${coordinates}`, {
+    // 3. Fetch Astrology Data (Kundli)
+    // Parameters: ayanamsa=1 (Lahiri), coordinates, datetime
+    const astrologyUrl = `https://api.prokerala.com/v2/astrology/kundli?datetime=${datetime}&coordinates=${coordinates}&ayanamsa=1`;
+    const astrologyResponse = await axios.get(astrologyUrl, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
 
     // 4. Map to existing frontend structure
-    // This mapping depends on the exact Prokerala V2 response structure.
-    // We adjust it to match our 'mockKundaliData' structure for the UI.
     const result = mapProkeralaToApp(astrologyResponse.data.data, fullName);
 
     return res.status(200).json(result);
 
   } catch (error) {
-    console.error('Prokerala API Error:', error.response?.data || error.message);
+    console.error('Prokerala/Nominatim API Error:', error.response?.data || error.message);
     return res.status(500).json({ 
       error: 'Unable to connect to astrology service.',
       details: error.response?.data || error.message 
@@ -89,8 +89,6 @@ function formatTime(hour, min, period) {
  */
 function mapProkeralaToApp(pkData, name) {
   // Extracting basic info from PK response
-  // PK response usually has planets under 'yoga' or 'planets' depending on endpoint
-  // This is a generalized mapping
   const planets = pkData.planets?.map(p => ({
     name: p.name,
     house: p.house
