@@ -42,7 +42,10 @@ export default async function handler(req, res) {
 
     const { lat, lon } = locationResponse.data[0];
     const coordinates = `${lat},${lon}`;
-    const datetime = `${dobYear}-${dobMonth}-${dobDay}T${formatTime(birthHour, birthMinute, birthPeriod)}:00Z`;
+    
+    // Defensive check for time parameters
+    const timeStr = formatTime(birthHour, birthMinute, birthPeriod);
+    const datetime = `${dobYear}-${dobMonth}-${dobDay}T${timeStr}:00Z`;
 
     // 2. Get OAuth2 Access Token for Prokerala
     const tokenResponse = await axios.post('https://api.prokerala.com/token', {
@@ -59,6 +62,12 @@ export default async function handler(req, res) {
     const astrologyResponse = await axios.get(astrologyUrl, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
+
+    // LOG PROKERALA RESPONSE
+    console.log(
+      'PROKERALA RESPONSE:',
+      JSON.stringify(astrologyResponse.data, null, 2)
+    );
 
     // 4. Map to existing frontend structure
     const result = mapProkeralaToApp(astrologyResponse.data.data, fullName);
@@ -78,24 +87,37 @@ export default async function handler(req, res) {
  * Helper: Format time to 24h ISO format
  */
 function formatTime(hour, min, period) {
-  let h = parseInt(hour);
+  // Defensive checks
+  const hVal = hour !== undefined && hour !== null ? hour : '0';
+  const mVal = min !== undefined && min !== null ? min : '0';
+
+  let h = parseInt(hVal);
+  if (isNaN(h)) h = 0;
+  
   if (period === 'PM' && h < 12) h += 12;
   if (period === 'AM' && h === 12) h = 0;
-  return `${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+  
+  const hStr = h.toString().padStart(2, '0');
+  const mStr = mVal.toString().padStart(2, '0');
+  
+  return `${hStr}:${mStr}`;
 }
 
 /**
  * Helper: Map Prokerala API structure to AstroTarot internal structure
  */
 function mapProkeralaToApp(pkData, name) {
+  if (!pkData) return null;
+
   // Extracting basic info from PK response
+  // Based on common Prokerala V2 structure: data.planets is usually an array
   const planets = pkData.planets?.map(p => ({
-    name: p.name,
-    house: p.house
+    name: p.name || 'Unknown',
+    house: p.house !== undefined ? p.house : 0
   })) || [];
 
   return {
-    name: name,
+    name: name || 'Seeker',
     lagna: pkData.lagna?.name || "Unknown",
     moonSign: pkData.moon_sign?.name || "Unknown",
     sunSign: pkData.sun_sign?.name || "Unknown",
