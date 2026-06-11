@@ -263,137 +263,6 @@ const AskPandit = () => {
 
   const displayError = errorMsg || (mode === 'personal' ? getPersonalError() : getCompError());
 
-  // MOCK GENERATORS
-  const generatePersonal = (tone) => {
-    const responses = {
-      english: {
-        overall: "Planetary transits are in your favor. The coming period is highly positive.",
-        career: "You may receive new responsibilities. Hard work will pay off.",
-        love: "Sweetness in relationships will increase. Mutual understanding grows.",
-        marriage: "Strong marriage prospects are forming. Jupiter's grace is present.",
-        finance: "Financial status remains stable. Gains from investments are possible.",
-        health: "Health remains good, but meditation is recommended.",
-        luckyColor: "Golden Yellow",
-        remedies: "Offer water to the Sun and donate yellow items on Thursday.",
-        positive: "Self-confidence and decision-making ability.",
-        watch: "Hasty decisions."
-      },
-      hindi_script: {
-        overall: "ग्रहों का गोचर आपके पक्ष में है। आने वाला समय सकारात्मक है।",
-        career: "नई जिम्मेदारियां मिल सकती हैं। मेहनत रंग लाएगी।",
-        love: "रिश्तों में मधुरता आएगी। आपसी समझ बढ़ेगी।",
-        marriage: "विवाह के प्रबल योग बन रहे हैं। गुरु की कृपा है।",
-        finance: "आर्थिक स्थिति स्थिर रहेगी। निवेश से लाभ संभव है।",
-        health: "स्वास्थ्य अच्छा रहेगा, लेकिन ध्यान आवश्यक है।",
-        luckyColor: "सुनहरा पीला",
-        remedies: "सूर्य को जल चढ़ाएं और गुरुवार को पीला दान करें।",
-        positive: "आत्मविश्वास और निर्णय लेने की क्षमता।",
-        watch: "जल्दबाजी में लिए गए फैसले।"
-      },
-      hinglish: {
-        overall: "Planetary transits aapke favor mein hain. Aane wala time bahut positive rahega.",
-        career: "Career mein nayi responsibilities mil sakti hain. Hard work pay off karega.",
-        love: "Relationships mein sweetness aayegi. Mutual understanding badhegi.",
-        marriage: "Shaadi ke strong chances ban rahe hain. Jupiter ki kripa hai.",
-        finance: "Financial status stable rahega. Investments se gains possible hain.",
-        health: "Health theek rahegi, but meditation zaroori hai.",
-        luckyColor: "Golden Yellow (Sunehra Peela)",
-        remedies: "Surya ko jal chadhayein aur Thursday ko yellow items donate karein.",
-        positive: "Self-confidence aur right decisions.",
-        watch: "Jaldbaazi mein decisions na lein."
-      },
-      punjabi: {
-        overall: "Grah tuhade favor vich han. Aan wala time bahut vadiya hai.",
-        career: "Career vich tarakki mil sakdi hai. Mehnat da fal milega.",
-        love: "Pyar vich mithas vadhegi.",
-        marriage: "Vyah de change yog ban rahe han.",
-        finance: "Paise pakhon halat theek rahenge.",
-        health: "Sehat theek rahegi, par dhyan rakho.",
-        luckyColor: "Pila (Yellow)",
-        remedies: "Suraj nu jal chadao.",
-        positive: "Confidence vadiya rahega.",
-        watch: "Jaldi vich faisle na lo."
-      },
-      bengali: {
-        overall: "Groho apnar pokkhe ache. Ashonno shomoy khub bhalo.",
-        career: "Career e notun dayitto pete paren.",
-        love: "Bhalobashay modhurota barbe.",
-        marriage: "Biyer bhalo jog ache.",
-        finance: "Arthik obostha sthitishil thakbe.",
-        health: "Shastho bhalo thakbe.",
-        luckyColor: "Holud (Yellow)",
-        remedies: "Shurjo ke jol din.",
-        positive: "Atto-bisshash.",
-        watch: "Tarahuro kore sidhhanto neben na."
-      }
-    };
-
-    const data = responses[tone] || responses.english;
-    return {
-      type: 'personal',
-      luckyNumber: 7,
-      ...data
-    };
-  };
-
-  const generateComp = (tone) => {
-    const responses = {
-      english: {
-        comm: "Good exchange of ideas, Mercury's position is favorable.",
-        emo: "Moon combination is excellent. Deep emotional understanding.",
-        marriage: "Excellent alignment for a long-term marriage.",
-        strengths: "Mutual respect and loyalty.",
-        challenges: "Avoid ego clashes.",
-        outlook: "A happy and prosperous shared future.",
-        guidance: "Accept each other's flaws. Worship Shiva-Parvati."
-      },
-      hindi_script: {
-        comm: "विचारों का अच्छा आदान-प्रदान, बुध की स्थिति अनुकूल।",
-        emo: "चंद्रमा का मिलन शानदार है। गहरी समझ।",
-        marriage: "दीर्घकालिक विवाह के लिए उत्कृष्ट योग।",
-        strengths: "पारस्परिक सम्मान और वफादारी।",
-        challenges: "अहंकार के टकराव से बचें।",
-        outlook: "एक सुखद और समृद्ध साझा भविष्य।",
-        guidance: "एक-दूसरे की कमियों को स्वीकार करें। शिव-पार्वती की पूजा करें।"
-      },
-      hinglish: {
-        comm: "Ideas ka accha exchange hai, Mercury ki position favorable hai.",
-        emo: "Moon combination excellent hai. Deep understanding rahegi.",
-        marriage: "Long-term marriage ke liye excellent alignment hai.",
-        strengths: "Mutual respect aur loyalty.",
-        challenges: "Ego clashes se bachein.",
-        outlook: "Ek happy aur prosperous shared future.",
-        guidance: "Ek-doosre ke flaws accept karein. Shiva-Parvati ki pooja karein."
-      },
-      punjabi: {
-        comm: "Vicharan da vadiya mel, Budh di sthiti theek hai.",
-        emo: "Emotional understanding bahut vadiya hai.",
-        marriage: "Pakke vyah layi vadiya yog han.",
-        strengths: "Izzat te wafadari.",
-        challenges: "Ahankar ton bacho.",
-        outlook: "Khush-haal bhavikh.",
-        guidance: "Ikk duje nu samjho."
-      },
-      bengali: {
-        comm: "Bhabnar bhalo adan prodan.",
-        emo: "Moner mil khub bhalo.",
-        marriage: "Biyer jonno khub bhalo jog.",
-        strengths: "Poroshporer proti shomman.",
-        challenges: "Ojhotha jhogra eriye cholun.",
-        outlook: "Shukhi bhabishyat.",
-        guidance: "Eke oporke bujhte chesta korun."
-      }
-    };
-
-    const data = responses[tone] || responses.english;
-    return {
-      type: 'compatibility',
-      score: 82,
-      guna: 28,
-      ...data
-    };
-  };
-
   const handleGenerate = async () => {
     if (loading || !user || !isValid) return;
     setErrorMsg('');
@@ -416,21 +285,37 @@ const AskPandit = () => {
     setLoading(true);
     setResult(null);
 
-    setTimeout(async () => {
-      try {
-        if (!user?.premium) {
-          await executePanditAI(user.uid, isFree, mode);
-        }
-        
-        const data = mode === 'personal' ? generatePersonal(currentTone) : generateComp(currentTone);
-        setResult(data);
-      } catch (error) {
-        console.error("AI Error:", error);
-        setErrorMsg("Error generating reading.");
-      } finally {
-        setLoading(false);
+    try {
+      if (!user?.premium) {
+        await executePanditAI(user.uid, isFree, mode);
       }
-    }, 2000);
+      
+      console.log("Question:", mode === 'personal' ? personalForm.question : "Compatibility Check");
+
+      const response = await fetch('/api/pandit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, currentTone, personalForm, compForm })
+      });
+
+      if (!response.ok) {
+        throw new Error('API Request Failed');
+      }
+
+      const data = await response.json();
+      console.log("AI Response:", data);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setResult(data);
+    } catch (error) {
+      console.error("AI Error:", error);
+      setErrorMsg("Pandit AI could not generate a reading right now. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderDateSelectors = (formState, updateForm) => (
@@ -615,36 +500,33 @@ const AskPandit = () => {
               </div>
               
               <div className="space-y-5">
-                {[
-                  { icon: '🔮', title: 'Overall Reading', text: result.overall },
-                  { icon: '💼', title: 'Career', text: result.career },
-                  { icon: '❤️', title: 'Love', text: result.love },
-                  { icon: '💍', title: 'Marriage', text: result.marriage },
-                  { icon: '💰', title: 'Finance', text: result.finance },
-                  { icon: '🏥', title: 'Health Guidance', text: result.health },
-                ].map((s, i) => (
+                {result.sections && result.sections.map((s, i) => (
                   <div key={i} className="space-y-1 bg-white/5 p-4 rounded-2xl">
                     <h4 className="text-mystic-gold text-xs font-black uppercase tracking-widest flex items-center gap-2"><span>{s.icon}</span> {s.title}</h4>
-                    <p className="text-white/80 text-sm italic">{s.text}</p>
+                    <p className="text-white/80 text-sm italic whitespace-pre-wrap leading-relaxed">{s.content}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/5 p-4 rounded-2xl text-center">
-                   <h4 className="text-[10px] text-white/40 uppercase font-black">🎨 Lucky Color</h4>
-                   <p className="text-mystic-gold font-bold">{result.luckyColor}</p>
+              {result.luckyColor && result.luckyNumber && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white/5 p-4 rounded-2xl text-center">
+                     <h4 className="text-[10px] text-white/40 uppercase font-black">🎨 {isHindi ? 'शुभ रंग' : 'Lucky Color'}</h4>
+                     <p className="text-mystic-gold font-bold">{result.luckyColor}</p>
+                  </div>
+                  <div className="bg-white/5 p-4 rounded-2xl text-center">
+                     <h4 className="text-[10px] text-white/40 uppercase font-black">🔢 {isHindi ? 'शुभ अंक' : 'Lucky Number'}</h4>
+                     <p className="text-mystic-gold font-bold text-xl">{result.luckyNumber}</p>
+                  </div>
                 </div>
-                <div className="bg-white/5 p-4 rounded-2xl text-center">
-                   <h4 className="text-[10px] text-white/40 uppercase font-black">🔢 Lucky Number</h4>
-                   <p className="text-mystic-gold font-bold text-xl">{result.luckyNumber}</p>
-                </div>
-              </div>
+              )}
 
-              <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
-                <h4 className="text-mystic-gold text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2"><span>🙏</span> Remedies</h4>
-                <p className="text-white/90 text-sm font-bold">{result.remedies}</p>
-              </div>
+              {result.remedies && (
+                <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
+                  <h4 className="text-mystic-gold text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2"><span>🙏</span> {isHindi ? 'उपाय' : 'Remedies'}</h4>
+                  <p className="text-white/90 text-sm font-bold">{result.remedies}</p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="glass-card p-6 rounded-[2.5rem] border-pink-500/20 space-y-6">
@@ -656,7 +538,7 @@ const AskPandit = () => {
               <div className="space-y-4 bg-white/5 p-5 rounded-3xl">
                  <div className="space-y-1">
                    <div className="flex justify-between">
-                     <span className="text-xs font-black text-white/60">Compatibility Score</span>
+                     <span className="text-xs font-black text-white/60">{isHindi ? 'अनुकूलता स्कोर' : 'Compatibility Score'}</span>
                      <span className="text-xs font-black text-pink-400">{result.score}%</span>
                    </div>
                    <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
@@ -665,7 +547,7 @@ const AskPandit = () => {
                  </div>
                  <div className="space-y-1">
                    <div className="flex justify-between">
-                     <span className="text-xs font-black text-white/60">Guna Milan (Max 36)</span>
+                     <span className="text-xs font-black text-white/60">{isHindi ? 'गुण मिलान (अधिकतम 36)' : 'Guna Milan (Max 36)'}</span>
                      <span className="text-xs font-black text-mystic-gold">{result.guna}/36</span>
                    </div>
                    <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
@@ -675,25 +557,20 @@ const AskPandit = () => {
               </div>
 
               <div className="space-y-5">
-                {[
-                  { icon: '🧠', title: 'Communication', text: result.comm },
-                  { icon: '❤️', title: 'Emotional', text: result.emo },
-                  { icon: '💍', title: 'Marriage Potential', text: result.marriage },
-                  { icon: '⚖️', title: 'Strengths', text: result.strengths },
-                  { icon: '⚠️', title: 'Challenges', text: result.challenges },
-                  { icon: '🔮', title: 'Long-Term Outlook', text: result.outlook },
-                ].map((s, i) => (
+                {result.sections && result.sections.map((s, i) => (
                   <div key={i} className="space-y-1 bg-white/5 p-4 rounded-2xl">
                     <h4 className="text-pink-400 text-xs font-black uppercase tracking-widest flex items-center gap-2"><span>{s.icon}</span> {s.title}</h4>
-                    <p className="text-white/80 text-sm italic">{s.text}</p>
+                    <p className="text-white/80 text-sm italic whitespace-pre-wrap leading-relaxed">{s.content}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-pink-500/10 border border-pink-500/20 p-4 rounded-2xl">
-                <h4 className="text-pink-400 text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2"><span>🙏</span> Guidance</h4>
-                <p className="text-white/90 text-sm font-bold">{result.guidance}</p>
-              </div>
+              {result.guidance && (
+                <div className="bg-pink-500/10 border border-pink-500/20 p-4 rounded-2xl">
+                  <h4 className="text-pink-400 text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2"><span>🙏</span> {isHindi ? 'मार्गदर्शन' : 'Guidance'}</h4>
+                  <p className="text-white/90 text-sm font-bold">{result.guidance}</p>
+                </div>
+              )}
             </div>
           )}
 
