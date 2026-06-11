@@ -5,6 +5,79 @@ import { useLanguage } from '../context/useLanguage';
 import { executePanditAI, resetDailyQuestionIfNewDay } from '../services/userService';
 import Button from '../components/ui/Button';
 
+// Extracted outside the main component to prevent re-renders on state changes causing focus loss
+const InputField = ({ label, value, onChange, placeholder }) => (
+  <div className="flex flex-col gap-1 w-full">
+    <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{label}</label>
+    <input 
+      type="text" 
+      value={value} 
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-mystic-gold/50 transition-all placeholder:text-white/20"
+    />
+  </div>
+);
+
+const SelectorButton = ({ value, options, placeholder, title, onSelect, setPickerConfig }) => {
+  const selectedOption = options.find(opt => (typeof opt === 'object' ? opt.value : opt) === value);
+  const displayValue = selectedOption ? (typeof selectedOption === 'object' ? selectedOption.name : selectedOption) : placeholder;
+
+  return (
+    <button
+      type="button"
+      onClick={() => setPickerConfig({ options, title, value, onSelect })}
+      className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl px-3 py-3 text-white text-sm transition-all hover:border-mystic-gold/50"
+    >
+      <span className={`truncate mr-1 ${value ? 'text-white' : 'text-white/40'}`}>
+        {displayValue}
+      </span>
+      <span className="text-[10px] flex-shrink-0 text-mystic-gold">▼</span>
+    </button>
+  );
+};
+
+const PickerModal = ({ pickerConfig, setPickerConfig, isHindi }) => {
+  if (!pickerConfig) return null;
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fade-in">
+      <div className="fixed inset-0" onClick={() => setPickerConfig(null)} />
+      <div className="glass-card w-full max-w-sm rounded-[32px] border border-mystic-gold/30 flex flex-col max-h-[70vh] relative z-10 overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
+        <div className="p-6 text-center border-b border-white/5">
+          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-mystic-gold">{pickerConfig.title}</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {pickerConfig.options.map((opt, i) => {
+            const optValue = typeof opt === 'object' ? opt.value : opt;
+            const optName = typeof opt === 'object' ? opt.name : opt;
+            const isSelected = pickerConfig.value === optValue;
+            return (
+              <div
+                key={i}
+                onClick={() => {
+                  pickerConfig.onSelect(optValue);
+                  setPickerConfig(null);
+                }}
+                className={`px-8 py-5 text-center transition-all cursor-pointer ${
+                  isSelected ? 'bg-mystic-gold text-mystic-indigo font-black text-xl' : 'text-white/60 hover:text-white hover:bg-white/5 text-lg'
+                }`}
+              >
+                {optName}
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-4 bg-white/5 text-center">
+           <button onClick={() => setPickerConfig(null)} className="py-2 text-[10px] font-black uppercase tracking-widest text-white/40">
+             {isHindi ? 'रद्द करें' : 'Cancel'}
+           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AskPandit = () => {
   const { user } = useAuth();
   const { currentLanguage } = useLanguage();
@@ -73,6 +146,9 @@ const AskPandit = () => {
     person1: isHindi ? 'पहला व्यक्ति' : 'Person 1',
     person2: isHindi ? 'दूसरा व्यक्ति' : 'Person 2',
     generateBtn: isHindi ? 'विश्लेषण करें' : 'Analyze Energies',
+    loadingText: isHindi ? '🔮 पंडित जी ब्रह्मांडीय ऊर्जा का विश्लेषण कर रहे हैं...' : '🔮 Pandit AI is analyzing celestial energies...',
+    notAstrology: isHindi ? '🙏 पंडित एआई केवल ज्योतिष और आध्यात्मिक मार्गदर्शन प्रदान करता है।' : '🙏 Pandit AI only provides astrology and spiritual guidance.',
+    invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
     tenCoins: isHindi ? '10 सिक्के' : '10 Coins',
@@ -357,78 +433,6 @@ const AskPandit = () => {
     }, 2000);
   };
 
-  const InputField = ({ label, value, onChange, placeholder }) => (
-    <div className="flex flex-col gap-1 w-full">
-      <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{label}</label>
-      <input 
-        type="text" 
-        value={value} 
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-mystic-gold/50 transition-all placeholder:text-white/20"
-      />
-    </div>
-  );
-
-  const SelectorButton = ({ value, options, placeholder, title, onSelect }) => {
-    const selectedOption = options.find(opt => (typeof opt === 'object' ? opt.value : opt) === value);
-    const displayValue = selectedOption ? (typeof selectedOption === 'object' ? selectedOption.name : selectedOption) : placeholder;
-
-    return (
-      <button
-        type="button"
-        onClick={() => setPickerConfig({ options, title, value, onSelect })}
-        className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl px-3 py-3 text-white text-sm transition-all hover:border-mystic-gold/50"
-      >
-        <span className={`truncate mr-1 ${value ? 'text-white' : 'text-white/40'}`}>
-          {displayValue}
-        </span>
-        <span className="text-[10px] flex-shrink-0 text-mystic-gold">▼</span>
-      </button>
-    );
-  };
-
-  const PickerModal = () => {
-    if (!pickerConfig) return null;
-
-    return (
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fade-in">
-        <div className="fixed inset-0" onClick={() => setPickerConfig(null)} />
-        <div className="glass-card w-full max-w-sm rounded-[32px] border border-mystic-gold/30 flex flex-col max-h-[70vh] relative z-10 overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
-          <div className="p-6 text-center border-b border-white/5">
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-mystic-gold">{pickerConfig.title}</h3>
-          </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {pickerConfig.options.map((opt, i) => {
-              const optValue = typeof opt === 'object' ? opt.value : opt;
-              const optName = typeof opt === 'object' ? opt.name : opt;
-              const isSelected = pickerConfig.value === optValue;
-              return (
-                <div
-                  key={i}
-                  onClick={() => {
-                    pickerConfig.onSelect(optValue);
-                    setPickerConfig(null);
-                  }}
-                  className={`px-8 py-5 text-center transition-all cursor-pointer ${
-                    isSelected ? 'bg-mystic-gold text-mystic-indigo font-black text-xl' : 'text-white/60 hover:text-white hover:bg-white/5 text-lg'
-                  }`}
-                >
-                  {optName}
-                </div>
-              );
-            })}
-          </div>
-          <div className="p-4 bg-white/5 text-center">
-             <button onClick={() => setPickerConfig(null)} className="py-2 text-[10px] font-black uppercase tracking-widest text-white/40">
-               {isHindi ? 'रद्द करें' : 'Cancel'}
-             </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderDateSelectors = (formState, updateForm) => (
     <div className="space-y-2">
       <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
@@ -438,21 +442,24 @@ const AskPandit = () => {
           options={days} 
           placeholder={t.day} 
           title="Select Day" 
-          onSelect={(val) => updateForm({ dobDay: val })} 
+          onSelect={(val) => updateForm({ dobDay: val })}
+          setPickerConfig={setPickerConfig}
         />
         <SelectorButton 
           value={formState.dobMonth} 
           options={months} 
           placeholder={t.month} 
           title="Select Month" 
-          onSelect={(val) => updateForm({ dobMonth: val })} 
+          onSelect={(val) => updateForm({ dobMonth: val })}
+          setPickerConfig={setPickerConfig}
         />
         <SelectorButton 
           value={formState.dobYear} 
           options={years} 
           placeholder={t.year} 
           title="Select Year" 
-          onSelect={(val) => updateForm({ dobYear: val })} 
+          onSelect={(val) => updateForm({ dobYear: val })}
+          setPickerConfig={setPickerConfig}
         />
       </div>
     </div>
@@ -467,21 +474,24 @@ const AskPandit = () => {
           options={hours} 
           placeholder={t.hour} 
           title="Select Hour" 
-          onSelect={(val) => updateForm({ tobHour: val })} 
+          onSelect={(val) => updateForm({ tobHour: val })}
+          setPickerConfig={setPickerConfig}
         />
         <SelectorButton 
           value={formState.tobMinute} 
           options={minutes} 
           placeholder={t.min} 
           title="Select Minute" 
-          onSelect={(val) => updateForm({ tobMinute: val })} 
+          onSelect={(val) => updateForm({ tobMinute: val })}
+          setPickerConfig={setPickerConfig}
         />
         <SelectorButton 
           value={formState.tobPeriod} 
           options={periods} 
           placeholder={t.period} 
           title="Select AM/PM" 
-          onSelect={(val) => updateForm({ tobPeriod: val })} 
+          onSelect={(val) => updateForm({ tobPeriod: val })}
+          setPickerConfig={setPickerConfig}
         />
       </div>
     </div>
@@ -489,7 +499,8 @@ const AskPandit = () => {
 
   return (
     <div className="flex flex-col w-full pb-20 animate-fade-in kundali-grid min-h-screen bg-[#020617]">
-      <PickerModal />
+      <PickerModal pickerConfig={pickerConfig} setPickerConfig={setPickerConfig} isHindi={isHindi} />
+      
       {/* Header */}
       <div className="px-6 pt-12 pb-6 text-center space-y-3 relative z-10">
         <div className="inline-block px-3 py-1 bg-gradient-to-r from-mystic-gold to-amber-600 text-mystic-indigo text-[10px] font-black rounded-full shadow-[0_0_15px_rgba(251,191,36,0.4)] uppercase tracking-widest">
@@ -589,7 +600,7 @@ const AskPandit = () => {
         <div className="flex-1 flex flex-col items-center justify-center space-y-6 px-6 py-20">
           <div className="w-16 h-16 border-4 border-mystic-indigo/20 border-t-mystic-gold rounded-full animate-spin shadow-[0_0_30px_rgba(251,191,36,0.3)]" />
           <p className="text-mystic-gold font-black uppercase tracking-widest text-center animate-pulse text-sm">
-            {t.loadingText}
+            {getDynamicLoadingText(currentTone)}
           </p>
         </div>
       )}
