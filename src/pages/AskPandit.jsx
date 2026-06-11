@@ -34,7 +34,27 @@ const AskPandit = () => {
     }
   }, [user]);
 
-  // Translations
+  // DYNAMIC LANGUAGE DETECTION
+  const detectTone = (text) => {
+    if (!text) return isHindi ? 'hindi_script' : 'english';
+    
+    const lower = text.toLowerCase();
+    
+    if (/[\u0900-\u097F]/.test(text)) return 'hindi_script';
+    
+    const hinglishWords = ['kya', 'kab', 'kaise', 'hai', 'hoga', 'hogi', 'milega', 'jayega', 'mera', 'meri', 'shaadi', 'shadi', 'rahega', 'kar', 'raha'];
+    if (hinglishWords.some(w => lower.includes(w))) return 'hinglish';
+
+    if (lower.includes('kida') || lower.includes('ki') || lower.includes('kive') || (lower.includes('mera') && lower.includes('vyah'))) return 'punjabi';
+    
+    if (lower.includes('kemon') || lower.includes('amar') || lower.includes('kobe') || lower.includes('hobe') || lower.includes('biye')) return 'bengali';
+    
+    return 'english';
+  };
+
+  const currentTone = mode === 'personal' ? detectTone(personalForm.question) : (isHindi ? 'hindi_script' : 'english');
+
+  // Translations (Static UI elements based on global toggle)
   const t = {
     title: isHindi ? 'ज्योतिष सहायक' : 'Astrology Assistant',
     personalTab: isHindi ? 'व्यक्तिगत रीडिंग' : 'Personal Reading',
@@ -53,9 +73,6 @@ const AskPandit = () => {
     person1: isHindi ? 'पहला व्यक्ति' : 'Person 1',
     person2: isHindi ? 'दूसरा व्यक्ति' : 'Person 2',
     generateBtn: isHindi ? 'विश्लेषण करें' : 'Analyze Energies',
-    loadingText: isHindi ? '🔮 पंडित जी ब्रह्मांडीय ऊर्जा का विश्लेषण कर रहे हैं...' : '🔮 Pandit AI is analyzing celestial energies...',
-    notAstrology: isHindi ? '🙏 पंडित एआई केवल ज्योतिष और आध्यात्मिक मार्गदर्शन प्रदान करता है।' : '🙏 Pandit AI only provides astrology and spiritual guidance.',
-    invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
     tenCoins: isHindi ? '10 सिक्के' : '10 Coins',
@@ -65,6 +82,28 @@ const AskPandit = () => {
     earnButton: isHindi ? 'मुफ्त सिक्के कमाएं' : 'Watch Ad to Continue',
     maybeLater: isHindi ? 'बाद में' : 'Maybe Later',
     back: isHindi ? 'नया प्रश्न पूछें' : 'Ask Another Question'
+  };
+
+  const getDynamicLoadingText = (tone) => {
+    switch (tone) {
+      case 'hindi_script': return '🔮 पंडित जी आपकी ग्रह ऊर्जा का विश्लेषण कर रहे हैं...';
+      case 'hinglish': return '🔮 Pandit AI aapki kundli aur planetary energies analyze kar raha hai...';
+      case 'punjabi': return '🔮 Pandit AI tuhadi planetary energies da analysis kar riha hai...';
+      case 'bengali': return '🔮 Pandit AI apnar planetary energies analyze korche...';
+      default: return '🔮 Pandit AI is analyzing your celestial energies...';
+    }
+  };
+
+  const getDynamicInvalidDateMsg = (tone) => {
+    if (tone === 'hindi_script') return 'कृपया मान्य जन्म तिथि दर्ज करें';
+    if (tone === 'hinglish') return 'Please ek valid birth date enter karein';
+    return 'Please enter a valid birth date';
+  };
+
+  const getDynamicNotAstrologyMsg = (tone) => {
+    if (tone === 'hindi_script') return '🙏 पंडित एआई केवल ज्योतिष और आध्यात्मिक मार्गदर्शन प्रदान करता है।';
+    if (tone === 'hinglish') return '🙏 Pandit AI sirf astrology aur spiritual guidance provide karta hai.';
+    return '🙏 Pandit AI only provides astrology and spiritual guidance.';
   };
 
   // Selectors Data
@@ -93,8 +132,8 @@ const AskPandit = () => {
   // ASTROLOGY FILTER
   const checkIsAstrology = (text) => {
     if (!text) return true;
-    const allowed = /astrology|horoscope|zodiac|marriage|love|career|future|remedy|kundli|kundali|din|rahega|shadi|paisa|finance|health|lucky|spiritual|god|planet|star|prediction/i;
-    const denied = /coding|politics|news|science|math|general knowledge|modi|biden|trump|react|javascript|python|css/i;
+    const allowed = /astrology|horoscope|zodiac|marriage|love|career|future|remedy|kundli|kundali|din|rahega|shadi|shaadi|paisa|finance|health|lucky|spiritual|god|planet|star|prediction|vyah|bhalobasha|biye/i;
+    const denied = /coding|politics|news|science|math|general knowledge|modi|biden|trump|react|javascript|python|css|html|computer/i;
     if (denied.test(text)) return false;
     return allowed.test(text) || true;
   };
@@ -137,47 +176,145 @@ const AskPandit = () => {
   const isValid = mode === 'personal' ? isPersonalValid : isCompValid;
 
   const getPersonalError = () => {
-    if (isPersonalDateValid === false) return t.invalidDate;
+    if (isPersonalDateValid === false) return getDynamicInvalidDateMsg(currentTone);
     return '';
   };
 
   const getCompError = () => {
-    if (isP1DateValid === false || isP2DateValid === false) return t.invalidDate;
+    if (isP1DateValid === false || isP2DateValid === false) return getDynamicInvalidDateMsg(currentTone);
     return '';
   };
 
   const displayError = errorMsg || (mode === 'personal' ? getPersonalError() : getCompError());
 
   // MOCK GENERATORS
-  const generatePersonal = () => {
+  const generatePersonal = (tone) => {
+    const responses = {
+      english: {
+        overall: "Planetary transits are in your favor. The coming period is highly positive.",
+        career: "You may receive new responsibilities. Hard work will pay off.",
+        love: "Sweetness in relationships will increase. Mutual understanding grows.",
+        marriage: "Strong marriage prospects are forming. Jupiter's grace is present.",
+        finance: "Financial status remains stable. Gains from investments are possible.",
+        health: "Health remains good, but meditation is recommended.",
+        luckyColor: "Golden Yellow",
+        remedies: "Offer water to the Sun and donate yellow items on Thursday.",
+        positive: "Self-confidence and decision-making ability.",
+        watch: "Hasty decisions."
+      },
+      hindi_script: {
+        overall: "ग्रहों का गोचर आपके पक्ष में है। आने वाला समय सकारात्मक है।",
+        career: "नई जिम्मेदारियां मिल सकती हैं। मेहनत रंग लाएगी।",
+        love: "रिश्तों में मधुरता आएगी। आपसी समझ बढ़ेगी।",
+        marriage: "विवाह के प्रबल योग बन रहे हैं। गुरु की कृपा है।",
+        finance: "आर्थिक स्थिति स्थिर रहेगी। निवेश से लाभ संभव है।",
+        health: "स्वास्थ्य अच्छा रहेगा, लेकिन ध्यान आवश्यक है।",
+        luckyColor: "सुनहरा पीला",
+        remedies: "सूर्य को जल चढ़ाएं और गुरुवार को पीला दान करें।",
+        positive: "आत्मविश्वास और निर्णय लेने की क्षमता।",
+        watch: "जल्दबाजी में लिए गए फैसले।"
+      },
+      hinglish: {
+        overall: "Planetary transits aapke favor mein hain. Aane wala time bahut positive rahega.",
+        career: "Career mein nayi responsibilities mil sakti hain. Hard work pay off karega.",
+        love: "Relationships mein sweetness aayegi. Mutual understanding badhegi.",
+        marriage: "Shaadi ke strong chances ban rahe hain. Jupiter ki kripa hai.",
+        finance: "Financial status stable rahega. Investments se gains possible hain.",
+        health: "Health theek rahegi, but meditation zaroori hai.",
+        luckyColor: "Golden Yellow (Sunehra Peela)",
+        remedies: "Surya ko jal chadhayein aur Thursday ko yellow items donate karein.",
+        positive: "Self-confidence aur right decisions.",
+        watch: "Jaldbaazi mein decisions na lein."
+      },
+      punjabi: {
+        overall: "Grah tuhade favor vich han. Aan wala time bahut vadiya hai.",
+        career: "Career vich tarakki mil sakdi hai. Mehnat da fal milega.",
+        love: "Pyar vich mithas vadhegi.",
+        marriage: "Vyah de change yog ban rahe han.",
+        finance: "Paise pakhon halat theek rahenge.",
+        health: "Sehat theek rahegi, par dhyan rakho.",
+        luckyColor: "Pila (Yellow)",
+        remedies: "Suraj nu jal chadao.",
+        positive: "Confidence vadiya rahega.",
+        watch: "Jaldi vich faisle na lo."
+      },
+      bengali: {
+        overall: "Groho apnar pokkhe ache. Ashonno shomoy khub bhalo.",
+        career: "Career e notun dayitto pete paren.",
+        love: "Bhalobashay modhurota barbe.",
+        marriage: "Biyer bhalo jog ache.",
+        finance: "Arthik obostha sthitishil thakbe.",
+        health: "Shastho bhalo thakbe.",
+        luckyColor: "Holud (Yellow)",
+        remedies: "Shurjo ke jol din.",
+        positive: "Atto-bisshash.",
+        watch: "Tarahuro kore sidhhanto neben na."
+      }
+    };
+
+    const data = responses[tone] || responses.english;
     return {
       type: 'personal',
-      overall: isHindi ? "ग्रहों का गोचर आपके पक्ष में है। आने वाला समय सकारात्मक है।" : "Planetary transits are in your favor. The coming period is highly positive.",
-      career: isHindi ? "नई जिम्मेदारियां मिल सकती हैं। मेहनत रंग लाएगी।" : "You may receive new responsibilities. Hard work will pay off.",
-      love: isHindi ? "रिश्तों में मधुरता आएगी। आपसी समझ बढ़ेगी।" : "Sweetness in relationships will increase. Mutual understanding grows.",
-      marriage: isHindi ? "विवाह के प्रबल योग बन रहे हैं। गुरु की कृपा है।" : "Strong marriage prospects are forming. Jupiter's grace is present.",
-      finance: isHindi ? "आर्थिक स्थिति स्थिर रहेगी। निवेश से लाभ संभव है।" : "Financial status remains stable. Gains from investments are possible.",
-      health: isHindi ? "स्वास्थ्य अच्छा रहेगा, लेकिन ध्यान आवश्यक है।" : "Health remains good, but meditation is recommended.",
-      luckyColor: isHindi ? "सुनहरा पीला" : "Golden Yellow",
       luckyNumber: 7,
-      remedies: isHindi ? "सूर्य को जल चढ़ाएं और गुरुवार को पीला दान करें।" : "Offer water to the Sun and donate yellow items on Thursday.",
-      positive: isHindi ? "आत्मविश्वास और निर्णय लेने की क्षमता।" : "Self-confidence and decision-making ability.",
-      watch: isHindi ? "जल्दबाजी में लिए गए फैसले।" : "Hasty decisions."
+      ...data
     };
   };
 
-  const generateComp = () => {
+  const generateComp = (tone) => {
+    const responses = {
+      english: {
+        comm: "Good exchange of ideas, Mercury's position is favorable.",
+        emo: "Moon combination is excellent. Deep emotional understanding.",
+        marriage: "Excellent alignment for a long-term marriage.",
+        strengths: "Mutual respect and loyalty.",
+        challenges: "Avoid ego clashes.",
+        outlook: "A happy and prosperous shared future.",
+        guidance: "Accept each other's flaws. Worship Shiva-Parvati."
+      },
+      hindi_script: {
+        comm: "विचारों का अच्छा आदान-प्रदान, बुध की स्थिति अनुकूल।",
+        emo: "चंद्रमा का मिलन शानदार है। गहरी समझ।",
+        marriage: "दीर्घकालिक विवाह के लिए उत्कृष्ट योग।",
+        strengths: "पारस्परिक सम्मान और वफादारी।",
+        challenges: "अहंकार के टकराव से बचें।",
+        outlook: "एक सुखद और समृद्ध साझा भविष्य।",
+        guidance: "एक-दूसरे की कमियों को स्वीकार करें। शिव-पार्वती की पूजा करें।"
+      },
+      hinglish: {
+        comm: "Ideas ka accha exchange hai, Mercury ki position favorable hai.",
+        emo: "Moon combination excellent hai. Deep understanding rahegi.",
+        marriage: "Long-term marriage ke liye excellent alignment hai.",
+        strengths: "Mutual respect aur loyalty.",
+        challenges: "Ego clashes se bachein.",
+        outlook: "Ek happy aur prosperous shared future.",
+        guidance: "Ek-doosre ke flaws accept karein. Shiva-Parvati ki pooja karein."
+      },
+      punjabi: {
+        comm: "Vicharan da vadiya mel, Budh di sthiti theek hai.",
+        emo: "Emotional understanding bahut vadiya hai.",
+        marriage: "Pakke vyah layi vadiya yog han.",
+        strengths: "Izzat te wafadari.",
+        challenges: "Ahankar ton bacho.",
+        outlook: "Khush-haal bhavikh.",
+        guidance: "Ikk duje nu samjho."
+      },
+      bengali: {
+        comm: "Bhabnar bhalo adan prodan.",
+        emo: "Moner mil khub bhalo.",
+        marriage: "Biyer jonno khub bhalo jog.",
+        strengths: "Poroshporer proti shomman.",
+        challenges: "Ojhotha jhogra eriye cholun.",
+        outlook: "Shukhi bhabishyat.",
+        guidance: "Eke oporke bujhte chesta korun."
+      }
+    };
+
+    const data = responses[tone] || responses.english;
     return {
       type: 'compatibility',
       score: 82,
       guna: 28,
-      comm: isHindi ? "विचारों का अच्छा आदान-प्रदान, बुध की स्थिति अनुकूल।" : "Good exchange of ideas, Mercury's position is favorable.",
-      emo: isHindi ? "चंद्रमा का मिलन शानदार है। गहरी समझ।" : "Moon combination is excellent. Deep emotional understanding.",
-      marriage: isHindi ? "दीर्घकालिक विवाह के लिए उत्कृष्ट योग।" : "Excellent alignment for a long-term marriage.",
-      strengths: isHindi ? "पारस्परिक सम्मान और वफादारी।" : "Mutual respect and loyalty.",
-      challenges: isHindi ? "अहंकार के टकराव से बचें।" : "Avoid ego clashes.",
-      outlook: isHindi ? "एक सुखद और समृद्ध साझा भविष्य।" : "A happy and prosperous shared future.",
-      guidance: isHindi ? "एक-दूसरे की कमियों को स्वीकार करें। शिव-पार्वती की पूजा करें।" : "Accept each other's flaws. Worship Shiva-Parvati."
+      ...data
     };
   };
 
@@ -187,7 +324,7 @@ const AskPandit = () => {
 
     if (mode === 'personal') {
       if (!checkIsAstrology(personalForm.question)) {
-        setErrorMsg(t.notAstrology);
+        setErrorMsg(getDynamicNotAstrologyMsg(currentTone));
         return;
       }
     }
@@ -209,7 +346,7 @@ const AskPandit = () => {
           await executePanditAI(user.uid, isFree, mode);
         }
         
-        const data = mode === 'personal' ? generatePersonal() : generateComp();
+        const data = mode === 'personal' ? generatePersonal(currentTone) : generateComp(currentTone);
         setResult(data);
       } catch (error) {
         console.error("AI Error:", error);
