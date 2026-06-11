@@ -6,12 +6,17 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
  */
 
 export default async function handler(req, res) {
+  console.log("STEP 1: Request received");
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { mode, currentTone, userData } = req.body;
+  console.log("STEP 2: Mode =", mode);
+
   const API_KEY = process.env.GEMINI_API_KEY;
+  console.log("STEP 3: API key exists =", !!API_KEY);
 
   if (!API_KEY) {
     return res.status(500).json({ error: 'GEMINI_API_KEY not configured.' });
@@ -25,6 +30,8 @@ export default async function handler(req, res) {
     model: "gemini-1.5-flash",
     systemInstruction
   });
+
+  console.log("STEP 4: Gemini model initialized");
 
   let prompt = '';
 
@@ -75,7 +82,10 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
 }`;
   }
 
+  console.log("STEP 5: Prompt created");
+
   try {
+    console.log("STEP 6: Calling Gemini...");
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
@@ -84,13 +94,21 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
       }
     });
 
+    console.log("STEP 7: Gemini response received");
     const text = result.response.text();
+    
+    console.log("STEP 8: Raw response =", text);
+    
+    console.log("STEP 9: Parsing JSON");
     const jsonResponse = JSON.parse(text);
 
     return res.status(200).json(jsonResponse);
 
   } catch (error) {
-    console.error('Gemini API Error:', error);
-    return res.status(500).json({ error: 'Pandit AI is currently meditating. Please try again.' });
+    console.error("FULL GEMINI ERROR:", error);
+    console.error("STACK:", error?.stack);
+    return res.status(500).json({
+      error: error?.message || "Unknown server error"
+    });
   }
 }
