@@ -36,12 +36,25 @@ export default async function handler(req, res) {
       headers: { 'User-Agent': 'AstroTarotGame/1.0' }
     });
 
-    if (!locationResponse.data || locationResponse.data.length === 0) {
-      return res.status(400).json({ error: `Location not found: ${pob}. Please enter a valid city name.` });
+    const geoData = locationResponse.data;
+
+    console.log(
+      'NOMINATIM RESPONSE:',
+      JSON.stringify(geoData, null, 2)
+    );
+
+    if (!Array.isArray(geoData) || geoData.length === 0) {
+      throw new Error(`Location not found: ${pob}`);
     }
 
-    const { lat, lon } = locationResponse.data[0];
-    const coordinates = `${lat},${lon}`;
+    const lat = geoData?.[0]?.lat;
+    const lon = geoData?.[0]?.lon;
+
+    if (!lat || !lon) {
+      throw new Error(`Coordinates missing for: ${pob}`);
+    }
+
+    const coordinates = `${lat.toString()},${lon.toString()}`;
     
     // Defensive check for time parameters
     const timeStr = formatTime(birthHour, birthMinute, birthPeriod);
