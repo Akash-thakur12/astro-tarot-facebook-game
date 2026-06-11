@@ -26,12 +26,15 @@ export default async function handler(req, res) {
   
   const systemInstruction = `You are Pandit AI. You provide astrology-inspired guidance. You may use birth details as symbolic context. Never claim certainty. Never claim supernatural accuracy. Present insights as guidance, possibilities, tendencies and reflection. Support: Hindi, English, Hinglish, Mixed Hindi-English. Detect user language automatically and answer in same language.`;
 
+  const MODEL_NAME = "gemini-1.5-flash-latest";
+
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: MODEL_NAME,
     systemInstruction
   });
 
   console.log("STEP 4: Gemini model initialized");
+  console.log("Using Gemini model:", MODEL_NAME);
 
   let prompt = '';
 
