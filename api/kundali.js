@@ -29,6 +29,16 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('REQ.BODY:', JSON.stringify(req.body, null, 2));
+    console.log('PLACE OF BIRTH:', pob);
+
+    if (!pob) {
+      return res.status(400).json({
+        error: "Location not found",
+        details: "Unable to geocode place of birth"
+      });
+    }
+
     // 1. Resolve Location (Geocoding via OpenStreetMap Nominatim)
     // Adding User-Agent as required by Nominatim usage policy
     const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(pob)}&format=json&limit=1`;
@@ -36,22 +46,30 @@ export default async function handler(req, res) {
       headers: { 'User-Agent': 'AstroTarotGame/1.0' }
     });
 
+    console.log('NOMINATIM STATUS:', locationResponse.status);
+
     const geoData = locationResponse.data;
 
     console.log(
-      'NOMINATIM RESPONSE:',
+      'NOMINATIM JSON RESPONSE:',
       JSON.stringify(geoData, null, 2)
     );
 
     if (!Array.isArray(geoData) || geoData.length === 0) {
-      throw new Error(`Location not found: ${pob}`);
+      return res.status(400).json({
+        error: "Location not found",
+        details: "Unable to geocode place of birth"
+      });
     }
 
     const lat = geoData?.[0]?.lat;
     const lon = geoData?.[0]?.lon;
 
     if (!lat || !lon) {
-      throw new Error(`Coordinates missing for: ${pob}`);
+      return res.status(400).json({
+        error: "Location not found",
+        details: "Unable to geocode place of birth"
+      });
     }
 
     const coordinates = `${lat.toString()},${lon.toString()}`;
