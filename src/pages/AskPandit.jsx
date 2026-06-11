@@ -161,13 +161,8 @@ const AskPandit = () => {
   };
 
   const getDynamicLoadingText = (tone) => {
-    switch (tone) {
-      case 'hindi_script': return '🔮 पंडित जी आपकी ग्रह ऊर्जा का विश्लेषण कर रहे हैं...';
-      case 'hinglish': return '🔮 Pandit AI aapki kundli aur planetary energies analyze kar raha hai...';
-      case 'punjabi': return '🔮 Pandit AI tuhadi planetary energies da analysis kar riha hai...';
-      case 'bengali': return '🔮 Pandit AI apnar planetary energies analyze korche...';
-      default: return '🔮 Pandit AI is analyzing your celestial energies...';
-    }
+    if (mode === 'compatibility') return '❤️ Pandit AI is analyzing your compatibility...';
+    return '🔮 Pandit AI is analyzing cosmic energies...';
   };
 
   const getDynamicInvalidDateMsg = (tone) => {
@@ -292,10 +287,10 @@ const AskPandit = () => {
       
       console.log("Question:", mode === 'personal' ? personalForm.question : "Compatibility Check");
 
-      const response = await fetch('/api/pandit', {
+      const response = await fetch('/api/pandit-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, currentTone, personalForm, compForm })
+        body: JSON.stringify({ mode, currentTone, userData: mode === 'personal' ? personalForm : compForm })
       });
 
       if (!response.ok) {
@@ -312,7 +307,7 @@ const AskPandit = () => {
       setResult(data);
     } catch (error) {
       console.error("AI Error:", error);
-      setErrorMsg("Pandit AI could not generate a reading right now. Please try again.");
+      setErrorMsg("Pandit AI is currently meditating. Please try again.");
     } finally {
       setLoading(false);
     }
