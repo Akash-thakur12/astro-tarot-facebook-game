@@ -1,11 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as admin from 'firebase-admin';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin securely
-if (!admin.apps || admin.apps.length === 0) {
+// Initialize Firebase Admin securely using modern SDK API
+if (getApps().length === 0) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
+    initializeApp({
+      credential: cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
@@ -13,10 +15,12 @@ if (!admin.apps || admin.apps.length === 0) {
     });
   } catch (e) {
     // Fallback for local / default creds if cert vars are missing
-    admin.initializeApp();
+    initializeApp();
   }
 }
-const db = admin.firestore();
+
+const db = getFirestore();
+const adminAuth = getAuth();
 
 // Rate limiting map (in-memory, per Vercel instance)
 const rateLimits = new Map();
@@ -34,7 +38,7 @@ export default async function handler(req, res) {
   const idToken = authHeader.split('Bearer ')[1];
   let uid;
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
     uid = decodedToken.uid;
   } catch (error) {
     console.error("Auth Error:", error);
@@ -87,21 +91,21 @@ export default async function handler(req, res) {
 
         if (mode === 'chat' || mode === 'personal') {
           if (!dailyQUsed) {
-            t.update(userRef, { dailyQuestionUsed: true, lastQuestionDate: admin.firestore.FieldValue.serverTimestamp() });
+            t.update(userRef, { dailyQuestionUsed: true, lastQuestionDate: FieldValue.serverTimestamp() });
             usedFreePersonal = true;
           } else {
             if ((userDataDoc.coins || 0) < 10) throw new Error("INSUFFICIENT_COINS");
-            t.update(userRef, { coins: admin.firestore.FieldValue.increment(-10) });
+            t.update(userRef, { coins: FieldValue.increment(-10) });
             deductedCoins = true;
           }
         } else {
           // Compatibility mode check
           if (!dailyCUsed) {
-            t.update(userRef, { dailyCompUsed: true, lastCompDate: admin.firestore.FieldValue.serverTimestamp() });
+            t.update(userRef, { dailyCompUsed: true, lastCompDate: FieldValue.serverTimestamp() });
             usedFreeComp = true;
           } else {
             if ((userDataDoc.coins || 0) < 10) throw new Error("INSUFFICIENT_COINS");
-            t.update(userRef, { coins: admin.firestore.FieldValue.increment(-10) });
+            t.update(userRef, { coins: FieldValue.increment(-10) });
             deductedCoins = true;
           }
         }
@@ -237,7 +241,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
       if (deductedCoins || usedFreePersonal || usedFreeComp) {
         await db.runTransaction(async (t) => {
           if (deductedCoins) {
-            t.update(userRef, { coins: admin.firestore.FieldValue.increment(10) });
+            t.update(userRef, { coins: FieldValue.increment(10) });
           }
           if (usedFreePersonal) {
             t.update(userRef, { dailyQuestionUsed: false });
