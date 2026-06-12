@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import admin from 'firebase-admin';
+import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin securely
-if (!admin.apps.length) {
+if (!admin.apps || admin.apps.length === 0) {
   try {
     admin.initializeApp({
       credential: admin.credential.cert({
