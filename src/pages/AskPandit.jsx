@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { executePanditAI, resetDailyQuestionIfNewDay } from '../services/userService';
+import { resetDailyQuestionIfNewDay } from '../services/userService';
 import Button from '../components/ui/Button';
 
 // Extracted outside the main component to prevent re-renders on state changes causing focus loss
@@ -83,23 +83,40 @@ const AskPandit = () => {
   const { currentLanguage } = useLanguage();
   const navigate = useNavigate();
   const isHindi = currentLanguage === 'Hindi';
+  const chatEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   // State
-  const [mode, setMode] = useState('personal'); // 'personal' | 'compatibility'
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [hasEnteredDetails, setHasEnteredDetails] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showLowCoinsModal, setShowLowCoinsModal] = useState(false);
   const [pickerConfig, setPickerConfig] = useState(null);
+  const [inputText, setInputText] = useState('');
 
   // Forms
   const [personalForm, setPersonalForm] = useState({ 
-    name: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '', question: '' 
+    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
   });
-  const [compForm, setCompForm] = useState({
-    p1: { name: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' },
-    p2: { name: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' }
-  });
+
+  // PERSISTENCE - Load from localStorage
+  useEffect(() => {
+    const savedMessages = localStorage.getItem('pandit_chat_messages');
+    const savedForm = localStorage.getItem('pandit_user_profile');
+    const savedEntered = localStorage.getItem('pandit_has_entered_details');
+
+    if (savedMessages) setMessages(JSON.parse(savedMessages));
+    if (savedForm) setPersonalForm(JSON.parse(savedForm));
+    if (savedEntered === 'true') setHasEnteredDetails(true);
+  }, []);
+
+  // PERSISTENCE - Save to localStorage
+  useEffect(() => {
+    localStorage.setItem('pandit_chat_messages', JSON.stringify(messages));
+    localStorage.setItem('pandit_user_profile', JSON.stringify(personalForm));
+    localStorage.setItem('pandit_has_entered_details', hasEnteredDetails ? 'true' : 'false');
+  }, [messages, personalForm, hasEnteredDetails]);
 
   useEffect(() => {
     if (user) {
@@ -107,32 +124,44 @@ const AskPandit = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    scrollToBottom();
+    // Auto-focus after response or message update
+    if (!loading && hasEnteredDetails) {
+       inputRef.current?.focus();
+    }
+  }, [messages, loading, hasEnteredDetails]);
+
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleNewChat = () => {
+    localStorage.removeItem('pandit_chat_messages');
+    localStorage.removeItem('pandit_user_profile');
+    localStorage.removeItem('pandit_has_entered_details');
+    setMessages([]);
+    setHasEnteredDetails(false);
+    setPersonalForm({ 
+      name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
+    });
+  };
+
   // DYNAMIC LANGUAGE DETECTION
   const detectTone = (text) => {
     if (!text) return isHindi ? 'hindi_script' : 'english';
-    
     const lower = text.toLowerCase();
-    
     if (/[\u0900-\u097F]/.test(text)) return 'hindi_script';
-    
     const hinglishWords = ['kya', 'kab', 'kaise', 'hai', 'hoga', 'hogi', 'milega', 'jayega', 'mera', 'meri', 'shaadi', 'shadi', 'rahega', 'kar', 'raha'];
     if (hinglishWords.some(w => lower.includes(w))) return 'hinglish';
-
-    if (lower.includes('kida') || lower.includes('ki') || lower.includes('kive') || (lower.includes('mera') && lower.includes('vyah'))) return 'punjabi';
-    
-    if (lower.includes('kemon') || lower.includes('amar') || lower.includes('kobe') || lower.includes('hobe') || lower.includes('biye')) return 'bengali';
-    
     return 'english';
   };
 
-  const currentTone = mode === 'personal' ? detectTone(personalForm.question) : (isHindi ? 'hindi_script' : 'english');
-
-  // Translations (Static UI elements based on global toggle)
+  // Translations
   const t = {
-    title: isHindi ? 'ज्योतिष सहायक' : 'Astrology Assistant',
-    personalTab: isHindi ? 'व्यक्तिगत रीडिंग' : 'Personal Reading',
-    compTab: isHindi ? 'अनुकूलता जांच' : 'Compatibility Check',
+    title: isHindi ? 'ज्योतिष सहायक' : 'Pandit AI Chat',
     name: isHindi ? 'नाम' : 'Name',
+    gender: isHindi ? 'लिंग' : 'Gender',
     dob: isHindi ? 'जन्म तिथि' : 'Date of Birth',
     tob: isHindi ? 'जन्म समय' : 'Time of Birth',
     pob: isHindi ? 'जन्म स्थान' : 'Place of Birth',
@@ -142,12 +171,9 @@ const AskPandit = () => {
     hour: isHindi ? 'घंटा' : 'Hour',
     min: isHindi ? 'मिनट' : 'Min',
     period: 'AM/PM',
-    question: isHindi ? 'अपना प्रश्न पूछें (जैसे: 2026 कैसा रहेगा?)' : 'Ask your question (e.g. How will 2026 be?)',
-    person1: isHindi ? 'पहला व्यक्ति' : 'Person 1',
-    person2: isHindi ? 'दूसरा व्यक्ति' : 'Person 2',
-    generateBtn: isHindi ? 'विश्लेषण करें' : 'Analyze Energies',
-    loadingText: isHindi ? '🔮 पंडित जी ब्रह्मांडीय ऊर्जा का विश्लेषण कर रहे हैं...' : '🔮 Pandit AI is analyzing celestial energies...',
-    notAstrology: isHindi ? '🙏 पंडित एआई केवल ज्योतिष और आध्यात्मिक मार्गदर्शन प्रदान करता है।' : '🙏 Pandit AI only provides astrology and spiritual guidance.',
+    question: isHindi ? 'अपना प्रश्न पूछें...' : 'Ask your question...',
+    startChat: isHindi ? 'चैट शुरू करें' : 'Start Chatting',
+    thinking: isHindi ? '🔮 पंडित जी विचार कर रहे हैं...' : '🔮 Pandit AI is thinking...',
     invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
@@ -157,121 +183,76 @@ const AskPandit = () => {
     upgradeButton: isHindi ? 'प्रीमियम ₹49 अनलॉक करें' : 'Unlock Premium ₹49',
     earnButton: isHindi ? 'मुफ्त सिक्के कमाएं' : 'Watch Ad to Continue',
     maybeLater: isHindi ? 'बाद में' : 'Maybe Later',
-    back: isHindi ? 'नया प्रश्न पूछें' : 'Ask Another Question'
+    newChat: isHindi ? 'नई चैट' : 'New Chat'
   };
 
-  const getDynamicLoadingText = (tone) => {
-    if (mode === 'compatibility') return '❤️ Pandit AI is analyzing your compatibility...';
-    return '🔮 Pandit AI is analyzing cosmic energies...';
-  };
-
-  const getDynamicInvalidDateMsg = (tone) => {
-    if (tone === 'hindi_script') return 'कृपया मान्य जन्म तिथि दर्ज करें';
-    if (tone === 'hinglish') return 'Please ek valid birth date enter karein';
-    return 'Please enter a valid birth date';
-  };
-
-  const getDynamicNotAstrologyMsg = (tone) => {
-    if (tone === 'hindi_script') return '🙏 पंडित एआई केवल ज्योतिष और आध्यात्मिक मार्गदर्शन प्रदान करता है।';
-    if (tone === 'hinglish') return '🙏 Pandit AI sirf astrology aur spiritual guidance provide karta hai.';
-    return '🙏 Pandit AI only provides astrology and spiritual guidance.';
-  };
+  const genderOptions = [
+    { name: isHindi ? 'पुरुष' : 'Male', value: 'Male' },
+    { name: isHindi ? 'महिला' : 'Female', value: 'Female' },
+    { name: isHindi ? 'अन्य' : 'Other', value: 'Other' }
+  ];
 
   // Selectors Data
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const months = [
-    { name: isHindi ? 'जनवरी' : 'January', value: '01' },
-    { name: isHindi ? 'फ़रवरी' : 'February', value: '02' },
-    { name: isHindi ? 'मार्च' : 'March', value: '03' },
-    { name: isHindi ? 'अप्रैल' : 'April', value: '04' },
-    { name: isHindi ? 'मई' : 'May', value: '05' },
-    { name: isHindi ? 'जून' : 'June', value: '06' },
-    { name: isHindi ? 'जुलाई' : 'July', value: '07' },
-    { name: isHindi ? 'अगस्त' : 'August', value: '08' },
-    { name: isHindi ? 'सितंबर' : 'September', value: '09' },
-    { name: isHindi ? 'अक्टूबर' : 'October', value: '10' },
-    { name: isHindi ? 'नवंबर' : 'November', value: '11' },
-    { name: isHindi ? 'दिसंबर' : 'December', value: '12' },
+    { name: isHindi ? 'जनवरी' : 'January', value: '01' }, { name: isHindi ? 'फ़रवरी' : 'February', value: '02' },
+    { name: isHindi ? 'मार्च' : 'March', value: '03' }, { name: isHindi ? 'अप्रैल' : 'April', value: '04' },
+    { name: isHindi ? 'मई' : 'May', value: '05' }, { name: isHindi ? 'जून' : 'June', value: '06' },
+    { name: isHindi ? 'जुलाई' : 'July', value: '07' }, { name: isHindi ? 'अगस्त' : 'August', value: '08' },
+    { name: isHindi ? 'सितंबर' : 'September', value: '09' }, { name: isHindi ? 'अक्टूबर' : 'October', value: '10' },
+    { name: isHindi ? 'नवंबर' : 'November', value: '11' }, { name: isHindi ? 'दिसंबर' : 'December', value: '12' },
   ];
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 1940 + 1 }, (_, i) => (currentYear - i).toString());
-
   const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
   const periods = ['AM', 'PM'];
 
-  // ASTROLOGY FILTER
-  const checkIsAstrology = (text) => {
-    if (!text) return true;
-    const allowed = /astrology|horoscope|zodiac|marriage|love|compatibility|kundli|kundali|din|rahega|shadi|shaadi|paisa|finance|health|lucky|spiritual|god|planet|star|prediction|vyah|bhalobasha|biye|future guidance|remedies/i;
-    const denied = /coding|programming|politics|news|science|math|general knowledge|technology support|modi|biden|trump|react|javascript|python|css|html|computer/i;
-    
-    if (denied.test(text)) return false;
-    // Returns boolean true if a match is found, false otherwise.
-    return allowed.test(text);
-  };
-
   const validateDate = (day, month, year) => {
-    if (!day || !month || !year) return null; // Incomplete
+    if (!day || !month || !year) return null;
     const d = parseInt(day, 10);
     const m = parseInt(month, 10) - 1;
     const y = parseInt(year, 10);
     const date = new Date(y, m, d);
-    
-    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
-      return false; // Invalid date
-    }
-    
+    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) return false;
     const now = new Date();
-    if (date > now) {
-      return false; // Future
-    }
-    
+    if (date > now) return false;
     let age = now.getFullYear() - date.getFullYear();
     const mDiff = now.getMonth() - date.getMonth();
-    if (mDiff < 0 || (mDiff === 0 && now.getDate() < date.getDate())) {
-      age--;
-    }
-    
-    if (age < 13 || age > 120) {
-      return false;
-    }
-    
+    if (mDiff < 0 || (mDiff === 0 && now.getDate() < date.getDate())) age--;
+    if (age < 13 || age > 120) return false;
     return true;
   };
 
-  const isPersonalDateValid = validateDate(personalForm.dobDay, personalForm.dobMonth, personalForm.dobYear);
-  const isP1DateValid = validateDate(compForm.p1.dobDay, compForm.p1.dobMonth, compForm.p1.dobYear);
-  const isP2DateValid = validateDate(compForm.p2.dobDay, compForm.p2.dobMonth, compForm.p2.dobYear);
+  const isFormValid = 
+    personalForm.name && 
+    personalForm.gender && 
+    personalForm.dobDay && 
+    personalForm.dobMonth && 
+    personalForm.dobYear && 
+    personalForm.tobHour && 
+    personalForm.tobMinute && 
+    personalForm.tobPeriod && 
+    personalForm.pob && 
+    validateDate(personalForm.dobDay, personalForm.dobMonth, personalForm.dobYear) === true;
 
-  const isPersonalValid = mode === 'personal' && personalForm.name && personalForm.question && isPersonalDateValid === true;
-  const isCompValid = mode === 'compatibility' && compForm.p1.name && compForm.p2.name && isP1DateValid === true && isP2DateValid === true;
-  const isValid = mode === 'personal' ? isPersonalValid : isCompValid;
-
-  const getPersonalError = () => {
-    if (isPersonalDateValid === false) return getDynamicInvalidDateMsg(currentTone);
-    return '';
+  const handleStartChat = () => {
+    if (isFormValid) {
+      setHasEnteredDetails(true);
+    } else {
+      setErrorMsg(t.invalidDate);
+    }
   };
 
-  const getCompError = () => {
-    if (isP1DateValid === false || isP2DateValid === false) return getDynamicInvalidDateMsg(currentTone);
-    return '';
-  };
+  const handleSend = async (e) => {
+    if (e) e.preventDefault();
+    if (!inputText.trim() || loading || !user) return;
 
-  const displayError = errorMsg || (mode === 'personal' ? getPersonalError() : getCompError());
-
-  const handleGenerate = async () => {
-    if (loading || !user || !isValid) return;
+    const question = inputText.trim();
+    setInputText('');
     setErrorMsg('');
 
-    if (mode === 'personal') {
-      if (!checkIsAstrology(personalForm.question)) {
-        setErrorMsg(getDynamicNotAstrologyMsg(currentTone));
-        return;
-      }
-    }
-
-    const isFree = !user?.premium && (mode === 'personal' ? !user?.dailyQuestionUsed : !user?.dailyCompUsed);
+    const isFree = !user?.premium && !user?.dailyQuestionUsed;
     const hasEnoughCoins = (user?.coins || 0) >= 10;
 
     if (!user?.premium && !isFree && !hasEnoughCoins) {
@@ -279,36 +260,41 @@ const AskPandit = () => {
       return;
     }
 
+    // CRITICAL FIX #2: Eliminate race condition by using updatedMessages immediately
+    const newUserMessage = { role: 'user', content: question };
+    const updatedMessages = [...messages, newUserMessage];
+    setMessages(updatedMessages); // Update state for UI
+
     setLoading(true);
-    setResult(null);
 
     try {
-      console.log("Question:", mode === 'personal' ? personalForm.question : "Compatibility Check");
+      // CRITICAL FIX #7: Chat History Hard Limit
+      const MAX_HISTORY = 30; // Max 15 user + 15 AI turns
+      const trimmedHistory = updatedMessages.slice(-MAX_HISTORY);
 
-      // 1. Call Gemini API FIRST
+      const tone = detectTone(question);
+      
+      // CRITICAL FIX #3: Server-Side Authentication
+      const token = await user.getIdToken();
+
       const response = await fetch('/api/pandit-ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, currentTone, userData: mode === 'personal' ? personalForm : compForm })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          mode: 'chat', 
+          currentTone: tone, 
+          userData: { ...personalForm, question },
+          history: trimmedHistory
+        })
       });
 
-      if (!response.ok) {
-        throw new Error('API Request Failed');
-      }
-
       const data = await response.json();
-      console.log("AI Response:", data);
+      if (!response.ok) throw new Error(data.error || 'API Request Failed');
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // 2. Process deduction ONLY after successful generation
-      if (!user?.premium) {
-        await executePanditAI(user.uid, isFree, mode);
-      }
-
-      setResult(data);
+      setMessages(prev => [...prev, { role: 'model', content: data.text }]);
     } catch (error) {
       console.error("AI Error:", error);
       setErrorMsg("Pandit AI is currently meditating. Please try again.");
@@ -317,267 +303,141 @@ const AskPandit = () => {
     }
   };
 
-  const renderDateSelectors = (formState, updateForm) => (
-    <div className="space-y-2">
-      <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
-      <div className="grid grid-cols-3 gap-2">
-        <SelectorButton 
-          value={formState.dobDay} 
-          options={days} 
-          placeholder={t.day} 
-          title="Select Day" 
-          onSelect={(val) => updateForm({ dobDay: val })}
-          setPickerConfig={setPickerConfig}
-        />
-        <SelectorButton 
-          value={formState.dobMonth} 
-          options={months} 
-          placeholder={t.month} 
-          title="Select Month" 
-          onSelect={(val) => updateForm({ dobMonth: val })}
-          setPickerConfig={setPickerConfig}
-        />
-        <SelectorButton 
-          value={formState.dobYear} 
-          options={years} 
-          placeholder={t.year} 
-          title="Select Year" 
-          onSelect={(val) => updateForm({ dobYear: val })}
-          setPickerConfig={setPickerConfig}
-        />
+  const renderBirthDetailsForm = () => (
+    <div className="px-6 space-y-6 animate-fade-in py-10">
+      <div className="glass-card p-6 rounded-[2rem] border-white/5 space-y-5">
+        <h2 className="text-mystic-gold text-xs font-black uppercase tracking-widest text-center">Enter Birth Details</h2>
+        <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="e.g. Rahul" />
+        
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.gender}</label>
+          <div className="grid grid-cols-3 gap-2">
+            {genderOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setPersonalForm({ ...personalForm, gender: opt.value })}
+                className={`py-3 text-xs font-bold rounded-2xl border transition-all ${
+                  personalForm.gender === opt.value 
+                    ? 'bg-mystic-gold text-mystic-indigo border-mystic-gold' 
+                    : 'bg-white/5 text-white/40 border-white/10 hover:border-white/20'
+                }`}
+              >
+                {opt.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
+          <div className="grid grid-cols-3 gap-2">
+            <SelectorButton value={personalForm.dobDay} options={days} placeholder={t.day} title="Select Day" onSelect={(val) => setPersonalForm(p => ({ ...p, dobDay: val }))} setPickerConfig={setPickerConfig} />
+            <SelectorButton value={personalForm.dobMonth} options={months} placeholder={t.month} title="Select Month" onSelect={(val) => setPersonalForm(p => ({ ...p, dobMonth: val }))} setPickerConfig={setPickerConfig} />
+            <SelectorButton value={personalForm.dobYear} options={years} placeholder={t.year} title="Select Year" onSelect={(val) => setPersonalForm(p => ({ ...p, dobYear: val }))} setPickerConfig={setPickerConfig} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.tob}</label>
+          <div className="grid grid-cols-3 gap-2">
+            <SelectorButton value={personalForm.tobHour} options={hours} placeholder={t.hour} title="Select Hour" onSelect={(val) => setPersonalForm(p => ({ ...p, tobHour: val }))} setPickerConfig={setPickerConfig} />
+            <SelectorButton value={personalForm.tobMinute} options={minutes} placeholder={t.min} title="Select Minute" onSelect={(val) => setPersonalForm(p => ({ ...p, tobMinute: val }))} setPickerConfig={setPickerConfig} />
+            <SelectorButton value={personalForm.tobPeriod} options={periods} placeholder={t.period} title="Select AM/PM" onSelect={(val) => setPersonalForm(p => ({ ...p, tobPeriod: val }))} setPickerConfig={setPickerConfig} />
+          </div>
+        </div>
+
+        <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="e.g. New Delhi" />
       </div>
+
+      <Button fullWidth variant="gold" onClick={handleStartChat} disabled={!isFormValid} className="h-16 text-lg tracking-widest">
+        {t.startChat}
+      </Button>
     </div>
   );
 
-  const renderTimeSelectors = (formState, updateForm) => (
-    <div className="space-y-2">
-      <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.tob}</label>
-      <div className="grid grid-cols-3 gap-2">
-        <SelectorButton 
-          value={formState.tobHour} 
-          options={hours} 
-          placeholder={t.hour} 
-          title="Select Hour" 
-          onSelect={(val) => updateForm({ tobHour: val })}
-          setPickerConfig={setPickerConfig}
-        />
-        <SelectorButton 
-          value={formState.tobMinute} 
-          options={minutes} 
-          placeholder={t.min} 
-          title="Select Minute" 
-          onSelect={(val) => updateForm({ tobMinute: val })}
-          setPickerConfig={setPickerConfig}
-        />
-        <SelectorButton 
-          value={formState.tobPeriod} 
-          options={periods} 
-          placeholder={t.period} 
-          title="Select AM/PM" 
-          onSelect={(val) => updateForm({ tobPeriod: val })}
-          setPickerConfig={setPickerConfig}
-        />
+  const renderChatInterface = () => (
+    <div className="flex flex-col flex-1 relative overflow-hidden h-full">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 custom-scrollbar pb-32">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-50">
+            <span className="text-4xl">🔮</span>
+            <p className="text-white text-sm">Namaste {personalForm.name}.<br/>How can I guide you today?</p>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+            <div className={`max-w-[85%] px-5 py-3 rounded-[24px] text-sm leading-relaxed ${
+              msg.role === 'user' 
+                ? 'bg-mystic-gold text-mystic-indigo font-medium rounded-tr-none' 
+                : 'bg-white/10 text-white border border-white/5 rounded-tl-none'
+            }`}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="flex justify-start animate-fade-in">
+            <div className="bg-white/10 text-mystic-gold px-5 py-3 rounded-[24px] rounded-tl-none text-xs font-black uppercase tracking-widest animate-pulse border border-white/5">
+              {t.thinking}
+            </div>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="text-center px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold">
+            {errorMsg}
+          </div>
+        )}
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent pb-8">
+        <form onSubmit={handleSend} className="max-w-2xl mx-auto flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={t.question}
+            className="flex-1 bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white text-sm focus:outline-none focus:border-mystic-gold/50 transition-all placeholder:text-white/20"
+          />
+          <button 
+            type="submit" 
+            disabled={loading || !inputText.trim()}
+            className="w-14 h-14 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all disabled:opacity-50"
+          >
+            <span className="text-xl">➔</span>
+          </button>
+        </form>
       </div>
     </div>
   );
 
   return (
-    <div className="flex flex-col w-full pb-20 animate-fade-in kundali-grid min-h-screen bg-[#020617]">
+    <div className="flex flex-col w-full h-screen bg-[#020617] overflow-hidden">
       <PickerModal pickerConfig={pickerConfig} setPickerConfig={setPickerConfig} isHindi={isHindi} />
       
       {/* Header */}
-      <div className="px-6 pt-12 pb-6 text-center space-y-3 relative z-10">
-        <div className="inline-block px-3 py-1 bg-gradient-to-r from-mystic-gold to-amber-600 text-mystic-indigo text-[10px] font-black rounded-full shadow-[0_0_15px_rgba(251,191,36,0.4)] uppercase tracking-widest">
-           ⭐ {isHindi ? 'प्रीमियम एआई' : 'PREMIUM AI'}
+      <div className="px-6 pt-10 pb-4 flex justify-between items-center border-b border-white/5 bg-[#020617]/50 backdrop-blur-xl z-10">
+        <div className="flex-1" />
+        <h1 className="text-xl font-black premium-gradient-text text-white text-center flex-1">{t.title}</h1>
+        <div className="flex-1 flex justify-end">
+          {hasEnteredDetails && (
+            <button 
+              onClick={handleNewChat}
+              className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-white/60 hover:text-white hover:bg-white/10 transition-all"
+            >
+              🔄 {t.newChat}
+            </button>
+          )}
         </div>
-        <h1 className="text-3xl md:text-4xl font-black premium-gradient-text text-white">{t.title}</h1>
       </div>
 
-      {!result && !loading && (
-        <div className="px-6 space-y-6">
-          {/* Tabs */}
-          <div className="flex glass-card p-1 rounded-2xl border-white/5 overflow-hidden">
-            <button
-              onClick={() => { setMode('personal'); setErrorMsg(''); }}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all rounded-xl ${
-                mode === 'personal' ? 'bg-mystic-gold text-mystic-indigo' : 'text-white/40'
-              }`}
-            >
-              🔮 {t.personalTab}
-            </button>
-            <button
-              onClick={() => { setMode('compatibility'); setErrorMsg(''); }}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all rounded-xl ${
-                mode === 'compatibility' ? 'bg-mystic-gold text-mystic-indigo' : 'text-white/40'
-              }`}
-            >
-              ❤️ {t.compTab}
-            </button>
-          </div>
-
-          {/* Forms */}
-          <div className="glass-card p-6 rounded-[2rem] border-white/5 space-y-5">
-            {mode === 'personal' ? (
-              <div className="space-y-4 animate-fade-in">
-                <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="e.g. Rahul" />
-                {renderDateSelectors(personalForm, (updates) => setPersonalForm(prev => ({ ...prev, ...updates })))}
-                {renderTimeSelectors(personalForm, (updates) => setPersonalForm(prev => ({ ...prev, ...updates })))}
-                <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="e.g. New Delhi" />
-                <div className="flex flex-col gap-1 w-full pt-2">
-                  <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">❓ Question</label>
-                  <textarea 
-                    value={personalForm.question}
-                    onChange={e => setPersonalForm({...personalForm, question: e.target.value})}
-                    placeholder={t.question}
-                    className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-mystic-gold/50 transition-all placeholder:text-white/20 resize-none"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6 animate-fade-in">
-                <div className="space-y-4 p-4 rounded-3xl bg-white/5 border border-white/5">
-                  <h3 className="text-xs font-black text-mystic-gold uppercase tracking-widest">{t.person1}</h3>
-                  <InputField label={t.name} value={compForm.p1.name} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, name: e.target.value}})} placeholder="e.g. Rahul" />
-                  {renderDateSelectors(compForm.p1, (updates) => setCompForm(prev => ({ ...prev, p1: { ...prev.p1, ...updates } })))}
-                  {renderTimeSelectors(compForm.p1, (updates) => setCompForm(prev => ({ ...prev, p1: { ...prev.p1, ...updates } })))}
-                  <InputField label={t.pob} value={compForm.p1.pob} onChange={e => setCompForm({...compForm, p1: {...compForm.p1, pob: e.target.value}})} placeholder="e.g. New Delhi" />
-                </div>
-                <div className="text-center text-2xl animate-pulse">💕</div>
-                <div className="space-y-4 p-4 rounded-3xl bg-white/5 border border-white/5">
-                  <h3 className="text-xs font-black text-mystic-gold uppercase tracking-widest">{t.person2}</h3>
-                  <InputField label={t.name} value={compForm.p2.name} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, name: e.target.value}})} placeholder="e.g. Priya" />
-                  {renderDateSelectors(compForm.p2, (updates) => setCompForm(prev => ({ ...prev, p2: { ...prev.p2, ...updates } })))}
-                  {renderTimeSelectors(compForm.p2, (updates) => setCompForm(prev => ({ ...prev, p2: { ...prev.p2, ...updates } })))}
-                  <InputField label={t.pob} value={compForm.p2.pob} onChange={e => setCompForm({...compForm, p2: {...compForm.p2, pob: e.target.value}})} placeholder="e.g. Mumbai" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {displayError && (
-            <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-xs text-center font-bold">
-              {displayError}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <div className="flex justify-between items-center px-2">
-               <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white/40">Cost:</span>
-                  {user?.premium ? (
-                    <span className="text-xs font-bold text-green-400 uppercase tracking-widest">{t.unlimited}</span>
-                  ) : (mode === 'personal' ? !user?.dailyQuestionUsed : !user?.dailyCompUsed) ? (
-                    <span className="text-xs font-bold text-green-400 uppercase tracking-widest">{t.freeToday}</span>
-                  ) : (
-                    <span className="text-xs font-bold text-mystic-gold uppercase tracking-widest">{t.tenCoins}</span>
-                  )}
-               </div>
-            </div>
-            <Button fullWidth variant="gold" onClick={handleGenerate} disabled={!isValid} className="h-16 text-lg tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
-              {t.generateBtn}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="flex-1 flex flex-col items-center justify-center space-y-6 px-6 py-20">
-          <div className="w-16 h-16 border-4 border-mystic-indigo/20 border-t-mystic-gold rounded-full animate-spin shadow-[0_0_30px_rgba(251,191,36,0.3)]" />
-          <p className="text-mystic-gold font-black uppercase tracking-widest text-center animate-pulse text-sm">
-            {getDynamicLoadingText(currentTone)}
-          </p>
-        </div>
-      )}
-
-      {result && !loading && (
-        <div className="px-6 space-y-6 animate-fade-in pb-10">
-          {result.type === 'personal' ? (
-            <div className="glass-card p-6 rounded-[2.5rem] border-mystic-gold/20 space-y-6">
-              <div className="text-center space-y-2 mb-8">
-                <span className="text-4xl">🔮</span>
-                <h2 className="text-2xl font-black text-white">{personalForm.name}&apos;s Reading</h2>
-              </div>
-              
-              <div className="space-y-5">
-                {result.sections && result.sections.map((s, i) => (
-                  <div key={i} className="space-y-1 bg-white/5 p-4 rounded-2xl">
-                    <h4 className="text-mystic-gold text-xs font-black uppercase tracking-widest flex items-center gap-2"><span>{s.icon}</span> {s.title}</h4>
-                    <p className="text-white/80 text-sm italic whitespace-pre-wrap leading-relaxed">{s.content}</p>
-                  </div>
-                ))}
-              </div>
-
-              {result.luckyColor && result.luckyNumber && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/5 p-4 rounded-2xl text-center">
-                     <h4 className="text-[10px] text-white/40 uppercase font-black">🎨 {isHindi ? 'शुभ रंग' : 'Lucky Color'}</h4>
-                     <p className="text-mystic-gold font-bold">{result.luckyColor}</p>
-                  </div>
-                  <div className="bg-white/5 p-4 rounded-2xl text-center">
-                     <h4 className="text-[10px] text-white/40 uppercase font-black">🔢 {isHindi ? 'शुभ अंक' : 'Lucky Number'}</h4>
-                     <p className="text-mystic-gold font-bold text-xl">{result.luckyNumber}</p>
-                  </div>
-                </div>
-              )}
-
-              {result.remedies && (
-                <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
-                  <h4 className="text-mystic-gold text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2"><span>🙏</span> {isHindi ? 'उपाय' : 'Remedies'}</h4>
-                  <p className="text-white/90 text-sm font-bold">{result.remedies}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="glass-card p-6 rounded-[2.5rem] border-pink-500/20 space-y-6">
-              <div className="text-center space-y-2 mb-8">
-                <span className="text-4xl">💕</span>
-                <h2 className="text-xl font-black text-white">{compForm.p1.name} & {compForm.p2.name}</h2>
-              </div>
-
-              <div className="space-y-4 bg-white/5 p-5 rounded-3xl">
-                 <div className="space-y-1">
-                   <div className="flex justify-between">
-                     <span className="text-xs font-black text-white/60">{isHindi ? 'अनुकूलता स्कोर' : 'Compatibility Score'}</span>
-                     <span className="text-xs font-black text-pink-400">{result.score}%</span>
-                   </div>
-                   <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                     <div className="h-full bg-pink-500 rounded-full" style={{ width: `${result.score}%` }} />
-                   </div>
-                 </div>
-                 <div className="space-y-1">
-                   <div className="flex justify-between">
-                     <span className="text-xs font-black text-white/60">{isHindi ? 'गुण मिलान (अधिकतम 36)' : 'Guna Milan (Max 36)'}</span>
-                     <span className="text-xs font-black text-mystic-gold">{result.guna}/36</span>
-                   </div>
-                   <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                     <div className="h-full bg-mystic-gold rounded-full" style={{ width: `${(result.guna/36)*100}%` }} />
-                   </div>
-                 </div>
-              </div>
-
-              <div className="space-y-5">
-                {result.sections && result.sections.map((s, i) => (
-                  <div key={i} className="space-y-1 bg-white/5 p-4 rounded-2xl">
-                    <h4 className="text-pink-400 text-xs font-black uppercase tracking-widest flex items-center gap-2"><span>{s.icon}</span> {s.title}</h4>
-                    <p className="text-white/80 text-sm italic whitespace-pre-wrap leading-relaxed">{s.content}</p>
-                  </div>
-                ))}
-              </div>
-
-              {result.guidance && (
-                <div className="bg-pink-500/10 border border-pink-500/20 p-4 rounded-2xl">
-                  <h4 className="text-pink-400 text-xs font-black uppercase tracking-widest flex items-center gap-2 mb-2"><span>🙏</span> {isHindi ? 'मार्गदर्शन' : 'Guidance'}</h4>
-                  <p className="text-white/90 text-sm font-bold">{result.guidance}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <Button fullWidth variant="outline" onClick={() => setResult(null)} className="h-14">
-            {t.back}
-          </Button>
-        </div>
-      )}
+      {hasEnteredDetails ? renderChatInterface() : renderBirthDetailsForm()}
 
       {showLowCoinsModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
