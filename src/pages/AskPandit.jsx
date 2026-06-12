@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { resetDailyQuestionIfNewDay } from '../services/userService';
+import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
 
 // Extracted outside the main component to prevent re-renders on state changes causing focus loss
@@ -275,7 +276,9 @@ const AskPandit = () => {
       const tone = detectTone(question);
       
       // CRITICAL FIX #3: Server-Side Authentication
-      const token = await user.getIdToken();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('User not authenticated');
+      const token = await currentUser.getIdToken();
 
       const response = await fetch('/api/pandit-ai', {
         method: 'POST',
