@@ -32,6 +32,7 @@ const FortuneWheel = () => {
     if (user?.coins !== undefined) {
       setLocalCoins(user.coins);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.coins]);
 
   // Generates the conic-gradient string for the wheel background
@@ -174,7 +175,7 @@ const FortuneWheel = () => {
         </button>
         <div className="flex items-center gap-2 bg-black/40 px-4 py-1.5 rounded-2xl border border-mystic-gold/30">
           <span className="text-lg">🪙</span>
-          <span className="text-mystic-gold font-black text-sm">{user?.coins || 0}</span>
+          <span className="text-mystic-gold font-black text-sm">{localCoins}</span>
         </div>
       </div>
 
