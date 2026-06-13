@@ -1,17 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { checkPremiumExpiry } from '../services/userService';
 import Button from '../components/ui/Button';
-import CoinBar from '../components/CoinBar';
-import DailyBonus from '../components/DailyBonus';
-import RewardCenter from '../components/RewardCenter';
 
 const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currentLanguage, setLanguage } = useLanguage();
+  const [levelInfo, setLevelInfo] = useState({ level: 5, xp: 450, maxXp: 1000 });
+  const [streak, setStreak] = useState(3);
 
   useEffect(() => {
     if (user) {
@@ -21,315 +20,209 @@ const Home = () => {
 
   const isHindi = currentLanguage === 'Hindi';
 
-  // Translations for Home Page
+  // Translations for Gamified Home Page
   const th = {
-    heroTitle: isHindi ? 'आज आपके सितारे' : "Today's Cosmic",
-    heroSubtitle: isHindi ? 'क्या कहते हैं?' : "Alignment",
-    cosmicEnergy: isHindi ? 'आज की ब्रह्मांडीय ऊर्जा' : "Today's Cosmic Energy",
-    alignment: isHindi ? 'दैनिक संरेखण' : 'Daily Alignment',
-    horoscopeTitle: isHindi ? 'दैनिक राशिफल' : 'Daily Horoscope',
-    viewFullHoroscope: isHindi ? 'पूरा राशिफल देखें' : 'View Full Horoscope',
-    askPanditTitle: isHindi ? '🔮 पंडित जी से पूछें' : '🔮 Ask Pandit AI',
-    askPanditSub: isHindi ? 'अपने भविष्य, प्रेम, विवाह और करियर के प्रश्न पूछें' : 'Ask about your future, love, marriage and career',
-    popular: isHindi ? 'सबसे लोकप्रिय' : 'MOST POPULAR',
-    askButton: isHindi ? 'पूछें' : 'Ask Now',
-    freeQuestion: isHindi ? '1 मुफ्त प्रश्न उपलब्ध' : '1 Free Question Available',
-    tarotTitle: isHindi ? '🃏 दैनिक टैरो रीडिंग' : '🃏 Daily Tarot Reading',
-    tarotSub: isHindi ? 'आज का रहस्यमयी संदेश जानें' : 'Discover today\'s mystical message',
-    pickCard: isHindi ? 'अपना कार्ड चुनें' : 'Pick Your Card',
-    predictions: isHindi ? 'भविष्यवाणियां' : 'Predictions',
-    kundaliTitle: isHindi ? '🕉️ वैदिक कुंडली' : '🕉️ Vedic Kundali',
-    kundaliAnalysis: isHindi ? 'एआई भाग्य विश्लेषण' : 'AI Destiny Analysis',
-    detailedChart: isHindi ? 'व्यक्तिगत एआई-संचालित भविष्य मार्गदर्शन' : 'Personalized AI-powered future guidance',
-    generateKundali: isHindi ? '✨ एआई रीडिंग बनाएं' : '✨ GENERATE AI READING',
-    monetization: isHindi ? 'मुद्रीकरण' : 'Monetization',
-    unlockDestiny: isHindi ? 'अपना संपूर्ण भाग्य अनलॉक करें' : 'Unlock Your Complete Destiny',
-    oneTimeAccess: isHindi ? 'एक बार पहुंच' : 'ONE TIME ACCESS',
-    price: isHindi ? 'मात्र ₹49' : 'Only ₹49',
-    madeInStars: isHindi ? 'तारों में निर्मित' : 'Made in Stars',
-    love: isHindi ? 'प्रेम' : 'Love',
-    career: isHindi ? 'करियर' : 'Career',
-    money: isHindi ? 'धन' : 'Money',
-    health: isHindi ? 'स्वास्थ्य' : 'Health',
-    marriage: isHindi ? 'विवाह' : 'Marriage',
-    teaserLove: isHindi ? 'नया संबंध संकेतित' : 'New connection indicated',
-    teaserCareer: isHindi ? 'प्रमुख विकास चक्र' : 'Major growth cycle',
-    teaserMoney: isHindi ? 'वित्तीय स्थिरता' : 'Financial stability',
-    teaserMarriage: isHindi ? 'अनुकूल संरेखण' : 'Favorable alignment',
+    level: isHindi ? 'स्तर' : 'Level',
+    xp: 'XP',
+    streakTitle: isHindi ? 'दैनिक स्ट्रीक' : 'Daily Streak',
+    days: isHindi ? 'दिन' : 'Days',
+    nextReward: isHindi ? 'अगला इनाम: 50 🪙' : 'Next Reward: 50 🪙',
+    dailyReward: isHindi ? 'दैनिक इनाम' : 'Daily Reward',
+    claim: isHindi ? 'दावा करें' : 'Claim',
+    tarotTitle: isHindi ? 'आज का टैरो' : "Today's Tarot",
+    drawCard: isHindi ? 'कार्ड निकालें' : 'Draw Card',
+    fortuneWheel: isHindi ? 'भाग्य का पहिया' : 'Fortune Wheel',
+    spinNow: isHindi ? 'अभी घुमाएं' : 'Spin Now',
+    askPandit: isHindi ? 'पंडित एआई से पूछें' : 'Ask Pandit AI',
+    continueChat: isHindi ? 'चैट जारी रखें' : 'Continue Chat',
+    challenges: isHindi ? 'दैनिक चुनौतियां' : 'Daily Challenges',
+    challenge1: isHindi ? '1 टैरो कार्ड पढ़ें' : 'Read 1 Tarot Card',
+    challenge2: isHindi ? 'पंडित जी से 1 प्रश्न पूछें' : 'Ask Pandit 1 Question',
+    premium: isHindi ? 'प्रीमियम' : 'Premium',
   };
 
-  const zodiacs = [
-    { symbol: '♈', name: isHindi ? 'मेष' : 'Mesh' },
-    { symbol: '♉', name: isHindi ? 'वृषभ' : 'Vrishabh' },
-    { symbol: '♊', name: isHindi ? 'मिथुन' : 'Mithun' },
-    { symbol: '♋', name: isHindi ? 'कर्क' : 'Kark' },
-    { symbol: '♌', name: isHindi ? 'सिंह' : 'Simha' },
-    { symbol: '♍', name: isHindi ? 'कन्या' : 'Kanya' },
-    { symbol: '♎', name: isHindi ? 'तुला' : 'Tula' },
-    { symbol: '♏', name: isHindi ? 'वृश्चिक' : 'Vrishchik' },
-    { symbol: '♐', name: isHindi ? 'धनु' : 'Dhanu' },
-    { symbol: '♑', name: isHindi ? 'मकर' : 'Makar' },
-    { symbol: '♒', name: isHindi ? 'कुंभ' : 'Kumbh' },
-    { symbol: '♓', name: isHindi ? 'मीन' : 'Meen' },
-  ];
-
-  const cosmicScores = [
-    { label: th.love, score: 85, icon: '❤️', color: 'bg-rose-500' },
-    { label: th.career, score: 62, icon: '💼', color: 'bg-blue-500' },
-    { label: th.money, score: 74, icon: '💰', color: 'bg-emerald-500' },
-    { label: th.health, score: 91, icon: '🌿', color: 'bg-amber-500' },
-  ];
-
   return (
-    <div className="flex flex-col w-full pb-32 animate-fade-in kundali-grid bg-[#020617] relative">
+    <div className="flex flex-col w-full min-h-screen pb-32 animate-fade-in bg-[#09090b] relative overflow-hidden font-sans">
       
+      {/* Background Glows */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-mystic-gold/10 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-mystic-purple/10 blur-[100px] pointer-events-none" />
+
       {/* LANGUAGE SELECTOR */}
       <div className="absolute top-4 right-4 z-[110]">
-         <div className="flex glass-card rounded-full p-1 border-white/10 overflow-hidden shadow-2xl">
+         <div className="flex bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 shadow-2xl">
             <button 
               onClick={() => setLanguage('English')}
-              className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${currentLanguage === 'English' ? 'bg-mystic-gold text-mystic-indigo shadow-lg' : 'text-white/40 hover:text-white'}`}
+              className={`px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${currentLanguage === 'English' ? 'bg-mystic-gold text-[#09090b] shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'text-white/40 hover:text-white'}`}
             >
               EN
             </button>
             <button 
               onClick={() => setLanguage('Hindi')}
-              className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${currentLanguage === 'Hindi' ? 'bg-mystic-gold text-mystic-indigo shadow-lg' : 'text-white/40 hover:text-white'}`}
+              className={`px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${currentLanguage === 'Hindi' ? 'bg-mystic-gold text-[#09090b] shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'text-white/40 hover:text-white'}`}
             >
               हिं
             </button>
          </div>
       </div>
 
-      {/* 1. USER HEADER */}
-      <CoinBar />
-
-      <div className="px-5 pt-6 space-y-8">
+      <div className="px-5 pt-8 space-y-6 relative z-10">
         
-        {/* 2. COSMIC SCORE CARD */}
-        <div className="glass-card p-6 rounded-[2.5rem] border-white/5 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 blur-[50px] rounded-full pointer-events-none" />
-          
-          <div className="flex justify-between items-center mb-6 relative z-10">
-            <div>
-              <span className="text-[10px] uppercase tracking-[0.3em] text-mystic-gold font-black">{th.alignment}</span>
-              <h3 className="text-xl font-black text-white/90">{th.cosmicEnergy}</h3>
+        {/* TOP HEADER: Avatar, Name, Coins */}
+        <div className="flex items-center justify-between bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-3xl shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-mystic-gold to-amber-600 p-[2px] shadow-[0_0_15px_rgba(251,191,36,0.3)]">
+              <div className="w-full h-full rounded-full bg-[#09090b] flex items-center justify-center text-xl overflow-hidden border border-black">
+                {user?.photoURL ? <img src={user.photoURL} alt="User" /> : '👤'}
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-full border-2 border-mystic-gold/20 flex items-center justify-center bg-mystic-gold/5 shadow-[0_0_15px_rgba(251,191,36,0.1)]">
-               <span className="text-xl">✨</span>
+            <div className="flex flex-col">
+              <span className="text-white font-bold text-sm tracking-wide">
+                {user?.displayName || (isHindi ? 'अतिथि' : 'Guest')}
+              </span>
+              {user?.premium && (
+                <span className="text-[9px] uppercase tracking-widest text-mystic-gold font-black flex items-center gap-1">
+                  ⭐ {th.premium}
+                </span>
+              )}
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-x-8 gap-y-6 relative z-10">
-            {cosmicScores.map((s) => (
-              <div key={s.label} className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <span className="text-xs font-bold text-white/60 flex items-center gap-1.5">
-                    <span>{s.icon}</span> {s.label}
-                  </span>
-                  <span className="text-xs font-black text-white/90">{s.score}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full ${s.color} rounded-full animate-progress glow-purple`}
-                    style={{ '--progress-width': `${s.score}%`, width: `${s.score}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+          <div 
+            onClick={() => navigate('/premium')}
+            className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-2xl border border-mystic-gold/30 cursor-pointer active:scale-95 transition-transform"
+          >
+            <span className="text-xl drop-shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse">🪙</span>
+            <span className="text-mystic-gold font-black text-lg">{user?.coins || 0}</span>
           </div>
         </div>
 
-        {/* 3. DAILY HOROSCOPE CARD */}
-        <div className="glass-card p-7 rounded-[2.5rem] border-white/10 space-y-6 relative overflow-hidden group hover:border-white/20 transition-all duration-500">
-           <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-600/10 blur-[60px] rounded-full" />
-           
-           <h2 className="text-2xl font-black text-white text-center leading-tight">
-             {th.heroTitle} <br/><span className="premium-gradient-text italic">{th.heroSubtitle}</span>
-           </h2>
-
-           <div className="flex overflow-x-auto gap-4 no-scrollbar py-2 snap-x">
-             {zodiacs.map((z, i) => (
-               <div key={i} className="flex-shrink-0 flex flex-col items-center space-y-2 snap-center">
-                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl glass-card border transition-all duration-300 ${i === 0 ? 'border-mystic-gold bg-mystic-gold/10' : 'border-white/5'}`}>
-                   {z.symbol}
-                 </div>
-                 <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">{z.name}</span>
-               </div>
-             ))}
-           </div>
-
-           <div className="p-5 rounded-3xl bg-white/5 border border-white/5 relative">
-              <p className="text-sm text-white/70 leading-relaxed italic text-center font-serif">
-                {isHindi 
-                  ? '"एक शक्तिशाली ग्रह गोचर आपके महत्वाकांक्षा के घर में हो रहा है। दीर्घकालिक विकास पर ध्यान केंद्रित करें।"'
-                  : '"A powerful planetary transition is occurring in your house of ambition. Focus on long-term growth today."'
-                }
-              </p>
-           </div>
-
-           <Button fullWidth variant="primary" className="h-14 rounded-2xl font-black tracking-widest text-sm uppercase">
-             {th.viewFullHoroscope}
-           </Button>
+        {/* LEVEL & XP PROGRESS */}
+        <div className="px-2">
+          <div className="flex justify-between items-end mb-2">
+            <span className="text-white/80 font-bold text-xs uppercase tracking-wider">{th.level} <span className="text-mystic-gold text-lg">{levelInfo.level}</span></span>
+            <span className="text-white/40 text-[10px] font-bold">{levelInfo.xp} / {levelInfo.maxXp} {th.xp}</span>
+          </div>
+          <div className="h-3 w-full bg-black/50 rounded-full overflow-hidden border border-white/5 p-[1px]">
+            <div 
+              className="h-full bg-gradient-to-r from-mystic-purple to-mystic-gold rounded-full relative"
+              style={{ width: `${(levelInfo.xp / levelInfo.maxXp) * 100}%` }}
+            >
+              <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite] skew-x-[-20deg] -translate-x-full" />
+            </div>
+          </div>
         </div>
 
-        {/* 4. ASK PANDIT AI HERO CARD */}
-        <div 
-          onClick={() => navigate('/ask-pandit')}
-          className="glass-card p-8 rounded-[3rem] border-mystic-gold/20 bg-gradient-to-br from-mystic-purple/20 to-transparent relative overflow-hidden cursor-pointer active:scale-[0.98] transition-all group hover:border-mystic-gold/40 shadow-[0_20px_50px_rgba(0,0,0,0.4)]"
-        >
-           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-12 transition-transform duration-700">
-              <span className="text-[120px] leading-none text-white">🔮</span>
-           </div>
-           
-           <div className="relative z-10 space-y-6">
-              <div className="space-y-1">
-                 <span className="inline-block px-3 py-1 bg-mystic-gold text-mystic-indigo text-[10px] font-black rounded-full shadow-lg mb-2">{th.popular}</span>
-                 <h2 className="text-3xl font-black text-white tracking-tighter">{th.askPanditTitle}</h2>
-                 <p className="text-white/60 text-xs leading-relaxed max-w-[200px] font-medium italic">
-                   {th.askPanditSub}
-                 </p>
-              </div>
-
-              <div className="flex items-center gap-4">
-                 <Button variant="gold" className="px-10 h-14 rounded-2xl font-black text-lg shadow-[0_10px_40px_rgba(251,191,36,0.3)]">
-                   {th.askButton}
-                 </Button>
-                 {!user?.dailyQuestionUsed && (
-                   <span className="text-green-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
-                     {th.freeQuestion}
-                   </span>
-                 )}
-              </div>
-           </div>
-        </div>
-
-        {/* 5. DAILY TAROT CARD */}
-        <div 
-          onClick={() => navigate('/tarot')}
-          className="glass-gold p-8 rounded-[3rem] border-mystic-gold/30 bg-gradient-to-br from-[#7e22ce]/20 to-[#fbbf24]/5 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-all group shadow-xl"
-        >
-           <div className="absolute top-1/2 right-[-10%] -translate-y-1/2 text-8xl opacity-10 blur-[2px] group-hover:scale-110 transition-transform duration-1000 text-white">🃏</div>
-           <div className="relative z-10 space-y-5">
-              <div className="space-y-1">
-                 <h2 className="text-2xl font-black text-white tracking-tight">{th.tarotTitle}</h2>
-                 <p className="text-mystic-gold/80 text-sm font-bold italic">
-                   {th.tarotSub}
-                 </p>
-              </div>
-              <Button variant="outline" className="border-mystic-gold/40 text-mystic-gold font-black px-8">
-                 {th.pickCard}
-              </Button>
-           </div>
-        </div>
-
-        {/* 6. PREDICTION GRID */}
+        {/* MAIN CARDS GRID */}
         <div className="grid grid-cols-2 gap-4">
-           {[
-             { title: isHindi ? 'प्रेम भविष्यवाणी' : 'Love Prediction', icon: '💖', score: 85, teaser: th.teaserLove },
-             { title: isHindi ? 'करियर भविष्यवाणी' : 'Career Prediction', icon: '💼', score: 62, teaser: th.teaserCareer },
-             { title: isHindi ? 'धन भविष्यवाणी' : 'Money Prediction', icon: '💰', score: 74, teaser: th.teaserMoney },
-             { title: isHindi ? 'विवाह भविष्यवाणी' : 'Marriage Prediction', icon: '💍', score: 55, teaser: th.teaserMarriage },
-           ].map((item, idx) => (
-             <div key={idx} className="glass-card p-5 rounded-[2rem] border-white/5 space-y-3 hover:border-white/20 transition-colors cursor-pointer">
-                <div className="flex justify-between items-start">
-                   <span className="text-2xl">{item.icon}</span>
-                   <span className="text-[10px] font-black text-mystic-gold">{item.score}%</span>
-                </div>
-                <div>
-                   <h4 className="text-[11px] font-black text-white/90 uppercase tracking-tight leading-tight">{item.title}</h4>
-                   <p className="text-[9px] text-white/40 font-bold leading-tight mt-0.5">{item.teaser}</p>
-                </div>
-             </div>
-           ))}
-        </div>
-
-        {/* 7. KUNDALI SECTION */}
-        <div className="space-y-4">
-           <div className="flex items-center gap-3">
-              <h2 className="text-sm font-black uppercase tracking-[0.2em] text-white/60">{th.predictions}</h2>
-              <div className="h-px flex-1 bg-white/5" />
-           </div>
-           
-           <div 
-             onClick={() => navigate('/kundali')}
-             className="glass-card p-6 rounded-[2.5rem] border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/5 transition-all"
-           >
-              <div className="flex items-center gap-5">
-                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-3xl shadow-lg shadow-orange-900/20">
-                    <span className="text-white">☸️</span>
-                 </div>
-                 <div>
-                    <h3 className="text-lg font-black text-white/90 tracking-tight">{th.kundaliAnalysis}</h3>
-                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">{th.detailedChart}</p>
-                 </div>
+          
+          {/* 1. DAILY STREAK */}
+          <div className="col-span-2 bg-gradient-to-br from-orange-500/10 to-red-500/5 p-5 rounded-[2rem] border border-orange-500/20 flex justify-between items-center relative overflow-hidden group">
+            <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-7xl opacity-20 drop-shadow-[0_0_15px_rgba(249,115,22,1)]">🔥</div>
+            <div>
+              <h3 className="text-white/60 text-[10px] uppercase tracking-widest font-bold mb-1">{th.streakTitle}</h3>
+              <div className="text-white font-black text-3xl flex items-baseline gap-1">
+                {streak} <span className="text-sm font-bold text-white/50 mb-1">{th.days}</span>
               </div>
-              <button className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/40 group-hover:text-mystic-gold transition-colors">
-                 →
-              </button>
-           </div>
-           
-           <Button 
-            fullWidth 
-            variant="primary" 
-            onClick={() => navigate('/kundali')}
-            className="h-14 rounded-2xl font-black bg-gradient-to-r from-orange-600 to-red-700 border-none shadow-orange-900/20 uppercase"
-           >
-             {th.generateKundali}
-           </Button>
-        </div>
+              <p className="text-orange-400 text-[10px] font-bold mt-1">{th.nextReward}</p>
+            </div>
+            <div className="w-14 h-14 bg-orange-500/20 rounded-full flex items-center justify-center border border-orange-500/30 text-2xl shadow-[0_0_20px_rgba(249,115,22,0.2)]">
+              🔥
+            </div>
+          </div>
 
-        {/* 8. DAILY BONUS CARD */}
-        <DailyBonus />
-
-        {/* 9. EARN COINS SECTION */}
-        <RewardCenter />
-
-        {/* 10. PREMIUM SECTION */}
-        <div className="space-y-4">
-           <div className="flex items-center gap-3">
-              <h2 className="text-sm font-black uppercase tracking-[0.2em] text-white/60">{th.monetization}</h2>
-              <div className="h-px flex-1 bg-white/5" />
-           </div>
-
-           <div 
-             onClick={() => navigate('/premium')}
-             className="bg-gradient-to-br from-mystic-gold via-yellow-400 to-amber-700 p-8 rounded-[3rem] border border-white/20 shadow-[0_20px_50px_rgba(251,191,36,0.25)] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all"
-           >
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 blur-[80px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/3" />
-              
-              <div className="relative z-10 space-y-6">
-                 <div className="space-y-1 text-mystic-indigo">
-                    <h2 className="text-3xl font-black tracking-tighter">{th.unlockDestiny}</h2>
-                    <ul className="space-y-1.5 pt-3">
-                       {[
-                         isHindi ? 'असीमित पंडित प्रश्न' : 'Unlimited Ask Pandit', 
-                         isHindi ? 'प्रीमियम टैरो' : 'Premium Tarot', 
-                         isHindi ? 'प्रेम अनुकूलता' : 'Love Compatibility'
-                       ].map((f) => (
-                         <li key={f} className="text-[11px] font-black flex items-center gap-2 uppercase tracking-tight">
-                            <div className="w-1.5 h-1.5 rounded-full bg-mystic-indigo" /> {f}
-                         </li>
-                       ))}
-                    </ul>
-                 </div>
-
-                 <div className="flex items-center justify-between bg-black/10 backdrop-blur-md p-5 rounded-[2rem] border border-black/5">
-                    <div className="flex flex-col">
-                       <span className="text-[9px] font-black text-mystic-indigo/60 uppercase tracking-widest">{th.oneTimeAccess}</span>
-                       <span className="text-2xl font-black text-mystic-indigo">{th.price}</span>
-                    </div>
-                    <div className="w-12 h-12 bg-mystic-indigo rounded-full flex items-center justify-center text-white shadow-lg animate-bounce text-xl">
-                       💎
-                    </div>
-                 </div>
+          {/* 2. ASK PANDIT */}
+          <div 
+            onClick={() => navigate('/ask-pandit')}
+            className="col-span-2 bg-gradient-to-br from-indigo-900/40 to-purple-900/20 p-6 rounded-[2.5rem] border border-indigo-500/30 relative overflow-hidden shadow-[0_10px_30px_rgba(79,70,229,0.15)] cursor-pointer active:scale-[0.98] transition-all"
+          >
+            <div className="absolute right-0 bottom-0 w-32 h-32 bg-indigo-500/20 blur-[40px] rounded-full" />
+            <div className="flex items-center gap-4 relative z-10 mb-4">
+              <div className="text-4xl drop-shadow-lg">🔮</div>
+              <div>
+                <h3 className="text-white font-black text-xl">{th.askPandit}</h3>
+                <p className="text-indigo-300/80 text-[10px] uppercase tracking-widest font-bold">AI Astrologer</p>
               </div>
-           </div>
-        </div>
+            </div>
+            <Button variant="primary" className="w-full bg-indigo-600 hover:bg-indigo-500 border-none shadow-[0_0_15px_rgba(79,70,229,0.4)]">
+              {th.continueChat}
+            </Button>
+          </div>
 
-        <div className="py-10 text-center opacity-30">
-           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">AstroTarot • {th.madeInStars}</p>
+          {/* 3. TODAY'S TAROT */}
+          <div 
+            onClick={() => navigate('/tarot')}
+            className="bg-[#18181b]/80 p-5 rounded-[2rem] border border-white/10 flex flex-col items-center justify-center text-center gap-3 cursor-pointer active:scale-95 transition-all hover:border-mystic-gold/50 shadow-lg"
+          >
+            <div className="text-4xl drop-shadow-[0_0_10px_rgba(251,191,36,0.3)]">🃏</div>
+            <h3 className="text-white font-bold text-sm leading-tight">{th.tarotTitle}</h3>
+            <button className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-mystic-gold font-bold w-full uppercase tracking-wider">
+              {th.drawCard}
+            </button>
+          </div>
+
+          {/* 4. FORTUNE WHEEL */}
+          <div 
+            className="bg-[#18181b]/80 p-5 rounded-[2rem] border border-white/10 flex flex-col items-center justify-center text-center gap-3 cursor-pointer active:scale-95 transition-all hover:border-mystic-gold/50 shadow-lg"
+          >
+            <div className="text-4xl drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]">🎡</div>
+            <h3 className="text-white font-bold text-sm leading-tight">{th.fortuneWheel}</h3>
+            <button className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-mystic-purple font-bold w-full uppercase tracking-wider">
+              {th.spinNow}
+            </button>
+          </div>
+
+          {/* 5. DAILY REWARD */}
+          <div className="col-span-2 bg-gradient-to-r from-emerald-900/30 to-teal-900/10 p-5 rounded-[2rem] border border-emerald-500/20 flex justify-between items-center shadow-lg">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-2xl border border-emerald-500/30">
+                🎁
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-sm">{th.dailyReward}</h3>
+                <p className="text-emerald-400/80 text-[10px] uppercase tracking-widest font-bold">Ready to claim</p>
+              </div>
+            </div>
+            <button className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest text-xs rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] active:scale-95 transition-all">
+              {th.claim}
+            </button>
+          </div>
+
+          {/* 6. DAILY CHALLENGES */}
+          <div className="col-span-2 bg-[#18181b] p-6 rounded-[2.5rem] border border-white/5 space-y-5">
+            <h3 className="text-white/60 text-[10px] uppercase tracking-[0.2em] font-black">{th.challenges}</h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs">
+                  0/1
+                </div>
+                <div className="flex-1">
+                  <p className="text-white text-sm font-bold">{th.challenge1}</p>
+                  <div className="h-1.5 w-full bg-black mt-2 rounded-full overflow-hidden">
+                    <div className="h-full bg-white/20 rounded-full" style={{ width: '0%' }} />
+                  </div>
+                </div>
+                <div className="text-mystic-gold font-bold text-xs">10 🪙</div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-mystic-gold/20 border border-mystic-gold/30 flex items-center justify-center text-xs text-mystic-gold">
+                  ✓
+                </div>
+                <div className="flex-1">
+                  <p className="text-white/50 text-sm font-bold line-through">{th.challenge2}</p>
+                  <div className="h-1.5 w-full bg-black mt-2 rounded-full overflow-hidden">
+                    <div className="h-full bg-mystic-gold rounded-full" style={{ width: '100%' }} />
+                  </div>
+                </div>
+                <div className="text-mystic-gold/50 font-bold text-xs line-through">15 🪙</div>
+              </div>
+            </div>
+          </div>
+
         </div>
+        
+        <div className="h-10"></div> {/* Bottom Padding */}
       </div>
     </div>
   );
