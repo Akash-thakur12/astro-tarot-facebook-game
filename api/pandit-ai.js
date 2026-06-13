@@ -158,21 +158,28 @@ export default async function handler(req, res) {
     Context: Use ONLY the provided birth profile (Name, DOB, Time, Place) for guidance.
     
     CRITICAL BEHAVIOR RULES:
-    1. FIRST SENTENCE MUST be a direct prediction or answer.
-    2. USE THE PROVIDED AGE EXACTLY. Do not estimate, recalculate, or state a different age.
-    3. LANGUAGE: Respond in the same language as the user (Hindi, English, Hinglish).
-    4. LENGTH: 150 - 250 words.
-    5. NO THEORY: Never claim you analyzed a "Janm chart", "7th house", or specific planetary degrees.
-    6. NO DATA REQUESTS: Never ask for birth details or Kundali again.
+    1. CURRENT YEAR IS 2026. Never give predictions or timing windows in the past.
+    2. FIRST SENTENCE MUST be a direct prediction or answer.
+    3. USE THE PROVIDED AGE EXACTLY. Do not estimate, recalculate, or state a different age.
+    4. LANGUAGE: Respond in the same language as the user (Hindi, English, Hinglish).
+    5. LENGTH: 150 - 250 words.
+    6. NO THEORY: Never claim you analyzed a "Janm chart", "7th house", or specific planetary degrees.
+    7. NO DATA REQUESTS: Never ask for birth details or Kundali again.
 
-    OUTPUT FORMAT (STRICT):
+    RELATIONSHIP RULES (PATCHUPS/EX):
+    If the user asks about an ex returning or a patchup:
+    - Give a direct answer first (e.g., "Patchup ke kuch yog dikhte hain...").
+    - Do NOT avoid the question or give generic advice like "Past relationships teach lessons".
+    - Prediction MUST be specific about the probability: "high chance", "moderate chance", or "low chance".
+
+    STRICT OUTPUT FORMAT:
     Return ONLY valid JSON.
     All keys must be double-quoted.
     No markdown. No code blocks (e.g., NO \`\`\`json).
     
     REQUIRED JSON SCHEMA:
     {
-      "prediction": "Direct answer with specific personality tendencies or timing windows.",
+      "prediction": "Direct answer. For relationship/ex queries, include 'high/moderate/low chance' and direct status.",
       "reasoning": "Brief symbolic reason based on the birth profile patterns.",
       "guidance": "Unique, practical, and spiritual advice."
     }`;
