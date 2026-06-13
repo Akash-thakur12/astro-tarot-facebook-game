@@ -205,8 +205,8 @@ const FortuneWheel = () => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
             <button 
               onClick={handleSpin}
-              disabled={isSpinning}
-              className={`w-20 h-20 rounded-full border-4 border-mystic-gold bg-gradient-to-b from-[#18181b] to-black flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.5)] transition-transform ${isSpinning ? 'opacity-80 scale-95' : 'hover:scale-105 active:scale-95'}`}
+              disabled={spinState === 'spinning'}
+              className={`w-20 h-20 rounded-full border-4 border-mystic-gold bg-gradient-to-b from-[#18181b] to-black flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.5)] transition-transform ${spinState === 'spinning' ? 'opacity-80 scale-95' : 'hover:scale-105 active:scale-95'}`}
             >
               <span className="text-mystic-gold font-black uppercase tracking-widest text-xs">Spin</span>
             </button>
