@@ -2,9 +2,15 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+console.log("FUNCTION LOADED");
+console.log("PROJECT_ID:", process.env.FIREBASE_PROJECT_ID ? "FOUND" : "MISSING");
+console.log("CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL ? "FOUND" : "MISSING");
+console.log("PRIVATE_KEY:", process.env.FIREBASE_PRIVATE_KEY ? "FOUND" : "MISSING");
+
 // 1. Robust Firebase Admin Initialization
 const apps = getApps();
 if (!apps || apps.length === 0) {
+  console.log("FIREBASE INIT START");
   try {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -21,8 +27,9 @@ if (!apps || apps.length === 0) {
     } else {
       initializeApp();
     }
+    console.log("FIREBASE INIT SUCCESS");
   } catch (e) {
-    console.error("Firebase Init Error:", e);
+    console.log("FIREBASE INIT FAILED:", e.message);
     if (!e.message?.includes('already exists')) {
       throw e;
     }
@@ -61,6 +68,7 @@ const getWeightedReward = () => {
 };
 
 export default async function handler(req, res) {
+  console.log("REQUEST RECEIVED");
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -74,9 +82,11 @@ export default async function handler(req, res) {
   const idToken = authHeader.split('Bearer ')[1];
   let uid;
   try {
+    console.log("AUTH VERIFY START");
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     uid = decodedToken?.uid;
     if (!uid) throw new Error("No UID in token");
+    console.log("AUTH VERIFY SUCCESS");
   } catch (error) {
     console.error("Auth Error:", error);
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
@@ -105,7 +115,9 @@ export default async function handler(req, res) {
   try {
     // 5. Transaction to prevent double-spins via race conditions
     const result = await db.runTransaction(async (t) => {
+      console.log("FIRESTORE READ START");
       const spinDoc = await t.get(spinRef);
+      console.log("FIRESTORE READ SUCCESS");
       
       // Check if already spun
       if (spinDoc.exists) {
@@ -116,6 +128,7 @@ export default async function handler(req, res) {
       const wonReward = getWeightedReward();
       console.log("REWARD GENERATED:", wonReward.label);
 
+      console.log("FIRESTORE WRITE START");
       // Apply Reward
       if (wonReward.type === 'coin') {
         t.set(userRef, { coins: FieldValue.increment(wonReward.value) }, { merge: true });
@@ -135,7 +148,7 @@ export default async function handler(req, res) {
         createdAt: FieldValue.serverTimestamp()
       });
 
-      console.log("FIRESTORE UPDATED: Reward saved for user.");
+      console.log("FIRESTORE WRITE SUCCESS");
 
       return { 
         alreadySpun: false, 
@@ -143,6 +156,7 @@ export default async function handler(req, res) {
       };
     });
 
+    console.log("RESPONSE SENT");
     return res.status(200).json(result);
 
   } catch (error) {

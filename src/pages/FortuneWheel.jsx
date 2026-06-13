@@ -16,7 +16,7 @@ const REWARDS = [
 
 const FortuneWheel = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   
   // Explicit State Management
   const [spinState, setSpinState] = useState('idle'); // 'idle' | 'spinning' | 'finished' | 'fetching'
@@ -103,7 +103,7 @@ const FortuneWheel = () => {
         return; 
       }
 
-      const targetId = data.reward.rewardId;
+      const targetId = data.reward.id;
       const targetReward = REWARDS.find(r => r.id === targetId) || REWARDS[0];
 
       setSpinState('spinning');
@@ -139,7 +139,7 @@ const FortuneWheel = () => {
     }
   };
 
-  const handleClaim = () => {
+  const handleClaim = async () => {
     console.log("CLAIM CLICKED");
     
     if (wonReward) {
@@ -152,6 +152,14 @@ const FortuneWheel = () => {
         showToast(`XP gained! (+50 XP)`);
       } else if (wonReward.type === 'tarot') {
         showToast(`Reward claimed! Bonus Tarot Unlocked`);
+      }
+      
+      // Sync global state immediately
+      try {
+        await refreshUser();
+        console.log("GLOBAL STATE REFRESHED");
+      } catch (error) {
+        console.error("Failed to refresh user data:", error);
       }
     }
     
