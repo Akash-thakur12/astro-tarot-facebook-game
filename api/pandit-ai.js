@@ -4,18 +4,31 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin securely using modern SDK API
-if (getApps().length === 0) {
+const apps = getApps();
+if (!apps || apps.length === 0) {
   try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
-      })
-    });
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (projectId && clientEmail && privateKey) {
+      initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, '\n'),
+        })
+      });
+    } else {
+      // Fallback for local / default creds
+      initializeApp();
+    }
   } catch (e) {
-    // Fallback for local / default creds if cert vars are missing
-    initializeApp();
+    console.error("Firebase Init Error:", e);
+    // If already initialized by another process, ignore
+    if (!e.message?.includes('already exists')) {
+      throw e;
+    }
   }
 }
 
@@ -30,16 +43,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Ensure body exists
+  if (!req.body) {
+    return res.status(400).json({ error: 'Missing request body' });
+  }
+
   // CRITICAL FIX #3: Server-Side Authentication
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
   }
   const idToken = authHeader.split('Bearer ')[1];
+  if (!idToken) {
+    return res.status(401).json({ error: 'Unauthorized: Token missing after Bearer' });
+  }
+
   let uid;
   try {
     const decodedToken = await adminAuth.verifyIdToken(idToken);
-    uid = decodedToken.uid;
+    uid = decodedToken?.uid;
+    if (!uid) throw new Error("No UID in token");
   } catch (error) {
     console.error("Auth Error:", error);
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
@@ -60,6 +83,10 @@ export default async function handler(req, res) {
 
   const { mode, currentTone, userData, history } = req.body;
 
+  if (!userData) {
+    return res.status(400).json({ error: 'Missing userData in request body' });
+  }
+
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
     return res.status(500).json({ error: 'GEMINI_API_KEY not configured.' });
@@ -77,6 +104,8 @@ export default async function handler(req, res) {
       if (!doc.exists) throw new Error("USER_NOT_FOUND");
       
       const userDataDoc = doc.data();
+      if (!userDataDoc) throw new Error("USER_DATA_EMPTY");
+
       if (!userDataDoc.premium) {
         const lastQDate = userDataDoc.lastQuestionDate ? userDataDoc.lastQuestionDate.toDate() : null;
         const lastCDate = userDataDoc.lastCompDate ? userDataDoc.lastCompDate.toDate() : null;
@@ -98,7 +127,7 @@ export default async function handler(req, res) {
             t.update(userRef, { coins: FieldValue.increment(-10) });
             deductedCoins = true;
           }
-        } else {
+        } else if (mode === 'compatibility') {
           // Compatibility mode check
           if (!dailyCUsed) {
             t.update(userRef, { dailyCompUsed: true, lastCompDate: FieldValue.serverTimestamp() });
@@ -108,6 +137,11 @@ export default async function handler(req, res) {
             t.update(userRef, { coins: FieldValue.increment(-10) });
             deductedCoins = true;
           }
+        } else {
+           // Default to chat deduction if unknown mode but proceeding
+           if ((userDataDoc.coins || 0) < 10) throw new Error("INSUFFICIENT_COINS");
+           t.update(userRef, { coins: FieldValue.increment(-10) });
+           deductedCoins = true;
         }
       }
     });
@@ -140,20 +174,25 @@ export default async function handler(req, res) {
 
   if (mode === 'chat' || mode === 'personal') {
     const { name, gender, dobDay, dobMonth, dobYear, tobHour, tobMinute, tobPeriod, pob } = userData;
-    const profileContext = `USER PROFILE:\nName: ${name}\nGender: ${gender}\nBirth Date: ${dobDay}-${dobMonth}-${dobYear}\nBirth Time: ${tobHour}:${tobMinute} ${tobPeriod}\nBirth Place: ${pob}`;
+    const profileContext = `USER PROFILE:\nName: ${name || 'Unknown'}\nGender: ${gender || 'Unknown'}\nBirth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}\nBirth Time: ${tobHour || '?'}:${tobMinute || '?'}\nBirth Place: ${pob || 'Unknown'}`;
 
     contents = [{ role: 'user', parts: [{ text: profileContext }] }];
-    if (history && history.length > 0) {
+    if (Array.isArray(history) && history.length > 0) {
       history.forEach(msg => {
-        contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
+        if (msg && msg.role && msg.content) {
+          contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
+        }
       });
     }
   } else {
-    // CRITICAL FIX #9: Compatibility Regression Check
+    // Compatibility mode
     const { p1, p2 } = userData;
+    if (!p1 || !p2) {
+      return res.status(400).json({ error: 'Compatibility mode requires p1 and p2 in userData' });
+    }
     const compPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}
 Person 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}
-Preferred Tone: ${currentTone}
+Preferred Tone: ${currentTone || 'Wise'}
 
 Instructions:
 Generate a relationship compatibility analysis returning STRICTLY a JSON object matching this schema:
@@ -182,6 +221,10 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
         responseMimeType: "application/json"
       }
     });
+
+    if (!result || !result.response) {
+      throw new Error("No response from Gemini");
+    }
 
     const text = result.response.text();
     
@@ -268,3 +311,4 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     });
   }
 }
+
