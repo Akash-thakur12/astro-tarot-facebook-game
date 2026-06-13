@@ -4,7 +4,7 @@ import { useLanguage } from '../context/useLanguage';
 import { watchRewardAds } from '../services/userService';
 
 const RewardCenter = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentLanguage } = useLanguage();
   const [isWatching, setIsWatching] = useState(false);
   
@@ -21,6 +21,7 @@ const RewardCenter = () => {
     setTimeout(async () => {
       try {
         await watchRewardAds(user.uid, 50);
+        await refreshUser();
       } catch (error) {
         console.error("Ad Reward Error:", error);
       } finally {

@@ -4,7 +4,7 @@ import { useLanguage } from '../context/useLanguage';
 import { claimDailyBonus } from '../services/userService';
 
 const DailyBonus = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentLanguage } = useLanguage();
   const [timeLeft, setTimeLeft] = useState('');
   const [canClaim, setCanClaim] = useState(false);
@@ -43,6 +43,7 @@ const DailyBonus = () => {
     setIsClaiming(true);
     try {
       await claimDailyBonus(user.uid);
+      await refreshUser();
     } catch (error) {
       console.error("Claim Error:", error);
     } finally {

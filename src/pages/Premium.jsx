@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 
 const Premium = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentLanguage } = useLanguage();
 
   const isHindi = currentLanguage === 'Hindi';
@@ -55,6 +55,7 @@ const Premium = () => {
     if (!user?.uid) return;
     try {
       await purchasePremium(user.uid);
+      await refreshUser();
       alert(tp.congrats);
       navigate('/');
     } catch (error) {

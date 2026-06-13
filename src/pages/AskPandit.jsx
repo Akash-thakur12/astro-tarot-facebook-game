@@ -80,7 +80,7 @@ const PickerModal = ({ pickerConfig, setPickerConfig, isHindi }) => {
 };
 
 const AskPandit = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentLanguage } = useLanguage();
   const navigate = useNavigate();
   const isHindi = currentLanguage === 'Hindi';
@@ -318,6 +318,9 @@ const AskPandit = () => {
       if (!response.ok) throw new Error(data.error || 'API Request Failed');
 
       setMessages(prev => [...prev, { role: 'model', content: data.text }]);
+      
+      // Sync global user state to reflect coin deduction immediately
+      await refreshUser();
     } catch (error) {
       console.error("AI Error:", error);
       setErrorMsg("Pandit AI is currently meditating. Please try again.");

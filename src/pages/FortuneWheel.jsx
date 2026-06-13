@@ -26,16 +26,7 @@ const FortuneWheel = () => {
   const [wonReward, setWonReward] = useState(null);
   const [showShower, setShowShower] = useState(false);
   const [hasSpunToday, setHasSpunToday] = useState(false);
-  const [localCoins, setLocalCoins] = useState(0);
   const [toast, setToast] = useState(null);
-
-  // Sync local coins with global user state initially
-  useEffect(() => {
-    if (user?.coins !== undefined) {
-      setLocalCoins(user.coins);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.coins]);
 
   // Read today's spin status from Firestore on load
   useEffect(() => {
@@ -145,7 +136,6 @@ const FortuneWheel = () => {
     
     if (wonReward) {
       if (wonReward.type === 'coin') {
-        setLocalCoins(prev => prev + wonReward.value);
         console.log("COINS UPDATED");
         showToast(`Reward claimed! +${wonReward.value} Coins`);
       } else if (wonReward.type === 'xp') {
@@ -234,7 +224,7 @@ const FortuneWheel = () => {
         </button>
         <div className="flex items-center gap-2 bg-black/40 px-4 py-1.5 rounded-2xl border border-mystic-gold/30">
           <span className="text-lg">🪙</span>
-          <span className="text-mystic-gold font-black text-sm">{localCoins}</span>
+          <span className="text-mystic-gold font-black text-sm">{user?.coins || 0}</span>
         </div>
       </div>
 
