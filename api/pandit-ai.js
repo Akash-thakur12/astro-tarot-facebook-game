@@ -165,11 +165,6 @@ export default async function handler(req, res) {
     6. For 'chat' mode, respond with a JSON object: { "text": "Your detailed response here..." }. 
     7. For 'compatibility' mode, follow the strict schema provided in the prompt.`;
 
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    systemInstruction
-  });
-
   let contents = [];
 
   if (mode === 'chat' || mode === 'personal') {
@@ -213,102 +208,128 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     contents.push({ role: 'user', parts: [{ text: compPrompt }] });
   }
 
-  try {
-    const result = await model.generateContent({
-      contents,
-      generationConfig: {
-        temperature: 0.8,
-        responseMimeType: "application/json"
-      }
-    });
+  // Model selection with fallback
+  const models = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
+  let lastError = null;
+  let success = false;
+  let jsonResponse = null;
 
-    if (!result || !result.response) {
-      throw new Error("No response from Gemini");
-    }
-
-    const text = result.response.text();
-    
-    // CRITICAL FIX #1: Empty Gemini Response Protection
-    if (!text || !text.trim()) {
-      throw new Error("Empty Gemini response");
-    }
-
-    // CRITICAL FIX #8: Production Logging
-    if (process.env.NODE_ENV !== "production") {
-      console.log("RAW GEMINI RESPONSE:", text);
-    }
-
-    let cleanedText = text.trim();
-    if (cleanedText.startsWith("```")) {
-      cleanedText = cleanedText
-        .replace(/^```(?:json)?\n?/, "") 
-        .replace(/\n?```$/, "")          
-        .trim();
-    }
-    
-    if (process.env.NODE_ENV !== "production") {
-      console.log("CLEANED RESPONSE:", cleanedText);
-    }
-
-    let jsonResponse;
+  for (const modelName of models) {
     try {
-      jsonResponse = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.error("JSON PARSE ERROR:", parseError);
-      throw new Error("Invalid JSON from Gemini");
-    }
-
-    // CRITICAL FIX #2 & #9: JSON Shape Validation
-    if (mode === 'chat' || mode === 'personal') {
-      if (!jsonResponse || typeof jsonResponse !== "object" || typeof jsonResponse.text !== "string") {
-        console.error("INVALID JSON SHAPE:", jsonResponse);
-        jsonResponse = {
-          text: "I apologize, but I had trouble formatting my response. Please ask again."
-        };
-      }
-    } else {
-      // Compatibility mode validation
-      if (!jsonResponse || typeof jsonResponse !== "object" || typeof jsonResponse.score !== "number" || !Array.isArray(jsonResponse.sections)) {
-         console.error("INVALID COMPATIBILITY JSON SHAPE:", jsonResponse);
-         throw new Error("Invalid compatibility response shape");
-      }
-    }
-
-    return res.status(200).json(jsonResponse);
-
-  } catch (error) {
-    console.error("GEMINI ERROR:", error);
-    
-    // CRITICAL FIX #5: Refund On Gemini Failure
-    try {
-      if (deductedCoins || usedFreePersonal || usedFreeComp) {
-        await db.runTransaction(async (t) => {
-          if (deductedCoins) {
-            t.update(userRef, { coins: FieldValue.increment(10) });
-          }
-          if (usedFreePersonal) {
-            t.update(userRef, { dailyQuestionUsed: false });
-          }
-          if (usedFreeComp) {
-            t.update(userRef, { dailyCompUsed: false });
-          }
-        });
-        console.log(`Refunded user ${uid} due to AI failure`);
-      }
-    } catch (refundError) {
-      console.error("CRITICAL: Failed to refund user", uid, refundError);
-    }
-
-    // Provide a graceful fallback response if requested via chat mode
-    if (mode === 'chat' || mode === 'personal') {
-      return res.status(200).json({ 
-        text: "I apologize, but I am experiencing cosmic interference. Please try again. (Any coins used have been refunded)." 
+      console.log(`Attempting request with model: ${modelName}`);
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction
       });
-    }
 
-    return res.status(500).json({ 
-      error: error?.message || "Internal Server Error",
+      const result = await model.generateContent({
+        contents,
+        generationConfig: {
+          temperature: 0.8,
+          responseMimeType: "application/json"
+        }
+      });
+
+      if (!result || !result.response) {
+        throw new Error("No response from Gemini");
+      }
+
+      const text = result.response.text();
+      if (!text || !text.trim()) {
+        throw new Error("Empty Gemini response");
+      }
+
+      let cleanedText = text.trim();
+      if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText
+          .replace(/^```(?:json)?\n?/, "") 
+          .replace(/\n?```$/, "")          
+          .trim();
+      }
+      
+      jsonResponse = JSON.parse(cleanedText);
+
+      // JSON Shape Validation
+      if (mode === 'chat' || mode === 'personal') {
+        if (!jsonResponse || typeof jsonResponse !== "object" || typeof jsonResponse.text !== "string") {
+          console.error("INVALID JSON SHAPE:", jsonResponse);
+          jsonResponse = {
+            text: "I apologize, but I had trouble formatting my response. Please ask again."
+          };
+        }
+      } else {
+        if (!jsonResponse || typeof jsonResponse !== "object" || typeof jsonResponse.score !== "number" || !Array.isArray(jsonResponse.sections)) {
+           console.error("INVALID COMPATIBILITY JSON SHAPE:", jsonResponse);
+           throw new Error("Invalid compatibility response shape");
+        }
+      }
+
+      console.log(`Success with model: ${modelName}`);
+      success = true;
+      break; // Exit loop on success
+
+    } catch (error) {
+      lastError = error;
+      const statusCode = error?.status || error?.response?.status || "Unknown";
+      console.error(`Error with model ${modelName} (Status ${statusCode}):`, error.message);
+      
+      // If it's a 429 or quota error, log specifically and continue to next model
+      if (statusCode === 429 || error.message?.includes("quota") || error.message?.includes("429")) {
+        console.warn(`Quota exceeded for ${modelName}. Checking fallback...`);
+        continue;
+      }
+      
+      // For other critical errors, we might want to break early, 
+      // but for robustness we try the fallback anyway unless it's an Auth error
+      if (statusCode === 401 || statusCode === 403) {
+        break;
+      }
+    }
+  }
+
+  if (success && jsonResponse) {
+    return res.status(200).json(jsonResponse);
+  }
+
+  // If we reach here, all models failed
+  console.error("ALL MODELS FAILED. Last error:", lastError);
+  const finalStatusCode = lastError?.status || lastError?.response?.status || 500;
+  const isQuotaError = finalStatusCode === 429 || lastError?.message?.includes("quota") || lastError?.message?.includes("429");
+  
+  const fallbackMessage = isQuotaError 
+    ? "Pandit AI is temporarily busy. Please try again shortly."
+    : "I apologize, but I am experiencing cosmic interference. Please try again. (Any coins used have been refunded).";
+
+  // CRITICAL FIX #5: Refund On Gemini Failure
+  try {
+    if (deductedCoins || usedFreePersonal || usedFreeComp) {
+      await db.runTransaction(async (t) => {
+        if (deductedCoins) {
+          t.update(userRef, { coins: FieldValue.increment(10) });
+        }
+        if (usedFreePersonal) {
+          t.update(userRef, { dailyQuestionUsed: false });
+        }
+        if (usedFreeComp) {
+          t.update(userRef, { dailyCompUsed: false });
+        }
+      });
+      console.log(`Refunded user ${uid} due to AI failure (Quota: ${isQuotaError})`);
+    }
+  } catch (refundError) {
+    console.error("CRITICAL: Failed to refund user", uid, refundError);
+  }
+
+  // Provide a graceful fallback response if requested via chat mode
+  if (mode === 'chat' || mode === 'personal') {
+    return res.status(200).json({ 
+      text: fallbackMessage
     });
   }
+
+  return res.status(finalStatusCode === 429 ? 429 : 500).json({ 
+    error: isQuotaError ? "Quota exceeded" : (lastError?.message || "Internal Server Error"),
+  });
 }
+
 
