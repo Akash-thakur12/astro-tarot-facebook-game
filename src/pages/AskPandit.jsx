@@ -209,21 +209,43 @@ const AskPandit = () => {
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
   const periods = ['AM', 'PM'];
 
-  const validateDate = (day, month, year) => {
-    if (!day || !month || !year) return null;
+  const getValidationError = (day, month, year) => {
+    if (!day || !month || !year) return null; // Incomplete date, don't show error yet
+    
     const d = parseInt(day, 10);
     const m = parseInt(month, 10) - 1;
     const y = parseInt(year, 10);
     const date = new Date(y, m, d);
-    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) return false;
+    
+    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
+      console.warn("Validation failed: Invalid calendar date.", { day, month, year });
+      return "Invalid birth date.";
+    }
+    
     const now = new Date();
-    if (date > now) return false;
+    if (date > now) {
+      console.warn("Validation failed: Date is in the future.", { day, month, year });
+      return "Birth date cannot be in the future.";
+    }
+    
     let age = now.getFullYear() - date.getFullYear();
     const mDiff = now.getMonth() - date.getMonth();
     if (mDiff < 0 || (mDiff === 0 && now.getDate() < date.getDate())) age--;
-    if (age < 13 || age > 120) return false;
-    return true;
+    
+    if (age < 13) {
+      console.warn("Validation failed: Age is under 13.", { age, day, month, year });
+      return "Age must be at least 13 years.";
+    }
+    
+    if (age > 120) {
+      console.warn("Validation failed: Age over 120.", { age, day, month, year });
+      return "Please enter a valid birth year.";
+    }
+    
+    return null; // Valid
   };
+
+  const dobError = getValidationError(personalForm.dobDay, personalForm.dobMonth, personalForm.dobYear);
 
   const isFormValid = 
     personalForm.name && 
@@ -235,13 +257,11 @@ const AskPandit = () => {
     personalForm.tobMinute && 
     personalForm.tobPeriod && 
     personalForm.pob && 
-    validateDate(personalForm.dobDay, personalForm.dobMonth, personalForm.dobYear) === true;
+    dobError === null;
 
   const handleStartChat = () => {
     if (isFormValid) {
       setHasEnteredDetails(true);
-    } else {
-      setErrorMsg(t.invalidDate);
     }
   };
 
@@ -338,6 +358,11 @@ const AskPandit = () => {
             <SelectorButton value={personalForm.dobMonth} options={months} placeholder={t.month} title="Select Month" onSelect={(val) => setPersonalForm(p => ({ ...p, dobMonth: val }))} setPickerConfig={setPickerConfig} />
             <SelectorButton value={personalForm.dobYear} options={years} placeholder={t.year} title="Select Year" onSelect={(val) => setPersonalForm(p => ({ ...p, dobYear: val }))} setPickerConfig={setPickerConfig} />
           </div>
+          {dobError && (
+            <div className="text-red-400 text-[10px] font-bold mt-1 ml-1 animate-fade-in">
+              {dobError}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
