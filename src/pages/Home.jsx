@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import LevelProgress from '../components/LevelProgress';
 import DailyStreakCard from '../components/DailyStreakCard';
 import DailyChallengesCard from '../components/DailyChallengesCard';
+import DailyBonus from '../components/DailyBonus';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -224,19 +225,8 @@ const Home = () => {
           </div>
 
           {/* 5. DAILY REWARD */}
-          <div className="col-span-2 bg-gradient-to-r from-emerald-900/30 to-teal-900/10 p-5 rounded-[2rem] border border-emerald-500/20 flex justify-between items-center shadow-lg">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-2xl border border-emerald-500/30">
-                🎁
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-sm">{th.dailyReward}</h3>
-                <p className="text-emerald-400/80 text-[10px] uppercase tracking-widest font-bold">Ready to claim</p>
-              </div>
-            </div>
-            <button className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest text-xs rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] active:scale-95 transition-all">
-              {th.claim}
-            </button>
+          <div className="col-span-2">
+            <DailyBonus />
           </div>
 
           {/* 6. DAILY CHALLENGES */}
