@@ -6,6 +6,7 @@ import { checkPremiumExpiry } from '../services/userService';
 import Button from '../components/ui/Button';
 import LevelProgress from '../components/LevelProgress';
 import DailyStreakCard from '../components/DailyStreakCard';
+import DailyChallengesCard from '../components/DailyChallengesCard';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -22,6 +23,13 @@ const Home = () => {
     nextLevelXp: 600 
   });
   const [streak, setStreak] = useState(3);
+
+  // Mock State for Daily Challenges
+  const [challenges, setChallenges] = useState([
+    { id: 1, title: 'Ask Pandit Once', completed: true },
+    { id: 2, title: 'Draw Tarot Card', completed: true },
+    { id: 3, title: 'Spin Fortune Wheel', completed: false }
+  ]);
 
   useEffect(() => {
     if (user) {
@@ -199,37 +207,7 @@ const Home = () => {
           </div>
 
           {/* 6. DAILY CHALLENGES */}
-          <div className="col-span-2 bg-[#18181b] p-6 rounded-[2.5rem] border border-white/5 space-y-5">
-            <h3 className="text-white/60 text-[10px] uppercase tracking-[0.2em] font-black">{th.challenges}</h3>
-            
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs">
-                  0/1
-                </div>
-                <div className="flex-1">
-                  <p className="text-white text-sm font-bold">{th.challenge1}</p>
-                  <div className="h-1.5 w-full bg-black mt-2 rounded-full overflow-hidden">
-                    <div className="h-full bg-white/20 rounded-full" style={{ width: '0%' }} />
-                  </div>
-                </div>
-                <div className="text-mystic-gold font-bold text-xs">10 🪙</div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-mystic-gold/20 border border-mystic-gold/30 flex items-center justify-center text-xs text-mystic-gold">
-                  ✓
-                </div>
-                <div className="flex-1">
-                  <p className="text-white/50 text-sm font-bold line-through">{th.challenge2}</p>
-                  <div className="h-1.5 w-full bg-black mt-2 rounded-full overflow-hidden">
-                    <div className="h-full bg-mystic-gold rounded-full" style={{ width: '100%' }} />
-                  </div>
-                </div>
-                <div className="text-mystic-gold/50 font-bold text-xs line-through">15 🪙</div>
-              </div>
-            </div>
-          </div>
+          <DailyChallengesCard challenges={challenges} />
 
         </div>
         
