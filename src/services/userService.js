@@ -247,9 +247,54 @@ export const resetDailyQuestionIfNewDay = async (user) => {
     }
   }
 
+  if (user.lastChallengeClaimDate && typeof user.lastChallengeClaimDate.toDate === 'function') {
+    const lastDateClaim = user.lastChallengeClaimDate.toDate();
+    const isNewDayClaim = 
+      lastDateClaim.getDate() !== now.getDate() || 
+      lastDateClaim.getMonth() !== now.getMonth() || 
+      lastDateClaim.getFullYear() !== now.getFullYear();
+
+    if (isNewDayClaim && user.dailyChallengesClaimed) {
+      updates.dailyChallengesClaimed = false;
+      needsUpdate = true;
+    }
+  }
+
   if (needsUpdate) {
     const userRef = doc(db, COLLECTION, user.uid);
     await updateDoc(userRef, updates);
+  }
+};
+
+/**
+ * Claims reward for completing all daily challenges
+ */
+export const claimDailyChallengesReward = async (uid, coins = 50, xp = 20) => {
+  if (!uid) return;
+  const userRef = doc(db, COLLECTION, uid);
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists()) {
+        throw new Error("User does not exist");
+      }
+
+      const userData = userDoc.data();
+      if (userData.dailyChallengesClaimed) {
+        throw new Error("Reward already claimed today");
+      }
+
+      transaction.update(userRef, {
+        coins: increment(coins),
+        xp: increment(xp),
+        dailyChallengesClaimed: true,
+        lastChallengeClaimDate: serverTimestamp()
+      });
+    });
+  } catch (error) {
+    console.error("Challenge Claim Error:", error.message);
+    throw error;
   }
 };
 

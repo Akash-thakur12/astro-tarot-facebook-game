@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { checkPremiumExpiry } from '../services/userService';
+import { checkPremiumExpiry, claimDailyChallengesReward } from '../services/userService';
 import Button from '../components/ui/Button';
 import LevelProgress from '../components/LevelProgress';
 import DailyStreakCard from '../components/DailyStreakCard';
@@ -10,8 +10,14 @@ import DailyChallengesCard from '../components/DailyChallengesCard';
 
 const Home = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentLanguage, setLanguage } = useLanguage();
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3000);
+  };
   
   // Real XP data calculation
   const currentXp = user?.xp || 0;
@@ -37,6 +43,18 @@ const Home = () => {
     { id: 2, title: 'Draw Tarot Card', completed: !!user?.dailyTarotUsed },
     { id: 3, title: 'Spin Fortune Wheel', completed: !!user?.dailySpinUsed }
   ], [user]);
+
+  const handleClaimChallenges = async () => {
+    if (!user?.uid) return;
+    try {
+      await claimDailyChallengesReward(user.uid);
+      await refreshUser();
+      showToast("Daily rewards claimed! +50 Coins, +20 XP");
+    } catch (err) {
+      console.error("Failed to claim daily challenges:", err);
+      showToast(err.message || "Failed to claim reward");
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -70,6 +88,13 @@ const Home = () => {
   return (
     <div className="flex flex-col w-full min-h-screen pb-32 animate-fade-in bg-[#09090b] relative overflow-hidden font-sans">
       
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[250] bg-black/90 border border-mystic-gold text-mystic-gold px-6 py-3 rounded-full font-bold shadow-[0_0_20px_rgba(251,191,36,0.4)] animate-fade-in text-xs whitespace-nowrap uppercase tracking-widest text-center">
+          {toast}
+        </div>
+      )}
+
       {/* Background Glows */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-mystic-gold/10 blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-mystic-purple/10 blur-[100px] pointer-events-none" />
@@ -215,7 +240,11 @@ const Home = () => {
           </div>
 
           {/* 6. DAILY CHALLENGES */}
-          <DailyChallengesCard challenges={challenges} />
+          <DailyChallengesCard 
+            challenges={challenges} 
+            onClaim={handleClaimChallenges} 
+            isClaimed={!!user?.dailyChallengesClaimed}
+          />
 
         </div>
         
