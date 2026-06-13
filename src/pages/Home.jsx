@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
@@ -26,17 +26,17 @@ const Home = () => {
   const levelInfo = { 
     level: calculatedLevel, 
     xp: currentXp, 
-    nextLevelXp: nextLevelXp 
+    maxXp: nextLevelXp 
   };
 
   const [streak, setStreak] = useState(3);
 
-  // Mock State for Daily Challenges
-  const [challenges, setChallenges] = useState([
-    { id: 1, title: 'Ask Pandit Once', completed: true },
-    { id: 2, title: 'Draw Tarot Card', completed: true },
-    { id: 3, title: 'Spin Fortune Wheel', completed: false }
-  ]);
+  // Dynamic Daily Challenges derived from Firestore User data
+  const challenges = useMemo(() => [
+    { id: 1, title: 'Ask Pandit Once', completed: !!user?.dailyQuestionUsed },
+    { id: 2, title: 'Draw Tarot Card', completed: !!user?.dailyTarotUsed },
+    { id: 3, title: 'Spin Fortune Wheel', completed: !!user?.dailySpinUsed }
+  ], [user]);
 
   useEffect(() => {
     if (user) {

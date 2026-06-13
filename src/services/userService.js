@@ -234,6 +234,19 @@ export const resetDailyQuestionIfNewDay = async (user) => {
     }
   }
 
+  if (user.lastSpinDate && typeof user.lastSpinDate.toDate === 'function') {
+    const lastDateSpin = user.lastSpinDate.toDate();
+    const isNewDaySpin = 
+      lastDateSpin.getDate() !== now.getDate() || 
+      lastDateSpin.getMonth() !== now.getMonth() || 
+      lastDateSpin.getFullYear() !== now.getFullYear();
+
+    if (isNewDaySpin && user.dailySpinUsed) {
+      updates.dailySpinUsed = false;
+      needsUpdate = true;
+    }
+  }
+
   if (needsUpdate) {
     const userRef = doc(db, COLLECTION, user.uid);
     await updateDoc(userRef, updates);

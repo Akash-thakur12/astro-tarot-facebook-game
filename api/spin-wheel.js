@@ -130,13 +130,20 @@ export default async function handler(req, res) {
 
       console.log("FIRESTORE WRITE START");
       // Apply Reward
+      const userUpdates = {
+        dailySpinUsed: true,
+        lastSpinDate: FieldValue.serverTimestamp()
+      };
+
       if (wonReward.type === 'coin') {
-        t.set(userRef, { coins: FieldValue.increment(wonReward.value) }, { merge: true });
+        userUpdates.coins = FieldValue.increment(wonReward.value);
       } else if (wonReward.type === 'tarot') {
-        t.set(userRef, { bonusTarot: FieldValue.increment(wonReward.value) }, { merge: true });
+        userUpdates.bonusTarot = FieldValue.increment(wonReward.value);
       } else if (wonReward.type === 'xp') {
-        t.set(userRef, { xp: FieldValue.increment(50) }, { merge: true });
+        userUpdates.xp = FieldValue.increment(50);
       }
+
+      t.set(userRef, userUpdates, { merge: true });
 
       // Save Spin Record
       t.set(spinRef, {
