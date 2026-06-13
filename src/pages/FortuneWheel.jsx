@@ -5,13 +5,13 @@ import Button from '../components/ui/Button';
 
 const REWARDS = [
   { id: 0, label: "5 Coins", icon: "🪙", bg: "#b45309", type: 'coin', value: 5 },
-  { id: 1, label: "2x XP", icon: "⭐", bg: "#7e22ce", type: 'xp', value: 0 },
-  { id: 2, label: "10 Coins", icon: "🪙", bg: "#d97706", type: 'coin', value: 10 },
-  { id: 3, label: "Miss", icon: "💨", bg: "#334155", type: 'miss', value: 0 },
-  { id: 4, label: "20 Coins", icon: "🪙", bg: "#b45309", type: 'coin', value: 20 },
+  { id: 1, label: "10 Coins", icon: "🪙", bg: "#d97706", type: 'coin', value: 10 },
+  { id: 2, label: "20 Coins", icon: "🪙", bg: "#b45309", type: 'coin', value: 20 },
+  { id: 3, label: "50 Coins", icon: "💰", bg: "#d97706", type: 'coin', value: 50 },
+  { id: 4, label: "100 Coins", icon: "💎", bg: "#f59e0b", type: 'coin', value: 100 },
   { id: 5, label: "Bonus Tarot", icon: "🃏", bg: "#be185d", type: 'tarot', value: 0 },
-  { id: 6, label: "50 Coins", icon: "💰", bg: "#d97706", type: 'coin', value: 50 },
-  { id: 7, label: "100 Coins", icon: "💎", bg: "#f59e0b", type: 'coin', value: 100 },
+  { id: 6, label: "2x XP", icon: "⭐", bg: "#7e22ce", type: 'xp', value: 0 },
+  { id: 7, label: "Miss", icon: "💨", bg: "#334155", type: 'miss', value: 0 },
 ];
 
 const FortuneWheel = () => {
@@ -22,6 +22,7 @@ const FortuneWheel = () => {
   const [showPopup, setShowPopup] = useState(false);
   const [wonReward, setWonReward] = useState(null);
   const [showShower, setShowShower] = useState(false);
+  const [hasSpunToday, setHasSpunToday] = useState(false); // Mock state for daily spin limit
 
   // Generates the conic-gradient string for the wheel background
   const generateGradient = () => {
@@ -36,34 +37,28 @@ const FortuneWheel = () => {
   };
 
   const handleSpin = () => {
-    if (isSpinning) return;
+    if (isSpinning || hasSpunToday) return;
     setIsSpinning(true);
     setShowPopup(false);
     setShowShower(false);
 
-    // Determine winning slice (0 to 7)
-    // Weight it slightly so Miss or 100 Coins are rarer in a real app, but random for now
     const targetIndex = Math.floor(Math.random() * REWARDS.length);
     const targetReward = REWARDS[targetIndex];
 
-    // Calculate rotation
-    const spins = 5; // number of full spins
+    const spins = 5; 
     const degreesPerSlice = 360 / REWARDS.length;
-    // We want the target slice to land at the top (0 degrees).
-    // Because slice 0 is at top when rotation is 0, slice 1 is at top when rotation is -45 (or 315).
     const targetRotation = (360 - (targetIndex * degreesPerSlice));
     
-    // Add extra spins to the current rotation, rounded down to nearest 360 to keep it consistent
     const currentBase = Math.floor(rotation / 360) * 360;
     const finalRotation = currentBase + (spins * 360) + targetRotation;
 
     setRotation(finalRotation);
 
-    // Wait for animation to finish (4 seconds matching CSS transition)
     setTimeout(() => {
       setIsSpinning(false);
       setWonReward(targetReward);
       setShowPopup(true);
+      setHasSpunToday(true); // Mark as spun today
       if (targetReward.type !== 'miss') {
         setShowShower(true);
       }
@@ -73,7 +68,6 @@ const FortuneWheel = () => {
   const handleClaim = () => {
     setShowPopup(false);
     setShowShower(false);
-    // TODO: Update backend with reward
   };
 
   // Generate coin particles for the shower effect
@@ -226,6 +220,16 @@ const FortuneWheel = () => {
           </div>
 
         </div>
+
+        {/* Daily Spin Status */}
+        <div className="mt-12 text-center animate-fade-in">
+          <div className={`px-6 py-2.5 rounded-full border ${hasSpunToday ? 'bg-white/5 border-white/10 text-white/40' : 'bg-mystic-gold/10 border-mystic-gold/30 text-mystic-gold'} inline-block shadow-lg`}>
+            <span className="text-[11px] font-black uppercase tracking-widest">
+              {hasSpunToday ? 'Already Spun Today' : 'Daily Free Spin Available'}
+            </span>
+          </div>
+        </div>
+
       </div>
 
       {/* Reward Popup Modal */}
