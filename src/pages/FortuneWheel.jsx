@@ -25,6 +25,14 @@ const FortuneWheel = () => {
   const [wonReward, setWonReward] = useState(null);
   const [showShower, setShowShower] = useState(false);
   const [hasSpunToday, setHasSpunToday] = useState(false);
+  const [localCoins, setLocalCoins] = useState(0);
+
+  // Sync local coins with global user state initially
+  useEffect(() => {
+    if (user?.coins !== undefined) {
+      setLocalCoins(user.coins);
+    }
+  }, [user?.coins]);
 
   // Generates the conic-gradient string for the wheel background
   const generateGradient = () => {
@@ -38,38 +46,69 @@ const FortuneWheel = () => {
     return gradient;
   };
 
-  const handleSpin = () => {
+  const handleSpin = async () => {
     if (spinState === 'spinning' || hasSpunToday) return;
     
-    setSpinState('spinning');
+    setSpinState('fetching');
     setShowPopup(false);
     setShowShower(false);
 
-    // Determine winning slice (0 to 7)
-    const targetIndex = Math.floor(Math.random() * REWARDS.length);
-    const targetReward = REWARDS[targetIndex];
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/spin-wheel', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
 
-    // Calculate rotation: 8 full spins + target slice offset
-    const spins = 8; 
-    const degreesPerSlice = 360 / REWARDS.length;
-    const targetRotation = (360 - (targetIndex * degreesPerSlice));
-    
-    // Add extra spins to the current rotation
-    const currentBase = Math.floor(rotation / 360) * 360;
-    const finalRotation = currentBase + (spins * 360) + targetRotation;
-
-    setRotation(finalRotation);
-
-    // Animation Duration: 5 seconds
-    setTimeout(() => {
-      setSpinState('finished');
-      setWonReward(targetReward);
-      setShowPopup(true);
-      setHasSpunToday(true); // Mark as spun today
-      if (targetReward.type !== 'miss') {
-        setShowShower(true);
+      if (!res.ok) {
+        if (res.status === 429) throw new Error("Too many requests.");
+        throw new Error(data.error || "Failed to spin");
       }
-    }, 5000);
+
+      if (data.alreadySpun) {
+        setHasSpunToday(true);
+        setSpinState('idle');
+        return; // Handled visually by state
+      }
+
+      const targetId = data.reward.rewardId;
+      const targetReward = REWARDS.find(r => r.id === targetId) || REWARDS[0];
+
+      setSpinState('spinning');
+
+      // Calculate rotation: 8 full spins + target slice offset
+      const spins = 8; 
+      const degreesPerSlice = 360 / REWARDS.length;
+      const targetRotation = (360 - (targetId * degreesPerSlice));
+      
+      // Add extra spins to the current rotation
+      const currentBase = Math.floor(rotation / 360) * 360;
+      const finalRotation = currentBase + (spins * 360) + targetRotation;
+
+      setRotation(finalRotation);
+
+      // Animation Duration: 5 seconds
+      setTimeout(() => {
+        setSpinState('finished');
+        setWonReward(targetReward);
+        setShowPopup(true);
+        setHasSpunToday(true); // Mark as spun today
+        
+        if (targetReward.type === 'coin') {
+           setLocalCoins(prev => prev + targetReward.value);
+        }
+
+        if (targetReward.type !== 'miss') {
+          setShowShower(true);
+        }
+      }, 5000);
+
+    } catch (error) {
+      console.error("Spin error:", error);
+      setSpinState('idle');
+      // Briefly show an error toast or just revert to idle
+    }
   };
 
   const handleClaim = () => {
