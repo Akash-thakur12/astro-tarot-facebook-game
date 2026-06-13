@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { auth } from '../services/firebase';
 import { useAuth } from '../context/useAuth';
 import Button from '../components/ui/Button';
 
@@ -41,7 +42,7 @@ const FortuneWheel = () => {
     const checkStatus = async () => {
       if (!user) return;
       try {
-        const token = await user.getIdToken();
+        const token = await auth.currentUser.getIdToken();
         const res = await fetch('/api/spin-status', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -84,7 +85,7 @@ const FortuneWheel = () => {
     setShowShower(false);
 
     try {
-      const token = await user.getIdToken();
+      const token = await auth.currentUser.getIdToken();
       const res = await fetch('/api/spin-wheel', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
