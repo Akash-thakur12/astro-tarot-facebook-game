@@ -295,9 +295,9 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
       } catch (parseError) {
         console.warn("JSON.parse failed, attempting regex fallback:", parseError.message);
         
-        // Regex Fallback Parser
+        // Regex Fallback Parser - handles both "key": and key:
         const extractField = (field) => {
-          const regex = new RegExp(`"${field}"\\s*:\\s*"(.*?)"`, "is");
+          const regex = new RegExp(`"?${field}"?\\s*:\\s*"(.*?)"`, "is");
           const match = cleanedText.match(regex);
           return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : "";
         };
@@ -310,12 +310,16 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
           };
           
           if (!parsedData.prediction && !parsedData.reasoning && !parsedData.guidance) {
-            parsedData.prediction = cleanedText; // Ultimate fallback
+            parsedData = {
+              prediction: cleanedText,
+              reasoning: "",
+              guidance: ""
+            };
           }
         } else {
           // Compatibility mode fallback
-          const scoreMatch = cleanedText.match(/"score"\s*:\s*(\d+)/);
-          const guidanceMatch = cleanedText.match(/"guidance"\s*:\s*"(.*?)"/);
+          const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
+          const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
           parsedData = {
             score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
             guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
