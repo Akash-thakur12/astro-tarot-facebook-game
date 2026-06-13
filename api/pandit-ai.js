@@ -69,11 +69,12 @@ export default async function handler(req, res) {
   }
 
   // CRITICAL FIX #6: Rate Limiting
-  const now = Date.now();
-  const userRate = rateLimits.get(uid) || { count: 0, resetTime: now + 60000 };
-  if (now > userRate.resetTime) {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const userRate = rateLimits.get(uid) || { count: 0, resetTime: nowMs + 60000 };
+  if (nowMs > userRate.resetTime) {
     userRate.count = 0;
-    userRate.resetTime = now + 60000;
+    userRate.resetTime = nowMs + 60000;
   }
   if (userRate.count >= 20) {
     return res.status(429).json({ error: 'Too many requests. Please wait a minute.' });
