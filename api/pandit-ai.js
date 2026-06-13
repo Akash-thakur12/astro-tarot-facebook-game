@@ -189,8 +189,8 @@ Current Season: ${season}`;
 
     CRITICAL BEHAVIOR RULES:
     1. NEVER make predictions or give timing windows in the past.
-    2. ALL FUTURE PREDICTIONS MUST BE RELATIVE to the provided Current Date Context.
-    3. Prefer relative timelines (e.g., "In the next 6-12 months", "By the end of this season") rather than just hardcoded years.
+    2. TIMELINE RULES: Do NOT invent exact dates, months, or years. Avoid specific timelines like "6-9 months", "2027", "next year", "December", or "March".
+    3. Instead of specific timelines, use qualitative terms: "low chance", "moderate chance", "strong chance", "near-term opportunity", "gradual improvement", or "longer-term possibility".
     4. FIRST SENTENCE MUST be a direct prediction or answer.
     5. USE THE PROVIDED AGE EXACTLY. Do not estimate, recalculate, or state a different age.
     6. LANGUAGE: Respond in the same language as the user (Hindi, English, Hinglish).
@@ -211,7 +211,7 @@ Current Season: ${season}`;
     
     REQUIRED JSON SCHEMA:
     {
-      "prediction": "Direct answer. For relationship/ex queries, include 'high/moderate/low chance'. Use relative timelines.",
+      "prediction": "Direct answer. For relationship/ex queries, include 'high/moderate/low chance'. Use qualitative timelines.",
       "reasoning": "Brief symbolic reason based on the birth profile patterns.",
       "guidance": "Unique, practical, and spiritual advice."
     }`;
