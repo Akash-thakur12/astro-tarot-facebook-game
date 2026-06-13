@@ -114,6 +114,7 @@ export default async function handler(req, res) {
 
       // Generate Reward
       const wonReward = getWeightedReward();
+      console.log("REWARD GENERATED:", wonReward.label);
 
       // Apply Reward
       if (wonReward.type === 'coin') {
@@ -121,8 +122,7 @@ export default async function handler(req, res) {
       } else if (wonReward.type === 'tarot') {
         t.set(userRef, { bonusTarot: FieldValue.increment(wonReward.value) }, { merge: true });
       } else if (wonReward.type === 'xp') {
-        // Handle XP multiplier logic via user document flag or explicit XP addition
-        t.set(userRef, { xpMultiplierActive: true, xpMultiplierExpiry: FieldValue.serverTimestamp() }, { merge: true });
+        t.set(userRef, { xp: FieldValue.increment(50) }, { merge: true });
       }
 
       // Save Spin Record
@@ -134,6 +134,8 @@ export default async function handler(req, res) {
         rewardId: wonReward.id, // For frontend to know which slice to animate
         createdAt: FieldValue.serverTimestamp()
       });
+
+      console.log("FIRESTORE UPDATED: Reward saved for user.");
 
       return { 
         alreadySpun: false, 

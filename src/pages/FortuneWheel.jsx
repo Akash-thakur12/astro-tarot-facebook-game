@@ -9,8 +9,8 @@ const REWARDS = [
   { id: 2, label: "20 Coins", icon: "🪙", bg: "#b45309", type: 'coin', value: 20 },
   { id: 3, label: "50 Coins", icon: "💰", bg: "#d97706", type: 'coin', value: 50 },
   { id: 4, label: "100 Coins", icon: "💎", bg: "#f59e0b", type: 'coin', value: 100 },
-  { id: 5, label: "Bonus Tarot", icon: "🃏", bg: "#be185d", type: 'tarot', value: 0 },
-  { id: 6, label: "2x XP", icon: "⭐", bg: "#7e22ce", type: 'xp', value: 0 },
+  { id: 5, label: "Bonus Tarot", icon: "🃏", bg: "#be185d", type: 'tarot', value: 1 },
+  { id: 6, label: "2x XP", icon: "⭐", bg: "#7e22ce", type: 'xp', value: 50 },
   { id: 7, label: "Miss", icon: "💨", bg: "#334155", type: 'miss', value: 0 },
 ];
 
@@ -19,13 +19,14 @@ const FortuneWheel = () => {
   const { user } = useAuth();
   
   // Explicit State Management
-  const [spinState, setSpinState] = useState('idle'); // 'idle' | 'spinning' | 'finished'
+  const [spinState, setSpinState] = useState('idle'); // 'idle' | 'spinning' | 'finished' | 'fetching'
   const [rotation, setRotation] = useState(0);
   const [showPopup, setShowPopup] = useState(false);
   const [wonReward, setWonReward] = useState(null);
   const [showShower, setShowShower] = useState(false);
   const [hasSpunToday, setHasSpunToday] = useState(false);
   const [localCoins, setLocalCoins] = useState(0);
+  const [toast, setToast] = useState(null);
 
   // Sync local coins with global user state initially
   useEffect(() => {
@@ -34,6 +35,33 @@ const FortuneWheel = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.coins]);
+
+  // Read today's spin status from Firestore on load
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/spin-status', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.hasSpunToday) {
+            setHasSpunToday(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch spin status:", error);
+      }
+    };
+    checkStatus();
+  }, [user]);
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Generates the conic-gradient string for the wheel background
   const generateGradient = () => {
@@ -48,8 +76,9 @@ const FortuneWheel = () => {
   };
 
   const handleSpin = async () => {
-    if (spinState === 'spinning' || hasSpunToday) return;
+    if (spinState === 'spinning' || spinState === 'fetching' || hasSpunToday) return;
     
+    console.log("SPIN STARTED");
     setSpinState('fetching');
     setShowPopup(false);
     setShowShower(false);
@@ -70,7 +99,8 @@ const FortuneWheel = () => {
       if (data.alreadySpun) {
         setHasSpunToday(true);
         setSpinState('idle');
-        return; // Handled visually by state
+        showToast("Daily spin already used");
+        return; 
       }
 
       const targetId = data.reward.rewardId;
@@ -95,10 +125,7 @@ const FortuneWheel = () => {
         setWonReward(targetReward);
         setShowPopup(true);
         setHasSpunToday(true); // Mark as spun today
-        
-        if (targetReward.type === 'coin') {
-           setLocalCoins(prev => prev + targetReward.value);
-        }
+        console.log("POPUP OPENED");
 
         if (targetReward.type !== 'miss') {
           setShowShower(true);
@@ -108,13 +135,29 @@ const FortuneWheel = () => {
     } catch (error) {
       console.error("Spin error:", error);
       setSpinState('idle');
-      // Briefly show an error toast or just revert to idle
+      showToast("Network error. Please try again.");
     }
   };
 
   const handleClaim = () => {
+    console.log("CLAIM CLICKED");
+    
+    if (wonReward) {
+      if (wonReward.type === 'coin') {
+        setLocalCoins(prev => prev + wonReward.value);
+        console.log("COINS UPDATED");
+        showToast(`Reward claimed! +${wonReward.value} Coins`);
+      } else if (wonReward.type === 'xp') {
+        console.log("XP UPDATED");
+        showToast(`XP gained! (+50 XP)`);
+      } else if (wonReward.type === 'tarot') {
+        showToast(`Reward claimed! Bonus Tarot Unlocked`);
+      }
+    }
+    
     setShowPopup(false);
     setShowShower(false);
+    console.log("UI REFRESHED");
   };
 
   // Generate coin particles for the shower effect
@@ -150,6 +193,13 @@ const FortuneWheel = () => {
   return (
     <div className="flex flex-col w-full h-screen bg-[#09090b] relative overflow-hidden font-sans">
       
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[250] bg-black/90 border border-mystic-gold text-mystic-gold px-6 py-3 rounded-full font-bold shadow-[0_0_20px_rgba(251,191,36,0.4)] animate-fade-in text-xs whitespace-nowrap uppercase tracking-widest">
+          {toast}
+        </div>
+      )}
+
       {/* Dynamic Keyframes for Coin Shower */}
       <style>{`
         @keyframes coin-fall {
@@ -245,8 +295,8 @@ const FortuneWheel = () => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
             <button 
               onClick={handleSpin}
-              disabled={spinState === 'spinning'}
-              className={`w-20 h-20 rounded-full border-4 border-mystic-gold bg-gradient-to-b from-[#18181b] to-black flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.5)] transition-transform ${spinState === 'spinning' ? 'opacity-80 scale-95' : 'hover:scale-105 active:scale-95'}`}
+              disabled={spinState === 'spinning' || spinState === 'fetching' || hasSpunToday}
+              className={`w-20 h-20 rounded-full border-4 border-mystic-gold bg-gradient-to-b from-[#18181b] to-black flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.5)] transition-transform ${spinState === 'spinning' || spinState === 'fetching' ? 'opacity-80 scale-95' : 'hover:scale-105 active:scale-95'}`}
             >
               <span className="text-mystic-gold font-black uppercase tracking-widest text-xs">Spin</span>
             </button>

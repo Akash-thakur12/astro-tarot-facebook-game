@@ -13,15 +13,22 @@ const Home = () => {
   const { user } = useAuth();
   const { currentLanguage, setLanguage } = useLanguage();
   
-  // State structure for Level Progression (Mock Data)
-  // Formula: L1=0, L2=100, L3=250, L4=500, L5=800
-  // Simulating user is at Level 4, current XP is 420. Next level (L5) requires 500 XP total, but relative to level it's usually current / next threshold.
-  // The example requested: 420 / 600 XP (L4 to L5 requires 800 - 500 = 300? Let's use the explicit example: 420 / 600)
-  const [levelInfo, setLevelInfo] = useState({ 
-    level: 5, 
-    xp: 420, 
-    nextLevelXp: 600 
-  });
+  // Real XP data calculation
+  const currentXp = user?.xp || 0;
+  let calculatedLevel = 1;
+  let nextLevelXp = 100;
+  
+  if (currentXp >= 800) { calculatedLevel = 5; nextLevelXp = 1200; }
+  else if (currentXp >= 500) { calculatedLevel = 4; nextLevelXp = 800; }
+  else if (currentXp >= 250) { calculatedLevel = 3; nextLevelXp = 500; }
+  else if (currentXp >= 100) { calculatedLevel = 2; nextLevelXp = 250; }
+
+  const levelInfo = { 
+    level: calculatedLevel, 
+    xp: currentXp, 
+    nextLevelXp: nextLevelXp 
+  };
+
   const [streak, setStreak] = useState(3);
 
   // Mock State for Daily Challenges
