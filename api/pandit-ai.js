@@ -156,7 +156,6 @@ export default async function handler(req, res) {
   const genAI = new GoogleGenerativeAI(API_KEY);
 
   // Generate dynamic date context
-  const now = new Date();
   const dayStr = String(now.getDate()).padStart(2, '0');
   const monthNum = now.getMonth(); // 0-indexed
   const monthStr = String(monthNum + 1).padStart(2, '0');
