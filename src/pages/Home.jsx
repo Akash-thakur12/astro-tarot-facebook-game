@@ -5,6 +5,7 @@ import { useLanguage } from '../context/useLanguage';
 import { checkPremiumExpiry } from '../services/userService';
 import Button from '../components/ui/Button';
 import LevelProgress from '../components/LevelProgress';
+import DailyStreakCard from '../components/DailyStreakCard';
 
 const Home = () => {
   const navigate = useNavigate();
