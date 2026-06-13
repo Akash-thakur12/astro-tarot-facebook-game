@@ -181,6 +181,7 @@ const Home = () => {
 
           {/* 4. FORTUNE WHEEL */}
           <div 
+            onClick={() => navigate('/fortune-wheel')}
             className="bg-[#18181b]/80 p-5 rounded-[2rem] border border-white/10 flex flex-col items-center justify-center text-center gap-3 cursor-pointer active:scale-95 transition-all hover:border-mystic-gold/50 shadow-lg"
           >
             <div className="text-4xl drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]">🎡</div>

@@ -7,6 +7,7 @@ import Tarot from './pages/Tarot';
 import Kundali from './pages/Kundali';
 import Premium from './pages/Premium';
 import AskPandit from './pages/AskPandit';
+import FortuneWheel from './pages/FortuneWheel';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
               <Route path="/kundali" element={<Kundali />} />
               <Route path="/premium" element={<Premium />} />
               <Route path="/ask-pandit" element={<AskPandit />} />
+              <Route path="/fortune-wheel" element={<FortuneWheel />} />
             </Routes>
           </Layout>
         </Router>
@@ -27,6 +29,5 @@ function App() {
     </LanguageProvider>
   );
 }
-
 
 export default App;
