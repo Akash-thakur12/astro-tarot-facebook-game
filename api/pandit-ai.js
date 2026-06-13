@@ -208,15 +208,21 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     contents.push({ role: 'user', parts: [{ text: compPrompt }] });
   }
 
-  // Model selection with fallback
-  const models = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
-  let lastError = null;
-  let success = false;
+  // Model selection and fallback logic
+  const models = [
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-2.0-flash-001"
+  ];
+
   let jsonResponse = null;
+  let success = false;
+  let lastError = null;
 
   for (const modelName of models) {
     try {
-      console.log(`Attempting request with model: ${modelName}`);
+      console.log("Attempting model:", modelName);
+      
       const model = genAI.getGenerativeModel({
         model: modelName,
         systemInstruction
@@ -264,26 +270,34 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
         }
       }
 
-      console.log(`Success with model: ${modelName}`);
+      console.log("Model success:", modelName);
       success = true;
       break; // Exit loop on success
 
     } catch (error) {
       lastError = error;
       const statusCode = error?.status || error?.response?.status || "Unknown";
-      console.error(`Error with model ${modelName} (Status ${statusCode}):`, error.message);
-      
-      // If it's a 429 or quota error, log specifically and continue to next model
-      if (statusCode === 429 || error.message?.includes("quota") || error.message?.includes("429")) {
-        console.warn(`Quota exceeded for ${modelName}. Checking fallback...`);
+      console.error("Model failed:", modelName, {
+        message: error.message,
+        status: statusCode,
+        details: error.response?.data || "No extra data"
+      });
+
+      // If it's a 429 (quota) or 503 (unavailable), continue to the next model
+      if (statusCode === 429 || statusCode === 503 || error.message?.includes("quota") || error.message?.includes("429")) {
+        console.warn(`Fallback triggered from ${modelName} due to status ${statusCode}.`);
+        continue;
+      }
+
+      // For other critical errors (like 401/403 Auth errors or 400 Bad Request), 
+      // we might want to try the next model anyway for robustness, but usually these are permanent.
+      // We will continue for now unless it's a clear 404 Model Not Found.
+      if (statusCode === 404) {
+        console.warn(`Model ${modelName} not found. Trying next...`);
         continue;
       }
       
-      // For other critical errors, we might want to break early, 
-      // but for robustness we try the fallback anyway unless it's an Auth error
-      if (statusCode === 401 || statusCode === 403) {
-        break;
-      }
+      // Default behavior: try next model in the chain
     }
   }
 
@@ -292,13 +306,13 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
   }
 
   // If we reach here, all models failed
-  console.error("ALL MODELS FAILED. Last error:", lastError);
+  console.error("ALL MODELS FAILED. Final error state recorded.");
   const finalStatusCode = lastError?.status || lastError?.response?.status || 500;
   const isQuotaError = finalStatusCode === 429 || lastError?.message?.includes("quota") || lastError?.message?.includes("429");
   
   const fallbackMessage = isQuotaError 
-    ? "Pandit AI is temporarily busy. Please try again shortly."
-    : "I apologize, but I am experiencing cosmic interference. Please try again. (Any coins used have been refunded).";
+    ? "Pandit AI is temporarily busy. Please try again later."
+    : "I apologize, but I am experiencing cosmic interference. Please try again later.";
 
   // CRITICAL FIX #5: Refund On Gemini Failure
   try {
@@ -314,7 +328,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
           t.update(userRef, { dailyCompUsed: false });
         }
       });
-      console.log(`Refunded user ${uid} due to AI failure (Quota: ${isQuotaError})`);
+      console.log(`Refunded user ${uid} due to AI failure (Quota issue: ${isQuotaError})`);
     }
   } catch (refundError) {
     console.error("CRITICAL: Failed to refund user", uid, refundError);
@@ -331,5 +345,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     error: isQuotaError ? "Quota exceeded" : (lastError?.message || "Internal Server Error"),
   });
 }
+
+
 
 
