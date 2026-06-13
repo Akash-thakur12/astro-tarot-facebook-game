@@ -17,12 +17,14 @@ const REWARDS = [
 const FortuneWheel = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [isSpinning, setIsSpinning] = useState(false);
+  
+  // Explicit State Management
+  const [spinState, setSpinState] = useState('idle'); // 'idle' | 'spinning' | 'finished'
   const [rotation, setRotation] = useState(0);
   const [showPopup, setShowPopup] = useState(false);
   const [wonReward, setWonReward] = useState(null);
   const [showShower, setShowShower] = useState(false);
-  const [hasSpunToday, setHasSpunToday] = useState(false); // Mock state for daily spin limit
+  const [hasSpunToday, setHasSpunToday] = useState(false);
 
   // Generates the conic-gradient string for the wheel background
   const generateGradient = () => {
@@ -37,32 +39,37 @@ const FortuneWheel = () => {
   };
 
   const handleSpin = () => {
-    if (isSpinning || hasSpunToday) return;
-    setIsSpinning(true);
+    if (spinState === 'spinning' || hasSpunToday) return;
+    
+    setSpinState('spinning');
     setShowPopup(false);
     setShowShower(false);
 
+    // Determine winning slice (0 to 7)
     const targetIndex = Math.floor(Math.random() * REWARDS.length);
     const targetReward = REWARDS[targetIndex];
 
-    const spins = 5; 
+    // Calculate rotation: 8 full spins + target slice offset
+    const spins = 8; 
     const degreesPerSlice = 360 / REWARDS.length;
     const targetRotation = (360 - (targetIndex * degreesPerSlice));
     
+    // Add extra spins to the current rotation
     const currentBase = Math.floor(rotation / 360) * 360;
     const finalRotation = currentBase + (spins * 360) + targetRotation;
 
     setRotation(finalRotation);
 
+    // Animation Duration: 5 seconds
     setTimeout(() => {
-      setIsSpinning(false);
+      setSpinState('finished');
       setWonReward(targetReward);
       setShowPopup(true);
       setHasSpunToday(true); // Mark as spun today
       if (targetReward.type !== 'miss') {
         setShowShower(true);
       }
-    }, 4000);
+    }, 5000);
   };
 
   const handleClaim = () => {
