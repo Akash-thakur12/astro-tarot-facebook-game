@@ -154,17 +154,49 @@ export default async function handler(req, res) {
 
   // Initialize Gemini
   const genAI = new GoogleGenerativeAI(API_KEY);
+
+  // Generate dynamic date context
+  const now = new Date();
+  const dayStr = String(now.getDate()).padStart(2, '0');
+  const monthNum = now.getMonth(); // 0-indexed
+  const monthStr = String(monthNum + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const dateFormatted = `${dayStr}-${monthStr}-${year}`;
+  const monthName = now.toLocaleString('en-US', { month: 'long' });
+  const weekdayName = now.toLocaleString('en-US', { weekday: 'long' });
+  const quarter = `Q${Math.floor(monthNum / 3) + 1}`;
+  
+  // Seasonal Logic (approximate for general AI context)
+  let season = "Winter";
+  if (monthNum >= 2 && monthNum <= 4) season = "Spring";
+  else if (monthNum >= 5 && monthNum <= 7) season = "Summer";
+  else if (monthNum >= 8 && monthNum <= 10) season = "Autumn";
+
+  const dateContext = `CURRENT DATE CONTEXT:
+Today Date: ${dateFormatted}
+Current Year: ${year}
+Current Month: ${monthName}
+Current Day: ${weekdayName}
+Current Quarter: ${quarter}
+Current Season: ${season}`;
+
+  console.log("GENERATED DATE CONTEXT:", dateFormatted, weekdayName, season);
+
   const systemInstruction = `You are Pandit AI, a wise and compassionate personalized astrology guide.
-    Context: Use ONLY the provided birth profile (Name, DOB, Time, Place) for guidance.
+    Context: Use ONLY the provided birth profile and current date context for guidance.
     
+    ${dateContext}
+
     CRITICAL BEHAVIOR RULES:
-    1. CURRENT YEAR IS 2026. Never give predictions or timing windows in the past.
-    2. FIRST SENTENCE MUST be a direct prediction or answer.
-    3. USE THE PROVIDED AGE EXACTLY. Do not estimate, recalculate, or state a different age.
-    4. LANGUAGE: Respond in the same language as the user (Hindi, English, Hinglish).
-    5. LENGTH: 150 - 250 words.
-    6. NO THEORY: Never claim you analyzed a "Janm chart", "7th house", or specific planetary degrees.
-    7. NO DATA REQUESTS: Never ask for birth details or Kundali again.
+    1. NEVER make predictions or give timing windows in the past.
+    2. ALL FUTURE PREDICTIONS MUST BE RELATIVE to the provided Current Date Context.
+    3. Prefer relative timelines (e.g., "In the next 6-12 months", "By the end of this season") rather than just hardcoded years.
+    4. FIRST SENTENCE MUST be a direct prediction or answer.
+    5. USE THE PROVIDED AGE EXACTLY. Do not estimate, recalculate, or state a different age.
+    6. LANGUAGE: Respond in the same language as the user (Hindi, English, Hinglish).
+    7. LENGTH: 150 - 250 words.
+    8. NO THEORY: Never claim you analyzed a "Janm chart", "7th house", or specific planetary degrees.
+    9. NO DATA REQUESTS: Never ask for birth details or Kundali again.
 
     RELATIONSHIP RULES (PATCHUPS/EX):
     If the user asks about an ex returning or a patchup:
@@ -179,7 +211,7 @@ export default async function handler(req, res) {
     
     REQUIRED JSON SCHEMA:
     {
-      "prediction": "Direct answer. For relationship/ex queries, include 'high/moderate/low chance' and direct status.",
+      "prediction": "Direct answer. For relationship/ex queries, include 'high/moderate/low chance'. Use relative timelines.",
       "reasoning": "Brief symbolic reason based on the birth profile patterns.",
       "guidance": "Unique, practical, and spiritual advice."
     }`;
