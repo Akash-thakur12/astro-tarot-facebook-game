@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { purchasePremium } from '../services/userService';
+import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
 
 const Premium = () => {
@@ -54,12 +54,31 @@ const Premium = () => {
   const handleUnlock = async () => {
     if (!user?.uid) return;
     try {
-      await purchasePremium(user.uid);
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/payments/verify-purchase', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderId: "mock_order_" + Date.now(),
+          paymentId: "mock_payment_" + Date.now(),
+          signature: "mock_sig"
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Payment verification failed');
+      }
+
       await refreshUser();
       alert(tp.congrats);
       navigate('/');
     } catch (error) {
-      console.error("Purchase Error:", error);
+      console.error("Purchase Error:", error.message);
+      alert(error.message);
     }
   };
 

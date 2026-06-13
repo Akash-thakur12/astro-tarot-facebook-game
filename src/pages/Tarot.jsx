@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { resetTarotDailyIfNewDay, unlockExtraTarotReading, getTarotHistory, saveTarotReading, canReadTarotToday } from '../services/userService';
+import { getTarotHistory, canReadTarotToday } from '../services/userService';
+import { auth } from '../services/firebase';
 import tarotData from '../data/tarot_data.json';
 import Button from '../components/ui/Button';
 
 const Tarot = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentLanguage } = useLanguage();
   const navigate = useNavigate();
   const [selectedCard, setSelectedCard] = useState(null);
@@ -32,13 +33,29 @@ const Tarot = () => {
   useEffect(() => {
     const initializeTarot = async () => {
       if (user?.uid) {
-        await resetTarotDailyIfNewDay(user);
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          // Unified Status Check & Daily Reset
+          const response = await fetch('/api/user/check-status', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.resetPerformed) {
+              await refreshUser();
+            }
+          }
+        } catch (err) {
+          console.error("Status Check Error:", err);
+        }
         await updateHistory();
       }
     };
     
     initializeTarot();
-  }, [user, updateHistory]);
+  }, [user, updateHistory, refreshUser]);
 
   const handleCardClick = async (index) => {
     if (selectedCard !== null || isFlipping || isMovingToCenter) return;
@@ -56,19 +73,32 @@ const Tarot = () => {
     
     try {
       if (user?.uid) {
-        // Save detailed history to sub-collection
-        await saveTarotReading(user.uid, {
-          cardName: randomCard.name,
-          lovePrediction: randomCard.love_en,
-          careerPrediction: randomCard.career_en,
-          healthPrediction: randomCard.health_en
+        const idToken = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/tarot/save-reading', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            cardName: randomCard.name,
+            lovePrediction: randomCard.love_en,
+            careerPrediction: randomCard.career_en,
+            healthPrediction: randomCard.health_en
+          })
         });
 
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to save reading');
+        }
+
         await updateHistory();
+        await refreshUser();
       }
       setIsUnlockedByAd(false);
     } catch (err) {
-      console.error("Tarot Save Error:", err);
+      console.error("Tarot Save Error:", err.message);
     }
 
     // Step 2: After movement (600ms), start 3D Flip
@@ -97,7 +127,15 @@ const Tarot = () => {
     
     setTimeout(async () => {
       try {
-        await unlockExtraTarotReading(user.uid);
+        const idToken = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/tarot/unlock-reading', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to unlock reading');
+
+        await refreshUser();
         setIsUnlockedByAd(true);
         setSelectedCard(null);
         setShowResult(false);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { watchRewardAds } from '../services/userService';
+import { auth } from '../services/firebase';
 
 const RewardCenter = () => {
   const { user, refreshUser } = useAuth();
@@ -9,23 +9,37 @@ const RewardCenter = () => {
   const [isWatching, setIsWatching] = useState(false);
   
   const adsWatched = user?.adsWatchedToday || 0;
-  const maxAds = 4;
+  const maxAds = 5;
   const canWatch = adsWatched < maxAds;
 
   const handleWatchAd = async () => {
     if (!canWatch || isWatching) return;
     
-    setIsWatchingAd(true);
+    setIsWatching(true);
     
     // Simulate Ad watching duration
     setTimeout(async () => {
       try {
-        await watchRewardAds(user.uid, 50);
+        const idToken = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/rewards/ad-payout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to claim ad reward');
+        }
+
         await refreshUser();
+        console.log("Ad reward claimed via API:", data.reward);
       } catch (error) {
-        console.error("Ad Reward Error:", error);
+        console.error("Ad Reward Error:", error.message);
       } finally {
-        setIsWatchingAd(false);
+        setIsWatching(false);
       }
     }, 2000);
   };

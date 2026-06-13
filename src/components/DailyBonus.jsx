@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { claimDailyBonus } from '../services/userService';
+import { auth } from '../services/firebase';
 
 const DailyBonus = () => {
   const { user, refreshUser } = useAuth();
@@ -42,10 +42,24 @@ const DailyBonus = () => {
     if (!canClaim || isClaiming) return;
     setIsClaiming(true);
     try {
-      await claimDailyBonus(user.uid);
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/rewards/daily-bonus', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to claim reward');
+      }
+
       await refreshUser();
+      console.log("Daily bonus claimed via API:", data.reward);
     } catch (error) {
-      console.error("Claim Error:", error);
+      console.error("Claim Error:", error.message);
     } finally {
       setIsClaiming(false);
     }

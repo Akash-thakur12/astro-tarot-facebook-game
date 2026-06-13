@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { checkPremiumExpiry, claimDailyChallengesReward } from '../services/userService';
+import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
 import LevelProgress from '../components/LevelProgress';
 import DailyStreakCard from '../components/DailyStreakCard';
@@ -48,9 +48,22 @@ const Home = () => {
   const handleClaimChallenges = async () => {
     if (!user?.uid) return;
     try {
-      await claimDailyChallengesReward(user.uid);
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/rewards/challenges', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to claim challenges');
+      }
+
       await refreshUser();
-      showToast("Daily rewards claimed! +50 Coins, +20 XP");
+      showToast(`Daily rewards claimed! +${data.reward.coins} Coins, +${data.reward.xp} XP`);
     } catch (err) {
       console.error("Failed to claim daily challenges:", err);
       showToast(err.message || "Failed to claim reward");
@@ -58,10 +71,27 @@ const Home = () => {
   };
 
   useEffect(() => {
-    if (user) {
-      checkPremiumExpiry(user);
-    }
-  }, [user]);
+    const initializeHome = async () => {
+      if (user?.uid) {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          const response = await fetch('/api/user/check-status', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.resetPerformed) {
+              await refreshUser();
+            }
+          }
+        } catch (err) {
+          console.error("Home status check failed:", err);
+        }
+      }
+    };
+    initializeHome();
+  }, [user, refreshUser]);
 
   const isHindi = currentLanguage === 'Hindi';
 

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { resetDailyQuestionIfNewDay } from '../services/userService';
 import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
 
@@ -120,10 +119,27 @@ const AskPandit = () => {
   }, [messages, personalForm, hasEnteredDetails]);
 
   useEffect(() => {
-    if (user) {
-      resetDailyQuestionIfNewDay(user);
-    }
-  }, [user]);
+    const initializePandit = async () => {
+      if (user?.uid) {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          const response = await fetch('/api/user/check-status', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.resetPerformed) {
+              await refreshUser();
+            }
+          }
+        } catch (err) {
+          console.error("Status check failed:", err);
+        }
+      }
+    };
+    initializePandit();
+  }, [user, refreshUser]);
 
   useEffect(() => {
     scrollToBottom();
