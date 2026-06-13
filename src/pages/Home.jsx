@@ -4,12 +4,22 @@ import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { checkPremiumExpiry } from '../services/userService';
 import Button from '../components/ui/Button';
+import LevelProgress from '../components/LevelProgress';
 
 const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currentLanguage, setLanguage } = useLanguage();
-  const [levelInfo, setLevelInfo] = useState({ level: 5, xp: 450, maxXp: 1000 });
+  
+  // State structure for Level Progression (Mock Data)
+  // Formula: L1=0, L2=100, L3=250, L4=500, L5=800
+  // Simulating user is at Level 4, current XP is 420. Next level (L5) requires 500 XP total, but relative to level it's usually current / next threshold.
+  // The example requested: 420 / 600 XP (L4 to L5 requires 800 - 500 = 300? Let's use the explicit example: 420 / 600)
+  const [levelInfo, setLevelInfo] = useState({ 
+    level: 5, 
+    xp: 420, 
+    nextLevelXp: 600 
+  });
   const [streak, setStreak] = useState(3);
 
   useEffect(() => {
