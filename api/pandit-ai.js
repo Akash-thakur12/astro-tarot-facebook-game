@@ -158,41 +158,56 @@ export default async function handler(req, res) {
     Context: Use ONLY the provided birth profile (Name, DOB, Time, Place) for guidance.
     
     CRITICAL BEHAVIOR RULES:
-    1. NEVER ask for birth details (DOB, Time, Place) or Kundali again.
-    2. NEVER claim you analyzed a "Janm chart", "7th house", "Navamsha", "Planetary degrees", or "Exact positions".
-    3. NEVER say "I need more analysis", "I need planetary degrees", or "I need a full kundali".
-    4. Provide astrology-style guidance and symbolic interpretations based ONLY on the birth profile patterns.
-    5. Avoid generic astrology education. Focus 100% on personalized insights for the user.
-    6. First sentence MUST be a direct prediction or answer.
-    7. Use the provided age exactly if mentioned.
-    8. Language: Respond in the same language as the user (Hindi, English, Hinglish).
-    9. Length: 150 - 250 words.
+    1. FIRST SENTENCE MUST be a direct prediction or answer.
+    2. USE THE PROVIDED AGE EXACTLY. Do not estimate, recalculate, or state a different age.
+    3. LANGUAGE: Respond in the same language as the user (Hindi, English, Hinglish).
+    4. LENGTH: 150 - 250 words.
+    5. NO THEORY: Never claim you analyzed a "Janm chart", "7th house", or specific planetary degrees.
+    6. NO DATA REQUESTS: Never ask for birth details or Kundali again.
 
-    STRICT RESPONSE STRUCTURE:
-    🔮 Prediction
-    [Give a direct answer first. For marriage/partners, be specific about personality tendencies like: family-oriented, career-focused, practical thinker, emotionally mature, independent, ambitious, calm communicator, or supportive partner.]
+    OUTPUT FORMAT (STRICT):
+    Return ONLY valid JSON.
+    All keys must be double-quoted.
+    No markdown. No code blocks (e.g., NO \`\`\`json).
     
-    🔍 Reasoning
-    [Explain the interpretation based on the profile patterns. Do NOT mention houses or specific planetary degrees.]
-    
-    🌟 Guidance
-    [Provide unique, practical, and spiritual advice.]
-
-    BAD RESPONSE EXAMPLE: "Janm chart me saptam bhav ka swami..."
-    GOOD RESPONSE EXAMPLE: "Profile ke aadhar par aapke sambandhon me stability aur commitment ka prabhav zyada nazar aata hai."`;
+    REQUIRED JSON SCHEMA:
+    {
+      "prediction": "Direct answer with specific personality tendencies or timing windows.",
+      "reasoning": "Brief symbolic reason based on the birth profile patterns.",
+      "guidance": "Unique, practical, and spiritual advice."
+    }`;
 
   let contents = [];
 
   if (mode === 'chat' || mode === 'personal') {
     const { name, gender, dobDay, dobMonth, dobYear, tobHour, tobMinute, tobPeriod, pob } = userData;
+    
+    // Calculate current age server-side
+    let ageDisplay = "Unknown";
+    try {
+      if (dobDay && dobMonth && dobYear) {
+        const today = new Date();
+        const birthDate = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        ageDisplay = age;
+      }
+    } catch (e) {
+      console.error("Age calculation error:", e);
+    }
+
     const profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE FOR ALL PREDICTIONS:
 Name: ${name || 'Unknown'}
 Gender: ${gender || 'Unknown'}
 Birth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}
 Birth Time: ${tobHour || '?'}:${tobMinute || '?'} ${tobPeriod || ''}
 Birth Place: ${pob || 'Unknown'}
+CURRENT AGE: ${ageDisplay}
 
-User has already provided these details. NEVER ask for them again. Respond directly to the user's query using this data.`;
+User has already provided these details. NEVER ask for them again. USE THE PROVIDED AGE EXACTLY. Respond directly to the user's query using this data.`;
 
     contents = [{ role: 'user', parts: [{ text: profileContext }] }];
     if (Array.isArray(history) && history.length > 0) {
@@ -264,33 +279,62 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
       }
 
       const text = result.response.text();
+      console.log("RAW GEMINI RESPONSE:", text);
+
       if (!text || !text.trim()) {
         throw new Error("Empty Gemini response");
       }
 
       let cleanedText = text.trim();
-      if (cleanedText.startsWith("```")) {
-        cleanedText = cleanedText
-          .replace(/^```(?:json)?\n?/, "") 
-          .replace(/\n?```$/, "")          
-          .trim();
-      }
+      // Remove any potential markdown code blocks
+      cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
       
-      jsonResponse = JSON.parse(cleanedText);
+      let parsedData = null;
+      try {
+        parsedData = JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.warn("JSON.parse failed, attempting regex fallback:", parseError.message);
+        
+        // Regex Fallback Parser
+        const extractField = (field) => {
+          const regex = new RegExp(`"${field}"\\s*:\\s*"(.*?)"`, "is");
+          const match = cleanedText.match(regex);
+          return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : "";
+        };
 
-      // JSON Shape Validation
-      if (mode === 'chat' || mode === 'personal') {
-        if (!jsonResponse || typeof jsonResponse !== "object" || typeof jsonResponse.text !== "string") {
-          console.error("INVALID JSON SHAPE:", jsonResponse);
-          jsonResponse = {
-            text: "I apologize, but I had trouble formatting my response. Please ask again."
+        if (mode === 'chat' || mode === 'personal') {
+          parsedData = {
+            prediction: extractField("prediction"),
+            reasoning: extractField("reasoning"),
+            guidance: extractField("guidance")
+          };
+          
+          if (!parsedData.prediction && !parsedData.reasoning && !parsedData.guidance) {
+            parsedData.prediction = cleanedText; // Ultimate fallback
+          }
+        } else {
+          // Compatibility mode fallback
+          const scoreMatch = cleanedText.match(/"score"\s*:\s*(\d+)/);
+          const guidanceMatch = cleanedText.match(/"guidance"\s*:\s*"(.*?)"/);
+          parsedData = {
+            score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
+            guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
+            sections: []
           };
         }
+      }
+
+      // Final Normalization and Shape Validation
+      if (mode === 'chat' || mode === 'personal') {
+        jsonResponse = {
+          text: `🔮 Prediction\n${parsedData.prediction || ""}\n\n🔍 Reasoning\n${parsedData.reasoning || ""}\n\n🌟 Guidance\n${parsedData.guidance || ""}`
+        };
       } else {
-        if (!jsonResponse || typeof jsonResponse !== "object" || typeof jsonResponse.score !== "number" || !Array.isArray(jsonResponse.sections)) {
-           console.error("INVALID COMPATIBILITY JSON SHAPE:", jsonResponse);
+        // Compatibility mode validation
+        if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
            throw new Error("Invalid compatibility response shape");
         }
+        jsonResponse = parsedData;
       }
 
       console.log("Model success:", modelName);
