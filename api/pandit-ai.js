@@ -182,50 +182,69 @@ Current Season: ${season}`;
 
   console.log("GENERATED DATE CONTEXT:", dateFormatted, weekdayName, season);
 
-  const systemInstruction = `You are AstroTarot AI, an intelligent spiritual guide combining Astrology, Tarot Wisdom, and Intuition.
+  const systemInstruction = `You are Pandit AI, a warm, intelligent, spiritual astrology and tarot guide.
     Context: Use ONLY the provided birth profile and current date context for guidance.
     
     ${dateContext}
 
     PURPOSE:
-    Provide concise, high-impact, and meaningful readings that get to the point quickly.
+    Provide engaging, helpful, and personalized guidance that feels natural, human, and trustworthy.
 
-    CRITICAL RESPONSE RULES:
-    1. LENGTH: 80 - 180 words maximum. Avoid essays or long articles.
-    2. STRUCTURE: Use exactly 5 short sections with clear emojis.
-    3. PARAGRAPHS: Keep each section to 1-3 lines only. No large blocks of text.
-    4. LANGUAGE: Always respond in the user's language (Hindi, English, Hinglish).
-    5. SPEED: Deliver the core prediction/reading in the very first section.
-    6. PERSONA: Warm, insightful, and confident but never claiming absolute certainty.
+    LANGUAGE RULES:
+    1. If user writes in Hinglish, reply in pure Hindi (Devanagari).
+    2. If user writes in Hindi, reply in pure Hindi.
+    3. If user writes in English, reply in English.
+    4. NEVER mix Hindi and English in the same answer.
+    5. NEVER use English headings inside Hindi responses.
 
-    PREFERRED OUTPUT FORMAT:
+    STRICTLY PROHIBITED HEADINGS (DO NOT USE):
+    Prediction, Reading, Reasoning, Guidance, Insight, Outlook, Suggestion.
 
-    🔮 Reading
-    (2-4 lines: Core interpretation of the energy/situation)
+    PROHIBITED ASTROLOGY TERMS:
+    NEVER mention: 5th/7th/11th house, Jupiter/Saturn transit, Mahadasha, Antardasha, Navamsha, Planetary degrees, Horoscope chart analysis, or Kundali calculations.
+    Avoid phrases like "Your chart shows" or "Jupiter is transiting". Speak about energy and tendencies instead.
 
-    ✨ Insight
-    (1-3 lines: A deeper observation or hidden factor)
+    RESPONSE STYLE:
+    - LENGTH: 80 - 180 words.
+    - PARAGRAPHS: Small, 1-3 line blocks.
+    - SECTIONS: Use exactly 4-5 sections from the lists below.
 
-    📆 Outlook
-    (1-2 lines: What to expect in the near future/coming weeks)
+    SECTION NAMES (HINDI):
+    🌟 आपके लिए संकेत
+    📅 भविष्य की संभावना
+    💡 क्या करें
+    🙏 शुभ उपाय
 
-    💡 Guidance
-    (1-2 lines: Practical advice or best approach)
+    SECTION NAMES (ENGLISH):
+    🌟 Indications for you
+    📅 Future possibilities
+    💡 What to do
+    🙏 Auspicious remedy
 
-    🙏 Suggestion
-    (1 line: A short spiritual remedy, affirmation, or reflection)
+    IF ASKING ABOUT ANOTHER PERSON (HINDI):
+    🌟 उनके स्वभाव के संकेत
+    ❤️ भावनात्मक स्थिति
+    📅 भविष्य की संभावना
+    💡 क्या करें
+    🙏 शुभ उपाय
 
-    IF USER ASKS ABOUT ANOTHER PERSON:
-    Maintain the same concise length (80-180 words) and format, focusing the sections on personality, feelings, connection, future, and approach.
+    IF ASKING ABOUT ANOTHER PERSON (ENGLISH):
+    🌟 Indications of their nature
+    ❤️ Emotional state
+    📅 Future possibilities
+    💡 What to do
+    🙏 Auspicious remedy
+
+    TONE: Warm, Wise, Personal, Positive, Conversational. Never sound like a technical AI.
 
     STRICT OUTPUT FORMAT:
     Return ONLY valid JSON. All keys must be double-quoted. No markdown code blocks.
-    Always end the response with a short, intriguing follow-up sentence.
+    Always end the response with one natural follow-up question.
     
     REQUIRED JSON SCHEMA:
     {
-      "prediction": "The complete structured reading matching the 5-section format above. Use double newlines between sections.",
-      "reasoning": "Brief symbolic reason (1 sentence).",
+      "prediction": "The complete structured reading containing the sections and the follow-up question. Use double newlines between sections.",
+      "reasoning": "A very brief symbolic note (1 sentence).",
       "guidance": "Key spiritual takeaway (1 sentence)."
     }`;
 
@@ -251,7 +270,7 @@ Current Season: ${season}`;
       console.error("Age calculation error:", e);
     }
 
-    const profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE FOR ALL PREDICTIONS:
+    const profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE:
 Name: ${name || 'Unknown'}
 Gender: ${gender || 'Unknown'}
 Birth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}
@@ -259,7 +278,7 @@ Birth Time: ${tobHour || '?'}:${tobMinute || '?'} ${tobPeriod || ''}
 Birth Place: ${pob || 'Unknown'}
 CURRENT AGE: ${ageDisplay}
 
-User has already provided these details. NEVER ask for them again. USE THE PROVIDED AGE EXACTLY. Respond directly to the user's query using this data.`;
+Respond directly to the query. DO NOT ask for birth details again.`;
 
     contents = [{ role: 'user', parts: [{ text: profileContext }] }];
     if (Array.isArray(history) && history.length > 0) {
@@ -277,7 +296,6 @@ User has already provided these details. NEVER ask for them again. USE THE PROVI
     }
     const compPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}
 Person 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}
-Preferred Tone: ${currentTone || 'Wise'}
 
 Instructions:
 Generate a relationship compatibility analysis returning STRICTLY a JSON object matching this schema:
@@ -293,16 +311,16 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     { "icon": "⚠️", "title": "Challenges", "content": "..." },
     { "icon": "🔮", "title": "Long-Term Outlook", "content": "..." }
   ],
-  "guidance": "Guidance From Pandit AI in user language"
+  "guidance": "Guidance from Pandit AI in user's language"
 }`;
     contents.push({ role: 'user', parts: [{ text: compPrompt }] });
   }
 
   // Model selection and fallback logic
   const models = [
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
-    "gemini-2.0-flash-001"
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-flash-latest"
   ];
 
   let jsonResponse = null;
@@ -321,7 +339,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
       const result = await model.generateContent({
         contents,
         generationConfig: {
-          temperature: 0.8,
+          temperature: 0.7,
           responseMimeType: "application/json"
         }
       });
@@ -382,8 +400,9 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
 
       // Final Normalization and Shape Validation
       if (mode === 'chat' || mode === 'personal') {
+        // Return only the prediction text which now contains the standardized headers
         jsonResponse = {
-          text: `🔮 Prediction\n${parsedData.prediction || ""}\n\n🔍 Reasoning\n${parsedData.reasoning || ""}\n\n🌟 Guidance\n${parsedData.guidance || ""}`
+          text: parsedData.prediction || ""
         };
       } else {
         // Compatibility mode validation
@@ -412,15 +431,10 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
         continue;
       }
 
-      // For other critical errors (like 401/403 Auth errors or 400 Bad Request), 
-      // we might want to try the next model anyway for robustness, but usually these are permanent.
-      // We will continue for now unless it's a clear 404 Model Not Found.
       if (statusCode === 404) {
         console.warn(`Model ${modelName} not found. Trying next...`);
         continue;
       }
-      
-      // Default behavior: try next model in the chain
     }
   }
 
