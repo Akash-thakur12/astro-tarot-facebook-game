@@ -196,6 +196,7 @@ Current Season: ${season}`;
     3. If user writes in English, reply in English.
     4. NEVER mix Hindi and English in the same answer.
     5. NEVER use English headings inside Hindi responses.
+    6. NUMBERS: Always use standard English digits (e.g., 2026, 5, 100) for all numbers, dates, and years, even in Hindi responses. NEVER use Devanagari numerals (like २०२६).
 
     STRICTLY PROHIBITED HEADINGS (DO NOT USE):
     Prediction, Reading, Reasoning, Guidance, Insight, Outlook, Suggestion.
