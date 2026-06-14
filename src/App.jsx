@@ -8,6 +8,8 @@ import Kundali from './pages/Kundali';
 import Premium from './pages/Premium';
 import AskPandit from './pages/AskPandit';
 import FortuneWheel from './pages/FortuneWheel';
+import Privacy from './pages/Privacy';
+import DataDeletion from './pages/DataDeletion';
 import Login from './pages/Login';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
@@ -20,6 +22,8 @@ function App() {
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/data-deletion" element={<DataDeletion />} />
 
               {/* Protected Routes (Allow Guests by default) */}
               <Route path="/" element={
