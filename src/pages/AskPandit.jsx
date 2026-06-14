@@ -406,7 +406,7 @@ const AskPandit = () => {
     <div className="flex flex-col flex-1 relative overflow-hidden h-full">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 md:py-10 space-y-8 custom-scrollbar pb-[180px] md:pb-[220px]">
-        <div className="max-w-[850px] mx-auto w-full">
+        <div className="max-w-md mx-auto w-full">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 opacity-40 py-20">
               <span className="text-6xl animate-bounce">🔮</span>
@@ -461,7 +461,7 @@ const AskPandit = () => {
 
       {/* Input Area - Floated Above Bottom */}
       <div className="fixed bottom-6 md:bottom-10 left-0 right-0 z-50 pointer-events-none">
-        <div className="max-w-[850px] mx-auto w-full px-4 pointer-events-auto">
+        <div className="max-w-md mx-auto w-full px-4 pointer-events-auto">
           {/* Gradient Backdrop for Readability */}
           <div className="absolute inset-x-0 bottom-[-24px] md:bottom-[-40px] h-40 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent -z-10 pointer-events-none" />
           
@@ -501,7 +501,7 @@ const AskPandit = () => {
       
       {/* Header */}
       <div className="px-6 pt-10 pb-4 border-b border-white/5 bg-[#020617]/80 backdrop-blur-2xl z-[60]">
-        <div className="max-w-[850px] mx-auto w-full flex justify-between items-center">
+        <div className="max-w-md mx-auto w-full flex justify-between items-center">
           <button 
             onClick={() => navigate('/')}
             className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-90"
