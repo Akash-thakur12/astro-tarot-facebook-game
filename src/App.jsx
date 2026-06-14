@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import Layout from './components/layout/Layout';
@@ -17,48 +17,49 @@ function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <Router>
-          <Layout>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/data-deletion" element={<DataDeletion />} />
+        <Layout>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
 
-              {/* Protected Routes (Allow Guests by default) */}
-              <Route path="/" element={
-                <ProtectedRoute allowAnonymous={true}>
-                  <Home />
-                </ProtectedRoute>
-              } />
-              <Route path="/tarot" element={
-                <ProtectedRoute allowAnonymous={true}>
-                  <Tarot />
-                </ProtectedRoute>
-              } />
-              <Route path="/kundali" element={
-                <ProtectedRoute allowAnonymous={true}>
-                  <Kundali />
-                </ProtectedRoute>
-              } />
-              <Route path="/premium" element={
-                <ProtectedRoute allowAnonymous={true}>
-                  <Premium />
-                </ProtectedRoute>
-              } />
-              <Route path="/ask-pandit" element={
-                <ProtectedRoute allowAnonymous={true}>
-                  <AskPandit />
-                </ProtectedRoute>
-              } />
-              <Route path="/fortune-wheel" element={
-                <ProtectedRoute allowAnonymous={true}>
-                  <FortuneWheel />
-                </ProtectedRoute>
-              } />
-            </Routes>
-          </Layout>
-        </Router>
+            {/* Protected Routes (Allow Guests by default) */}
+            <Route path="/" element={
+              <ProtectedRoute allowAnonymous={true}>
+                <Home />
+              </ProtectedRoute>
+            } />
+            <Route path="/tarot" element={
+              <ProtectedRoute allowAnonymous={true}>
+                <Tarot />
+              </ProtectedRoute>
+            } />
+            <Route path="/kundali" element={
+              <ProtectedRoute allowAnonymous={true}>
+                <Kundali />
+              </ProtectedRoute>
+            } />
+            <Route path="/premium" element={
+              <ProtectedRoute allowAnonymous={true}>
+                <Premium />
+              </ProtectedRoute>
+            } />
+            <Route path="/ask-pandit" element={
+              <ProtectedRoute allowAnonymous={true}>
+                <AskPandit />
+              </ProtectedRoute>
+            } />
+            <Route path="/fortune-wheel" element={
+              <ProtectedRoute allowAnonymous={true}>
+                <FortuneWheel />
+              </ProtectedRoute>
+            } />
+
+            {/* Catch-all: Redirect to Home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
       </AuthProvider>
     </LanguageProvider>
   );
