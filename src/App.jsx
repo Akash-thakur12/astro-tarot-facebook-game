@@ -8,6 +8,8 @@ import Kundali from './pages/Kundali';
 import Premium from './pages/Premium';
 import AskPandit from './pages/AskPandit';
 import FortuneWheel from './pages/FortuneWheel';
+import Login from './pages/Login';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
   return (
@@ -16,12 +18,40 @@ function App() {
         <Router>
           <Layout>
             <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/tarot" element={<Tarot />} />
-              <Route path="/kundali" element={<Kundali />} />
-              <Route path="/premium" element={<Premium />} />
-              <Route path="/ask-pandit" element={<AskPandit />} />
-              <Route path="/fortune-wheel" element={<FortuneWheel />} />
+              {/* Public Routes */}
+              <Route path="/login" element={<Login />} />
+
+              {/* Protected Routes (Allow Guests by default) */}
+              <Route path="/" element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <Home />
+                </ProtectedRoute>
+              } />
+              <Route path="/tarot" element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <Tarot />
+                </ProtectedRoute>
+              } />
+              <Route path="/kundali" element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <Kundali />
+                </ProtectedRoute>
+              } />
+              <Route path="/premium" element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <Premium />
+                </ProtectedRoute>
+              } />
+              <Route path="/ask-pandit" element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <AskPandit />
+                </ProtectedRoute>
+              } />
+              <Route path="/fortune-wheel" element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <FortuneWheel />
+                </ProtectedRoute>
+              } />
             </Routes>
           </Layout>
         </Router>

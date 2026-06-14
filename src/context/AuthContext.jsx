@@ -46,11 +46,13 @@ export const AuthProvider = ({ children }) => {
             }
           });
         } else {
-          // No user, attempt anonymous sign in
-          await signInAnonymous();
+          // No user session found. Do NOT automatically sign in anonymously.
+          setUser(null);
+          setLoading(false);
         }
       } catch (error) {
         console.error("Auth Context Initialization Error:", error);
+        setUser(null);
         setLoading(false);
       }
     });

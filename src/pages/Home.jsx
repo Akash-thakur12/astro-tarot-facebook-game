@@ -8,6 +8,7 @@ import LevelProgress from '../components/LevelProgress';
 import DailyStreakCard from '../components/DailyStreakCard';
 import DailyChallengesCard from '../components/DailyChallengesCard';
 import DailyBonus from '../components/DailyBonus';
+import UserMenu from '../components/auth/UserMenu';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -80,13 +81,27 @@ const Home = () => {
       if (user?.uid) {
         try {
           const idToken = await auth.currentUser.getIdToken();
+          
+          // Get provider info from Firebase user
+          const firebaseUser = auth.currentUser;
+          const provider = firebaseUser.isAnonymous ? 'anonymous' : (firebaseUser.providerData[0]?.providerId || 'social');
+
           const response = await fetch('/api/user/check-status', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${idToken}` }
+            headers: { 
+              'Authorization': `Bearer ${idToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              email: firebaseUser.email,
+              provider: provider
+            })
           });
           if (response.ok) {
             const data = await response.json();
-            if (data.resetPerformed) {
+            if (data.resetPerformed || data.created) {
               await refreshUser();
             }
           }
@@ -96,7 +111,7 @@ const Home = () => {
       }
     };
     initializeHome();
-  }, [user, refreshUser]);
+  }, [user?.uid, refreshUser]);
 
   const isHindi = currentLanguage === 'Hindi';
 
@@ -155,14 +170,10 @@ const Home = () => {
 
       <div className="px-5 pt-8 space-y-6 relative z-10">
         
-        {/* TOP HEADER: Avatar, Name, Coins */}
+        {/* TOP HEADER: UserMenu, Name, Coins */}
         <div className="flex items-center justify-between bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-3xl shadow-lg">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-mystic-gold to-amber-600 p-[2px] shadow-[0_0_15px_rgba(251,191,36,0.3)]">
-              <div className="w-full h-full rounded-full bg-[#09090b] flex items-center justify-center text-xl overflow-hidden border border-black">
-                {user?.photoURL ? <img src={user.photoURL} alt="User" /> : '👤'}
-              </div>
-            </div>
+            <UserMenu />
             <div className="flex flex-col">
               <span className="text-white font-bold text-sm tracking-wide">
                 {user?.displayName || (isHindi ? 'अतिथि' : 'Guest')}

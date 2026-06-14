@@ -52,17 +52,23 @@ export default async function handler(req, res) {
   }
 
   const userRef = db.collection('users').doc(uid);
+  const { displayName, photoURL, email, provider } = req.body;
 
   try {
-    // 3. Unified Daily Reset Logic (UTC Based)
+    // 3. Unified Daily Reset & Profile Sync Logic
     const result = await db.runTransaction(async (t) => {
       const userDoc = await t.get(userRef);
+      const now = new Date();
       
       // AUTO-CREATE if missing
       if (!userDoc.exists) {
         const newUser = {
           uid,
-          coins: 0,
+          displayName: displayName || null,
+          photoURL: photoURL || null,
+          email: email || null,
+          provider: provider || 'anonymous',
+          coins: 100, // Matching firestore.rules expected default
           xp: 0,
           streak: 1,
           premium: false,
@@ -71,16 +77,24 @@ export default async function handler(req, res) {
           dailyTarotUsed: false,
           dailySpinUsed: false,
           dailyChallengesClaimed: false,
-          joinedAt: FieldValue.serverTimestamp()
+          joinedAt: FieldValue.serverTimestamp(),
+          lastLoginAt: FieldValue.serverTimestamp()
         };
         t.set(userRef, newUser);
-        return { resetPerformed: true, created: true };
+        return { resetPerformed: true, created: true, user: newUser };
       }
 
       const user = userDoc.data();
-      const now = new Date();
+      const updates = {
+        lastLoginAt: FieldValue.serverTimestamp()
+      };
       let needsUpdate = false;
-      const updates = {};
+
+      // Sync profile info if it's missing or if upgraded from anonymous
+      if (displayName && !user.displayName) { updates.displayName = displayName; needsUpdate = true; }
+      if (photoURL && !user.photoURL) { updates.photoURL = photoURL; needsUpdate = true; }
+      if (email && !user.email) { updates.email = email; needsUpdate = true; }
+      if (provider && user.provider === 'anonymous') { updates.provider = provider; needsUpdate = true; }
 
       const isNewDay = (lastDate) => {
         if (!lastDate) return true;
@@ -92,7 +106,7 @@ export default async function handler(req, res) {
         );
       };
 
-      // Check each usage flag
+      // Check each usage flag for daily reset
       if (isNewDay(user.lastQuestionDate) && user.dailyQuestionUsed) {
         updates.dailyQuestionUsed = false;
         needsUpdate = true;
@@ -128,9 +142,9 @@ export default async function handler(req, res) {
         }
       }
 
-      if (needsUpdate) {
+      if (needsUpdate || updates.lastLoginAt) {
         t.update(userRef, updates);
-        return { resetPerformed: true, updates };
+        return { resetPerformed: needsUpdate, updates };
       }
 
       return { resetPerformed: false };
@@ -140,9 +154,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Check Status Error:", error);
-    if (error.message === "USER_NOT_FOUND") {
-      return res.status(404).json({ error: "User profile not found" });
-    }
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 }
