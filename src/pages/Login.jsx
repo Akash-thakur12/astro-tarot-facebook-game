@@ -49,9 +49,9 @@ const Login = () => {
             fullWidth 
             onClick={() => handleLogin('google')}
             disabled={loading}
-            className="h-14 bg-white text-gray-900 hover:bg-gray-100 flex items-center justify-center gap-3"
+            className="h-14 bg-white text-gray-900 hover:bg-gray-100 font-semibold gap-3"
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 flex-shrink-0" />
             Continue with Google
           </Button>
 
@@ -59,9 +59,9 @@ const Login = () => {
             fullWidth 
             onClick={() => handleLogin('facebook')}
             disabled={loading}
-            className="h-14 bg-[#1877F2] text-white hover:bg-[#166fe5] flex items-center justify-center gap-3"
+            className="h-14 bg-[#1877F2] text-white hover:bg-[#166fe5] font-semibold gap-3"
           >
-            <img src="https://www.facebook.com/favicon.ico" alt="Facebook" className="w-5 h-5" />
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/facebook.svg" alt="Facebook" className="w-5 h-5 flex-shrink-0" />
             Continue with Facebook
           </Button>
 
