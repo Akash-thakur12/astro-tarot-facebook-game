@@ -10,6 +10,7 @@ import AskPandit from './pages/AskPandit';
 import FortuneWheel from './pages/FortuneWheel';
 import Privacy from './pages/Privacy';
 import DataDeletion from './pages/DataDeletion';
+import Terms from './pages/Terms';
 import Login from './pages/Login';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
@@ -23,6 +24,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/terms" element={<Terms />} />
 
             {/* Protected Routes (Allow Guests by default) */}
             <Route path="/" element={
