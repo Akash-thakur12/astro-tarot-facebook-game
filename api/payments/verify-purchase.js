@@ -1,6 +1,7 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import crypto from 'crypto';
 
 // 1. Initialize Firebase Admin
 const apps = getApps();
@@ -51,23 +52,30 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 
-  const { orderId, paymentId, signature, amount } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, amount } = req.body;
 
-  // 3. Payment Verification
-  // IMPORTANT: In production, verify the signature with Razorpay/Stripe secret keys here
-  if (!orderId || !paymentId) {
-    return res.status(400).json({ error: "Missing payment identifiers" });
+  // 3. Cryptographic Signature Verification
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ error: "Missing Razorpay payment identifiers" });
   }
 
-  // For now, we assume verification passed as we are hardening the architecture
-  const isVerified = true; 
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  const body = razorpay_order_id + "|" + razorpay_payment_id;
+  
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(body.toString())
+    .digest('hex');
+
+  const isVerified = expectedSignature === razorpay_signature;
 
   if (!isVerified) {
-    return res.status(400).json({ error: "Payment verification failed" });
+    console.error("Payment Signature Mismatch!");
+    return res.status(400).json({ error: "Payment verification failed: Signature mismatch" });
   }
 
   const userRef = db.collection('users').doc(uid);
-  const purchaseRef = db.collection('premiumPurchases').doc(paymentId);
+  const purchaseRef = db.collection('premiumPurchases').doc(razorpay_payment_id);
 
   try {
     await db.runTransaction(async (t) => {
@@ -83,9 +91,9 @@ export default async function handler(req, res) {
       // 4. Create premiumPurchases record
       t.set(purchaseRef, {
         uid,
-        paymentId,
-        orderId,
-        amount: amount || 0,
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        amount: amount || 4900, 
         verified: true,
         createdAt: FieldValue.serverTimestamp()
       });

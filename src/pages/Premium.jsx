@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
@@ -8,134 +9,207 @@ const Premium = () => {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const { currentLanguage } = useLanguage();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
-  const isHindi = currentLanguage === 'Hindi';
-
-  // Translations
-  const tp = {
-    title: isHindi ? 'एस्ट्रोटैरो प्रीमियम' : 'AstroTarot Premium',
-    subtitle: isHindi ? '"सितारों की पूरी शक्ति को अनलॉक करें और अपना भाग्य सुरक्षित करें।"' : '"Unlock the full power of the stars and secure your destiny."',
-    bestValue: isHindi ? 'सर्वश्रेष्ठ मूल्य' : 'Best Value',
-    perMonth: isHindi ? '/ 30 दिन' : '/ 30 Days',
-    unlockButton: isHindi ? 'प्रीमियम ₹49 अनलॉक करें' : 'Unlock Premium ₹49',
-    cancelAnytime: isHindi ? 'कभी भी रद्द करें • सुरक्षित भुगतान' : 'Cancel anytime • Secure payment',
-    returnTemple: isHindi ? 'मंदिर वापस जाएं' : 'Return to Temple',
-    congrats: isHindi ? "बधाई हो! अब आप एक प्रीमियम साधक हैं।" : "Congratulations! You are now a Premium Seeker.",
-  };
-
-  const benefits = [
-    { 
-      title: isHindi ? 'असीमित प्रश्न' : 'Unlimited Questions', 
-      icon: '💬', 
-      desc: isHindi ? 'पंडित जी से कभी भी, कुछ भी पूछें।' : 'Ask Pandit AI anything, anytime.' 
+  const t = {
+    English: {
+      title: "Divine Seeker Premium",
+      subtitle: "Unlock your full spiritual potential",
+      features: [
+        "Unlimited Pandit AI Consultations",
+        "Unlimited Daily Tarot Readings",
+        "Exclusive Fortune Wheel Rewards",
+        "Ad-Free Experience",
+        "Priority Spiritual Guidance"
+      ],
+      price: "₹49",
+      duration: "per month",
+      upgradeBtn: "Upgrade to Seeker Status",
+      processing: "Opening Sacred Gateway...",
+      success: "Blessed! You are now a Divine Seeker.",
+      returnTemple: "Back to Temple",
+      error: "Gateway interrupted. Please try again."
     },
-    { 
-      title: isHindi ? 'कोई सिक्का कटौती नहीं' : 'No Coin Deduction', 
-      icon: '🪙', 
-      desc: isHindi ? 'अपने सिक्के के संतुलन के बारे में कभी चिंता न करें।' : 'Never worry about your coin balance again.' 
-    },
-    { 
-      title: isHindi ? 'प्रीमियम रिपोर्ट्स' : 'Premium Reports', 
-      icon: '📊', 
-      desc: isHindi ? 'अपने करियर और प्रेम जीवन के बारे में गहरी जानकारी।' : 'Deep insights into your career and love life.' 
-    },
-    { 
-      title: isHindi ? 'विशेष भविष्यवाणियां' : 'Exclusive Predictions', 
-      icon: '✨', 
-      desc: isHindi ? 'उच्च सटीकता वाली वैदिक ऊर्जा रीडिंग।' : 'Higher accuracy Vedic energy readings.' 
-    },
-    { 
-      title: isHindi ? 'प्राथमिकता सुविधाएँ' : 'Priority Features', 
-      icon: '🚀', 
-      desc: isHindi ? 'नए एआई टूल तक पहुंचने वाले पहले व्यक्ति बनें।' : 'Be the first to access new AI tools.' 
-    },
-  ];
-
-  const handleUnlock = async () => {
-    if (!user?.uid) return;
-    try {
-      const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/payments/verify-purchase', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          orderId: "mock_order_" + Date.now(),
-          paymentId: "mock_payment_" + Date.now(),
-          signature: "mock_sig"
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Payment verification failed');
-      }
-
-      await refreshUser();
-      alert(tp.congrats);
-      navigate('/');
-    } catch (error) {
-      console.error("Purchase Error:", error.message);
-      alert(error.message);
+    Hindi: {
+      title: "डिवाइन सीकर प्रीमियम",
+      subtitle: "अपनी पूरी आध्यात्मिक क्षमता को अनलॉक करें",
+      features: [
+        "असीमित पंडित एआई परामर्श",
+        "असीमित दैनिक टैरो रीडिंग",
+        "विशेष भाग्य चक्र पुरस्कार",
+        "विज्ञापन-मुक्त अनुभव",
+        "प्राथमिक आध्यात्मिक मार्गदर्शन"
+      ],
+      price: "₹49",
+      duration: "प्रति माह",
+      upgradeBtn: "सीकर स्टेटस में अपग्रेड करें",
+      processing: "पवित्र द्वार खुल रहा है...",
+      success: "धन्य हो! अब आप एक डिवाइन सीकर हैं।",
+      returnTemple: "मंदिर वापस जाएं",
+      error: "द्वार बाधित हुआ। कृपया पुनः प्रयास करें।"
     }
   };
 
-  return (
-    <div className="flex flex-col w-full pb-20 animate-fade-in kundali-grid min-h-screen">
-      {/* Header */}
-      <div className="px-6 pt-12 pb-8 text-center space-y-4">
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-mystic-gold to-amber-600 mx-auto flex items-center justify-center text-4xl shadow-[0_0_30px_rgba(251,191,36,0.3)] border-2 border-white/20">
-          <span className="text-white">👑</span>
+  const tp = t[currentLanguage] || t.English;
+
+  // Load Razorpay Script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const token = await auth.currentUser.getIdToken();
+
+      // 1. Create Order
+      const orderRes = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error || "Failed to initiate payment");
+
+      // 2. Open Razorpay Checkout
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "AstroTarot",
+        description: "Monthly Premium Subscription",
+        order_id: orderData.id,
+        handler: async function (response) {
+          // 3. Verify Payment
+          try {
+            setLoading(true);
+            const verifyRes = await fetch('/api/payments/verify-purchase', {
+              method: 'POST',
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) throw new Error(verifyData.error || "Verification failed");
+
+            // Success
+            setSuccess(true);
+            await refreshUser();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        },
+        prefill: {
+          email: auth.currentUser.email || "",
+        },
+        theme: {
+          color: "#fbbf24" // Mystic Gold
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        setError(response.error.description);
+      });
+      rzp.open();
+
+    } catch (err) {
+      console.error("Payment Flow Error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+        <div className="w-24 h-24 bg-mystic-gold rounded-full flex items-center justify-center text-5xl mb-8 animate-bounce">
+          ✨
         </div>
-        <h1 className="text-4xl font-bold premium-gradient-text text-white">{tp.title}</h1>
-        <p className="text-white/60 text-sm max-w-[280px] mx-auto">
+        <h1 className="text-4xl font-black text-white mb-4">{tp.success}</h1>
+        <Button onClick={() => navigate('/')} variant="gold" className="mt-8 px-12">
+          {tp.returnTemple}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#020617] p-6 pb-20">
+      <div className="max-w-md mx-auto pt-12 text-center">
+        <button 
+          onClick={() => navigate('/')}
+          className="mb-8 w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
+        >
+          ←
+        </button>
+
+        <div className="inline-block px-4 py-1.5 rounded-full bg-mystic-gold/10 border border-mystic-gold/20 text-mystic-gold text-[10px] font-black uppercase tracking-[0.2em] mb-6 animate-pulse">
+          Limited Time Offer
+        </div>
+
+        <h1 className="text-4xl font-black premium-gradient-text mb-2 tracking-tight">
+          {tp.title}
+        </h1>
+        <p className="text-white/40 text-sm mb-12 uppercase tracking-widest font-medium">
           {tp.subtitle}
         </p>
-      </div>
 
-      {/* Benefits List */}
-      <div className="px-6 space-y-4 mb-10">
-        {benefits.map((b, i) => (
-          <div key={i} className="glass-card p-5 rounded-3xl border border-white/5 flex items-center gap-5 transition-all hover:border-mystic-gold/30">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl">
-              {b.icon}
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-white">{b.title}</h3>
-              <p className="text-[10px] text-white/40 leading-tight mt-1">{b.desc}</p>
-            </div>
+        {/* Pricing Card */}
+        <div className="glass border-mystic-gold/20 rounded-[2.5rem] p-8 relative overflow-hidden group mb-10 shadow-[0_0_50px_rgba(251,191,36,0.1)]">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-mystic-gold/5 blur-3xl rounded-full -mr-16 -mt-16" />
+          
+          <div className="mb-10">
+            <div className="text-5xl font-black text-white mb-1">{tp.price}</div>
+            <div className="text-white/40 text-xs uppercase tracking-widest font-bold">{tp.duration}</div>
           </div>
-        ))}
-      </div>
 
-      {/* Pricing CTA */}
-      <div className="px-6 space-y-6">
-        <div className="glass-card p-6 rounded-[32px] border border-mystic-gold/20 text-center space-y-4 relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-mystic-gold to-transparent opacity-50" />
-           
-           <div className="space-y-1">
-              <span className="text-[10px] uppercase tracking-[0.4em] text-mystic-gold font-bold">{tp.bestValue}</span>
-              <div className="flex items-center justify-center gap-2">
-                 <span className="text-white/40 line-through text-lg">₹99</span>
-                 <span className="text-4xl font-black text-white">₹49</span>
-                 <span className="text-white/40 text-sm">{tp.perMonth}</span>
+          <div className="space-y-6 mb-12">
+            {tp.features.map((feature, i) => (
+              <div key={i} className="flex items-center gap-4 text-left group/item">
+                <div className="w-6 h-6 rounded-full bg-mystic-gold/10 flex items-center justify-center text-mystic-gold text-[10px] group-hover/item:scale-110 transition-transform">
+                  ✓
+                </div>
+                <span className="text-white/70 text-sm font-medium">{feature}</span>
               </div>
-           </div>
+            ))}
+          </div>
 
-           <Button 
+          <Button 
             fullWidth 
             variant="gold" 
-            onClick={handleUnlock}
-            className="h-16 shadow-[0_10px_40px_rgba(251,191,36,0.2)]"
-           >
-             {tp.unlockButton}
-           </Button>
-           
-           <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest">
-             {tp.cancelAnytime}
-           </p>
+            onClick={handleUpgrade}
+            loading={loading}
+            className="h-16 rounded-2xl font-black text-sm tracking-widest uppercase shadow-[0_10px_30px_rgba(251,191,36,0.2)]"
+          >
+            {loading ? tp.processing : tp.upgradeBtn}
+          </Button>
+
+          {error && (
+            <div className="mt-6 text-red-400 text-xs font-bold animate-fade-in">
+               ⚠️ {error}
+            </div>
+          )}
         </div>
 
         <button 

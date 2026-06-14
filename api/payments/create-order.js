@@ -1,0 +1,78 @@
+import Razorpay from 'razorpay';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+
+// Initialize Firebase Admin for auth check
+const apps = getApps();
+if (!apps || apps.length === 0) {
+  try {
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (projectId && clientEmail && privateKey) {
+      initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, '\n'),
+        })
+      });
+    } else {
+      initializeApp();
+    }
+  } catch (e) {
+    if (!e.message?.includes('already exists')) throw e;
+  }
+}
+
+const adminAuth = getAuth();
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // 1. Verify Authentication
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+
+  const idToken = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    if (!decodedToken?.uid) throw new Error("No UID in token");
+  } catch (error) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+
+  // 2. Initialize Razorpay
+  const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+
+  // 3. Create Order (₹49 = 4900 paise)
+  const options = {
+    amount: 4900, 
+    currency: "INR",
+    receipt: `receipt_${Date.now()}`,
+    notes: {
+      description: "AstroTarot Premium - Seeker Status"
+    }
+  };
+
+  try {
+    const order = await razorpay.orders.create(options);
+    return res.status(200).json({
+      id: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key: process.env.RAZORPAY_KEY_ID // Send Key ID to frontend for convenience
+    });
+  } catch (error) {
+    console.error("Razorpay Order Creation Error:", error);
+    return res.status(500).json({ error: "Failed to create payment order" });
+  }
+}
