@@ -128,6 +128,12 @@ export default async function handler(req, res) {
       const wonReward = getWeightedReward();
       console.log("REWARD GENERATED:", wonReward.label);
 
+      // Restore tracking for Daily Challenges (but NO rewards yet)
+      t.set(userRef, {
+        dailySpinUsed: true,
+        lastSpinDate: FieldValue.serverTimestamp()
+      }, { merge: true });
+
       // Save Spin Record (Reward is PENDING until /api/claim-reward is called)
       t.set(spinRef, {
         uid: uid,
