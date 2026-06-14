@@ -102,6 +102,10 @@ const FortuneWheel = () => {
         throw new Error(data.error || "Failed to spin");
       }
 
+      console.log("SPIN SUCCESSFUL - Refreshing user to update challenges");
+      await refreshUser();
+      console.log("USER REFRESHED - dailySpinUsed should be true now");
+
       if (data.alreadySpun) {
         setHasSpunToday(true);
         setSpinState('idle');

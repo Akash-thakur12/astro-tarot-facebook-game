@@ -39,11 +39,16 @@ const Home = () => {
   const [streak, setStreak] = useState(3);
 
   // Dynamic Daily Challenges derived from Firestore User data
-  const challenges = useMemo(() => [
-    { id: 1, title: 'Ask Pandit Once', completed: !!user?.dailyQuestionUsed },
-    { id: 2, title: 'Draw Tarot Card', completed: !!user?.dailyTarotUsed },
-    { id: 3, title: 'Spin Fortune Wheel', completed: !!user?.dailySpinUsed }
-  ], [user]);
+  const challenges = useMemo(() => {
+    console.log("DEBUG: Home.jsx - user.dailySpinUsed =", user?.dailySpinUsed);
+    const list = [
+      { id: 1, title: 'Ask Pandit Once', completed: !!user?.dailyQuestionUsed },
+      { id: 2, title: 'Draw Tarot Card', completed: !!user?.dailyTarotUsed },
+      { id: 3, title: 'Spin Fortune Wheel', completed: !!user?.dailySpinUsed }
+    ];
+    console.log("DEBUG: Home.jsx - Challenges =", list);
+    return list;
+  }, [user]);
 
   const handleClaimChallenges = async () => {
     if (!user?.uid) return;

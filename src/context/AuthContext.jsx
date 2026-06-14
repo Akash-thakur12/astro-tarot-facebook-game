@@ -34,7 +34,9 @@ export const AuthProvider = ({ children }) => {
           // Listen for real-time changes to the user document
           unsubscribeSnapshot = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
             if (docSnap.exists()) {
-              setUser(docSnap.data());
+              const data = docSnap.data();
+              console.log("DEBUG: AuthContext - User data updated from onSnapshot:", data.dailySpinUsed);
+              setUser(data);
               setLoading(false);
             } else {
               // User doc doesn't exist yet, wait for provisioning
