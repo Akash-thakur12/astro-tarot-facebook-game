@@ -47,6 +47,7 @@ const Login = () => {
         <div className="space-y-6">
           <Button 
             fullWidth 
+            variant="outline"
             onClick={() => handleLogin('facebook')}
             disabled={loading}
             className="h-14 bg-[#1877F2] text-white hover:bg-[#166fe5] font-semibold gap-3 shadow-[0_0_30px_rgba(24,119,242,0.35)] rounded-2xl border-none"
@@ -63,6 +64,7 @@ const Login = () => {
 
           <Button 
             fullWidth 
+            variant="outline"
             onClick={() => handleLogin('anonymous')}
             disabled={loading}
             className="h-14 bg-transparent border border-white/15 text-white/80 hover:text-white hover:bg-white/5 rounded-2xl shadow-none"
