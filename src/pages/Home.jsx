@@ -176,12 +176,17 @@ const Home = () => {
                 <span className="text-lg">👤</span>
               )}
             </div>
-            <div className="flex flex-col">
-              <span className="text-white font-bold text-sm tracking-wide">
-                {isHindi ? 'अतिथि खाता' : 'Guest Account'}
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-white font-bold text-sm tracking-wide truncate max-w-[150px]">
+                {user?.displayName || (isHindi ? 'अतिथि खाता' : 'Guest Account')}
               </span>
+              {user?.email && (
+                <span className="text-[10px] text-white/40 truncate max-w-[150px]">
+                  {user.email}
+                </span>
+              )}
               {user?.premium && (
-                <span className="text-[9px] uppercase tracking-widest text-mystic-gold font-black flex items-center gap-1">
+                <span className="text-[9px] uppercase tracking-widest text-mystic-gold font-black flex items-center gap-1 mt-0.5">
                   ⭐ {th.premium}
                 </span>
               )}

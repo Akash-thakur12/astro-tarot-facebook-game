@@ -51,6 +51,27 @@ const UserMenu = () => {
         <div className="absolute top-0 right-0 w-20 h-20 bg-mystic-gold/10 blur-2xl rounded-full pointer-events-none" />
         
         <div className="space-y-3 relative z-10">
+          {!isAnonymous && (
+            <div className="flex items-center gap-3 px-2 mb-2 pb-3 border-b border-white/5">
+              <div className="w-10 h-10 rounded-full border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center shadow-lg">
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl">👤</span>
+                )}
+              </div>
+              <div className="flex flex-col overflow-hidden text-left">
+                <span className="text-white font-bold text-sm tracking-wide truncate">
+                  {user?.displayName || (isHindi ? 'उपयोगकर्ता' : 'User')}
+                </span>
+                {user?.email && (
+                  <span className="text-[10px] text-white/40 truncate">
+                    {user.email}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           {isAnonymous && (
             <div className="space-y-3">
               <p className="text-white/50 text-[11px] text-center font-medium leading-relaxed px-4">
