@@ -405,10 +405,10 @@ const AskPandit = () => {
   const renderChatInterface = () => (
     <div className="flex flex-col flex-1 relative overflow-hidden h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 md:py-10 space-y-8 custom-scrollbar pb-32 md:pb-40">
-        <div className="max-w-[800px] mx-auto w-full space-y-8">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 md:py-10 space-y-8 custom-scrollbar pb-[180px] md:pb-[220px]">
+        <div className="max-w-[850px] mx-auto w-full">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6 opacity-40 py-20">
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 opacity-40 py-20">
               <span className="text-6xl animate-bounce">🔮</span>
               <div className="space-y-2">
                 <h3 className="text-white text-xl font-bold">Namaste {personalForm.name}</h3>
@@ -417,52 +417,57 @@ const AskPandit = () => {
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-              <div className={`
-                relative px-6 py-4 md:px-7 md:py-5 rounded-[2rem] text-[15px] md:text-[16px] leading-[1.8] tracking-wide shadow-2xl
-                ${msg.role === 'user' 
-                  ? 'bg-mystic-gold text-mystic-indigo font-black max-w-[85%] md:max-w-[500px] rounded-tr-none' 
-                  : 'bg-white/5 text-white/90 border border-white/10 max-w-[95%] md:max-w-[700px] rounded-tl-none backdrop-blur-md'
-                }
-              `}>
-                {msg.content.split('\n').map((line, idx) => (
-                  <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
-                    {line}
-                  </p>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {loading && (
-            <div className="flex justify-start animate-fade-in">
-              <div className="bg-white/5 border border-white/10 text-mystic-gold px-6 py-4 rounded-[2rem] rounded-tl-none flex items-center gap-3 backdrop-blur-md shadow-xl">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce" />
+          <div className="space-y-8">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                <div className={`
+                  relative px-6 py-4 md:px-7 md:py-5 rounded-[2rem] text-[15px] md:text-[16px] leading-[1.8] tracking-wide shadow-2xl
+                  ${msg.role === 'user' 
+                    ? 'bg-mystic-gold text-mystic-indigo font-black max-w-[85%] md:max-w-[500px] rounded-tr-none' 
+                    : 'bg-white/5 text-white/90 border border-white/10 max-w-[95%] md:max-w-[700px] rounded-tl-none backdrop-blur-md'
+                  }
+                `}>
+                  {msg.content.split('\n').map((line, idx) => (
+                    <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
+                      {line}
+                    </p>
+                  ))}
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t.thinking}</span>
               </div>
-            </div>
-          )}
+            ))}
 
-          {errorMsg && (
-            <div className="max-w-xs mx-auto text-center px-6 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[11px] font-bold uppercase tracking-wider">
-              {errorMsg}
-            </div>
-          )}
-          <div ref={chatEndRef} className="h-4" />
+            {loading && (
+              <div className="flex justify-start animate-fade-in">
+                <div className="bg-white/5 border border-white/10 text-mystic-gold px-6 py-4 rounded-[2rem] rounded-tl-none flex items-center gap-3 backdrop-blur-md shadow-xl">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t.thinking}</span>
+                </div>
+              </div>
+            )}
+
+            {errorMsg && (
+              <div className="max-w-xs mx-auto text-center px-6 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[11px] font-bold uppercase tracking-wider">
+                {errorMsg}
+              </div>
+            )}
+            <div ref={chatEndRef} className="h-4" />
+          </div>
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none bg-gradient-to-t from-[#020617] via-[#020617]/90 to-transparent pt-10">
-        <div className="max-w-[800px] mx-auto w-full px-4 pb-6 md:pb-10 pointer-events-auto">
+      {/* Input Area - Floated Above Bottom */}
+      <div className="fixed bottom-6 md:bottom-10 left-0 right-0 z-50 pointer-events-none">
+        <div className="max-w-[850px] mx-auto w-full px-4 pointer-events-auto">
+          {/* Gradient Backdrop for Readability */}
+          <div className="absolute inset-x-0 bottom-[-24px] md:bottom-[-40px] h-40 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent -z-10 pointer-events-none" />
+          
           <form 
             onSubmit={handleSend} 
-            className="relative flex items-center group"
+            className="relative flex items-center group mb-4"
           >
             <div className="absolute inset-0 bg-mystic-gold/10 blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 rounded-full" />
             <input
@@ -471,7 +476,7 @@ const AskPandit = () => {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={t.question}
-              className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-20 py-5 md:py-6 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.5)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
+              className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-20 py-5 md:py-6 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.6)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
             />
             <button 
               type="submit" 
@@ -482,8 +487,8 @@ const AskPandit = () => {
             </button>
           </form>
           
-          <div className="mt-3 text-center hidden md:block">
-             <p className="text-[9px] uppercase tracking-[0.3em] font-bold text-white/20">Pandit AI can provide spiritual guidance but use your own wisdom</p>
+          <div className="text-center opacity-20 px-6">
+             <p className="text-[9px] md:text-[10px] uppercase tracking-[0.25em] font-bold leading-relaxed text-white">Pandit AI can provide spiritual guidance but use your own wisdom</p>
           </div>
         </div>
       </div>
@@ -496,7 +501,7 @@ const AskPandit = () => {
       
       {/* Header */}
       <div className="px-6 pt-10 pb-4 border-b border-white/5 bg-[#020617]/80 backdrop-blur-2xl z-[60]">
-        <div className="max-w-[800px] mx-auto w-full flex justify-between items-center">
+        <div className="max-w-[850px] mx-auto w-full flex justify-between items-center">
           <button 
             onClick={() => navigate('/')}
             className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-90"
