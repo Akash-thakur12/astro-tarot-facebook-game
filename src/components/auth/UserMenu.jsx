@@ -63,34 +63,34 @@ const UserMenu = () => {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 mt-3 w-64 bg-[#09090b] border border-white/20 rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[999] animate-fade-in origin-top-left">
-            <div className="px-3 py-4 border-b border-white/5 mb-2">
+          <div className="absolute left-0 mt-3 w-56 bg-[#09090b] border border-white/20 rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[999] animate-fade-in origin-top-left">
+            <div className="px-3 py-2 border-b border-white/5 mb-1">
               <p className="text-white font-bold text-sm truncate">{user.displayName || 'Spiritual Seeker'}</p>
               <p className="text-white/40 text-[10px] uppercase tracking-widest font-black mt-1">
                 {isAnonymous ? 'Guest Account' : (user.email || 'Permanent Soul')}
               </p>
-              <p className="text-white/20 text-[8px] uppercase tracking-widest font-bold mt-2 truncate">
+              <p className="text-white/20 text-[9px] uppercase tracking-widest font-bold mt-2 truncate">
                 ID: {user.uid}
               </p>
             </div>
 
             {isAnonymous && (
-              <div className="p-3 bg-mystic-gold/5 border border-mystic-gold/20 rounded-2xl mb-4">
+              <div className="p-2.5 bg-mystic-gold/5 border border-mystic-gold/20 rounded-2xl mb-2">
                 <p className="text-mystic-gold text-[10px] font-black uppercase tracking-wider mb-2">Save Progress</p>
                 <div className="flex gap-2">
                   <button 
                     disabled={loading}
                     onClick={() => handleLink('google')}
-                    className="flex-1 h-8 bg-white rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors disabled:opacity-50"
+                    className="flex-1 h-9 bg-white rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors disabled:opacity-50"
                   >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
                   </button>
                   <button 
                     disabled={loading}
                     onClick={() => handleLink('facebook')}
-                    className="flex-1 h-8 bg-[#1877F2] rounded-lg flex items-center justify-center hover:bg-[#166fe5] transition-colors disabled:opacity-50"
+                    className="flex-1 h-9 bg-[#1877F2] rounded-lg flex items-center justify-center hover:bg-[#166fe5] transition-colors disabled:opacity-50"
                   >
-                    <img src="https://www.facebook.com/favicon.ico" alt="Facebook" className="w-4 h-4" />
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/facebook.svg" alt="Facebook" className="w-4 h-4" />
                   </button>
                 </div>
                 {error && (
@@ -103,7 +103,7 @@ const UserMenu = () => {
 
             <button 
               onClick={handleLogout}
-              className="w-full text-left px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors text-xs font-bold uppercase tracking-widest"
+              className="w-full text-left px-4 py-2 mt-1 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors text-xs font-bold uppercase tracking-widest"
             >
               Sign Out
             </button>
