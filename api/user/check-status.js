@@ -57,8 +57,24 @@ export default async function handler(req, res) {
     // 3. Unified Daily Reset Logic (UTC Based)
     const result = await db.runTransaction(async (t) => {
       const userDoc = await t.get(userRef);
+      
+      // AUTO-CREATE if missing
       if (!userDoc.exists) {
-        throw new Error("USER_NOT_FOUND");
+        const newUser = {
+          uid,
+          coins: 0,
+          xp: 0,
+          streak: 1,
+          premium: false,
+          adsWatchedToday: 0,
+          dailyQuestionUsed: false,
+          dailyTarotUsed: false,
+          dailySpinUsed: false,
+          dailyChallengesClaimed: false,
+          joinedAt: FieldValue.serverTimestamp()
+        };
+        t.set(userRef, newUser);
+        return { resetPerformed: true, created: true };
       }
 
       const user = userDoc.data();

@@ -66,6 +66,24 @@ export default async function handler(req, res) {
     // In Firestore Admin, we can just do these sequentially or use a transaction.
     
     await db.runTransaction(async (t) => {
+      // 0. Check and AUTO-CREATE user if missing
+      const userDoc = await t.get(userRef);
+      if (!userDoc.exists) {
+        t.set(userRef, {
+          uid,
+          coins: 0,
+          xp: 0,
+          streak: 1,
+          premium: false,
+          adsWatchedToday: 0,
+          dailyQuestionUsed: false,
+          dailyTarotUsed: false,
+          dailySpinUsed: false,
+          dailyChallengesClaimed: false,
+          joinedAt: FieldValue.serverTimestamp()
+        });
+      }
+
       // 1. Create History Entry
       const newHistoryRef = historyRef.doc();
       t.set(newHistoryRef, {

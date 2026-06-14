@@ -124,6 +124,24 @@ export default async function handler(req, res) {
         return { alreadySpun: true };
       }
 
+      // AUTO-CREATE user if missing
+      const userDoc = await t.get(userRef);
+      if (!userDoc.exists) {
+        t.set(userRef, {
+          uid,
+          coins: 0,
+          xp: 0,
+          streak: 1,
+          premium: false,
+          adsWatchedToday: 0,
+          dailyQuestionUsed: false,
+          dailyTarotUsed: false,
+          dailySpinUsed: false,
+          dailyChallengesClaimed: false,
+          joinedAt: FieldValue.serverTimestamp()
+        });
+      }
+
       // Generate Reward
       const wonReward = getWeightedReward();
       console.log("REWARD GENERATED:", wonReward.label);

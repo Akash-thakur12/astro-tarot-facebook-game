@@ -102,9 +102,28 @@ export default async function handler(req, res) {
   try {
     await db.runTransaction(async (t) => {
       const doc = await t.get(userRef);
-      if (!doc.exists) throw new Error("USER_NOT_FOUND");
       
-      const userDataDoc = doc.data();
+      let userDataDoc;
+      if (!doc.exists) {
+        // AUTO-CREATE
+        userDataDoc = {
+          uid,
+          coins: 0,
+          xp: 0,
+          streak: 1,
+          premium: false,
+          adsWatchedToday: 0,
+          dailyQuestionUsed: false,
+          dailyTarotUsed: false,
+          dailySpinUsed: false,
+          dailyChallengesClaimed: false,
+          joinedAt: FieldValue.serverTimestamp()
+        };
+        t.set(userRef, userDataDoc);
+      } else {
+        userDataDoc = doc.data();
+      }
+
       if (!userDataDoc) throw new Error("USER_DATA_EMPTY");
 
       if (!userDataDoc.premium) {

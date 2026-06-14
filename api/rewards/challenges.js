@@ -57,11 +57,27 @@ export default async function handler(req, res) {
     // 3. Atomic Transaction for Challenge Reward
     const result = await db.runTransaction(async (t) => {
       const userDoc = await t.get(userRef);
+      
+      let userData;
       if (!userDoc.exists) {
-        throw new Error("USER_NOT_FOUND");
+        // AUTO-CREATE
+        userData = {
+          uid,
+          coins: 0,
+          xp: 0,
+          streak: 1,
+          premium: false,
+          adsWatchedToday: 0,
+          dailyQuestionUsed: false,
+          dailyTarotUsed: false,
+          dailySpinUsed: false,
+          dailyChallengesClaimed: false,
+          joinedAt: FieldValue.serverTimestamp()
+        };
+        t.set(userRef, userData);
+      } else {
+        userData = userDoc.data();
       }
-
-      const userData = userDoc.data();
 
       // Verify Requirements
       const allTasksDone = 
