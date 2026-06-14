@@ -44,39 +44,28 @@ const Login = () => {
           <p className="text-white/40 text-xs uppercase tracking-[0.3em] font-bold">Your Cosmic Journey Awaits</p>
         </div>
 
-        <div className="space-y-4">
-          <Button 
-            fullWidth 
-            onClick={() => handleLogin('google')}
-            disabled={loading}
-            className="h-14 bg-white text-gray-900 hover:bg-gray-100 font-semibold gap-3"
-          >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 flex-shrink-0" />
-            Continue with Google
-          </Button>
-
+        <div className="space-y-6">
           <Button 
             fullWidth 
             onClick={() => handleLogin('facebook')}
             disabled={loading}
-            className="h-14 bg-[#1877F2] text-white hover:bg-[#166fe5] font-semibold gap-3"
+            className="h-14 bg-[#1877F2] text-white hover:bg-[#166fe5] font-semibold gap-3 shadow-[0_0_30px_rgba(24,119,242,0.35)] rounded-2xl border-none"
           >
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/facebook.svg" alt="Facebook" className="w-5 h-5 flex-shrink-0" />
             Continue with Facebook
           </Button>
 
-          <div className="flex items-center gap-4 my-8">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-white/20 text-[10px] font-black uppercase tracking-widest">OR</span>
-            <div className="flex-1 h-px bg-white/10" />
+          <div className="flex items-center gap-4 my-4">
+            <div className="flex-1 h-px bg-white/5" />
+            <span className="text-white/10 text-[10px] font-black uppercase tracking-widest">OR</span>
+            <div className="flex-1 h-px bg-white/5" />
           </div>
 
           <Button 
             fullWidth 
-            variant="outline"
             onClick={() => handleLogin('anonymous')}
             disabled={loading}
-            className="h-14"
+            className="h-14 bg-transparent border border-white/15 text-white/80 hover:text-white hover:bg-white/5 rounded-2xl shadow-none"
           >
             Continue as Guest
           </Button>
