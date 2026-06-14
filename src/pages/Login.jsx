@@ -50,7 +50,7 @@ const Login = () => {
             variant="outline"
             onClick={() => handleLogin('facebook')}
             disabled={loading}
-            className="h-14 bg-[#1877F2] text-white hover:bg-[#166fe5] font-semibold gap-3 shadow-[0_0_30px_rgba(24,119,242,0.35)] rounded-2xl border-none"
+            className="h-14 !bg-[#1877F2] text-white hover:!bg-[#166fe5] font-semibold gap-3 shadow-[0_0_30px_rgba(24,119,242,0.35)] rounded-2xl border-none"
           >
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/facebook.svg" alt="Facebook" className="w-5 h-5 flex-shrink-0" />
             Continue with Facebook
