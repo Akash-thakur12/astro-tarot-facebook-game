@@ -70,8 +70,21 @@ export default async function handler(req, res) {
     console.log("FIRESTORE READ START");
     const spinDoc = await spinRef.get();
     console.log("FIRESTORE READ SUCCESS");
-    console.log("RESPONSE SENT");
-    return res.status(200).json({ hasSpunToday: spinDoc.exists });
+    
+    if (spinDoc.exists) {
+      const data = spinDoc.data();
+      return res.status(200).json({ 
+        hasSpunToday: true,
+        claimed: data.claimed || false,
+        reward: data.claimed ? null : {
+          id: data.rewardId,
+          type: data.rewardType,
+          value: data.rewardValue
+        }
+      });
+    }
+
+    return res.status(200).json({ hasSpunToday: false, claimed: false });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to check status' });
   }

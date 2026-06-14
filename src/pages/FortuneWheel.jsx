@@ -26,6 +26,7 @@ const FortuneWheel = () => {
   const [wonReward, setWonReward] = useState(null);
   const [showShower, setShowShower] = useState(false);
   const [hasSpunToday, setHasSpunToday] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Read today's spin status from Firestore on load
@@ -41,6 +42,19 @@ const FortuneWheel = () => {
           const data = await res.json();
           if (data.hasSpunToday) {
             setHasSpunToday(true);
+            
+            // If they spun but didn't claim, restore the reward state
+            if (!data.claimed && data.reward) {
+              const pendingReward = REWARDS.find(r => r.id === data.reward.id);
+              if (pendingReward) {
+                setWonReward(pendingReward);
+                setSpinState('finished');
+                setShowPopup(true);
+                if (pendingReward.type !== 'miss') {
+                  setShowShower(true);
+                }
+              }
+            }
           }
         }
       } catch (error) {
@@ -99,6 +113,7 @@ const FortuneWheel = () => {
       const targetReward = REWARDS.find(r => r.id === targetId) || REWARDS[0];
 
       setSpinState('spinning');
+      setHasSpunToday(true); // Disable further spins immediately
 
       // Calculate rotation: 8 full spins + target slice offset
       const spins = 8; 
@@ -116,7 +131,6 @@ const FortuneWheel = () => {
         setSpinState('finished');
         setWonReward(targetReward);
         setShowPopup(true);
-        setHasSpunToday(true); // Mark as spun today
         console.log("POPUP OPENED");
 
         if (targetReward.type !== 'miss') {
@@ -132,31 +146,55 @@ const FortuneWheel = () => {
   };
 
   const handleClaim = async () => {
-    console.log("CLAIM CLICKED");
+    if (isClaiming || !wonReward) return;
     
-    if (wonReward) {
+    console.log("CLAIM CLICKED");
+    setIsClaiming(true);
+
+    try {
+      if (wonReward.type === 'miss') {
+        setShowPopup(false);
+        setShowShower(false);
+        setIsClaiming(false);
+        return;
+      }
+
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/claim-reward', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to claim reward");
+      }
+
+      // Success
       if (wonReward.type === 'coin') {
-        console.log("COINS UPDATED");
         showToast(`Reward claimed! +${wonReward.value} Coins`);
       } else if (wonReward.type === 'xp') {
-        console.log("XP UPDATED");
         showToast(`XP gained! (+50 XP)`);
       } else if (wonReward.type === 'tarot') {
         showToast(`Reward claimed! Bonus Tarot Unlocked`);
       }
       
-      // Sync global state immediately
-      try {
-        await refreshUser();
-        console.log("GLOBAL STATE REFRESHED");
-      } catch (error) {
-        console.error("Failed to refresh user data:", error);
-      }
+      // Sync global state
+      await refreshUser();
+      
+      setShowPopup(false);
+      setShowShower(false);
+      console.log("CLAIM SUCCESSFUL");
+    } catch (error) {
+      console.error("Claim error:", error);
+      showToast(error.message || "Failed to claim reward");
+    } finally {
+      setIsClaiming(false);
     }
-    
-    setShowPopup(false);
-    setShowShower(false);
-    console.log("UI REFRESHED");
   };
 
   // Generate coin particles for the shower effect
@@ -356,6 +394,7 @@ const FortuneWheel = () => {
                 fullWidth 
                 variant="gold" 
                 onClick={handleClaim}
+                loading={isClaiming}
                 className="h-14 rounded-2xl font-black text-sm tracking-widest uppercase mt-4"
               >
                 {wonReward?.type === 'miss' ? 'Continue' : 'Claim Reward'}

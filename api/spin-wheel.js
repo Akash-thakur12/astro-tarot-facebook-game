@@ -128,30 +128,14 @@ export default async function handler(req, res) {
       const wonReward = getWeightedReward();
       console.log("REWARD GENERATED:", wonReward.label);
 
-      console.log("FIRESTORE WRITE START");
-      // Apply Reward
-      const userUpdates = {
-        dailySpinUsed: true,
-        lastSpinDate: FieldValue.serverTimestamp()
-      };
-
-      if (wonReward.type === 'coin') {
-        userUpdates.coins = FieldValue.increment(wonReward.value);
-      } else if (wonReward.type === 'tarot') {
-        userUpdates.bonusTarot = FieldValue.increment(wonReward.value);
-      } else if (wonReward.type === 'xp') {
-        userUpdates.xp = FieldValue.increment(50);
-      }
-
-      t.set(userRef, userUpdates, { merge: true });
-
-      // Save Spin Record
+      // Save Spin Record (Reward is PENDING until /api/claim-reward is called)
       t.set(spinRef, {
         uid: uid,
         spinDate: todayStr,
         rewardType: wonReward.type,
         rewardValue: wonReward.value,
-        rewardId: wonReward.id, // For frontend to know which slice to animate
+        rewardId: wonReward.id,
+        claimed: false, // MANDATORY: Reward only granted after explicit claim
         createdAt: FieldValue.serverTimestamp()
       });
 
