@@ -174,8 +174,8 @@ const Home = () => {
         <div className="flex items-center justify-between bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-3xl shadow-lg">
           <div className="flex items-center gap-3">
             <UserMenu />
-            <div className="flex flex-col">
-              <span className="text-white font-bold text-sm tracking-wide">
+            <div className="flex flex-col min-w-0">
+              <span className="text-white font-bold text-sm tracking-wide truncate">
                 {user?.displayName || (isHindi ? 'अतिथि' : 'Guest')}
               </span>
               {user?.premium && (

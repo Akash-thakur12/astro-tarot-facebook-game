@@ -51,7 +51,7 @@ const UserMenu = () => {
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-10 h-10 rounded-full border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center hover:border-mystic-gold/50 transition-all active:scale-95 shadow-lg"
+        className="flex-shrink-0 w-10 h-10 rounded-full border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center hover:border-mystic-gold/50 transition-all active:scale-95 shadow-lg"
       >
         {user.photoURL ? (
           <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
@@ -63,7 +63,7 @@ const UserMenu = () => {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-3 w-64 glass border-white/10 rounded-3xl p-4 shadow-2xl z-50 animate-fade-in origin-top-right">
+          <div className="absolute left-0 mt-3 w-64 glass border-white/10 rounded-3xl p-4 shadow-2xl z-50 animate-fade-in origin-top-left">
             <div className="px-3 py-4 border-b border-white/5 mb-2">
               <p className="text-white font-bold text-sm truncate">{user.displayName || 'Spiritual Seeker'}</p>
               <p className="text-white/40 text-[10px] uppercase tracking-widest font-black mt-1">
