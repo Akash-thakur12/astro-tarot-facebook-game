@@ -4,8 +4,6 @@ import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
-import LevelProgress from '../components/LevelProgress';
-import DailyStreakCard from '../components/DailyStreakCard';
 import DailyChallengesCard from '../components/DailyChallengesCard';
 import DailyBonus from '../components/DailyBonus';
 import UserMenu from '../components/auth/UserMenu';
@@ -37,17 +35,15 @@ const Home = () => {
     maxXp: nextLevelXp 
   };
 
-  const [streak, setStreak] = useState(3);
+  const streak = 3;
 
   // Dynamic Daily Challenges derived from Firestore User data
   const challenges = useMemo(() => {
-    console.log("DEBUG: Home.jsx - user.dailySpinUsed =", user?.dailySpinUsed);
     const list = [
       { id: 1, title: 'Ask Pandit Once', completed: !!user?.dailyQuestionUsed },
       { id: 2, title: 'Draw Tarot Card', completed: !!user?.dailyTarotUsed },
       { id: 3, title: 'Spin Fortune Wheel', completed: !!user?.dailySpinUsed }
     ];
-    console.log("DEBUG: Home.jsx - Challenges =", list);
     return list;
   }, [user]);
 

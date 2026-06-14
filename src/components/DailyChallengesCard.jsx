@@ -1,4 +1,3 @@
-import React from 'react';
 
 const DailyChallengesCard = ({ challenges = [], rewards = { coins: 50, xp: 20 }, onClaim, isClaimed = false }) => {
   const completedCount = challenges.filter(c => c.completed).length;

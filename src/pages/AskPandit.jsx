@@ -88,28 +88,38 @@ const AskPandit = () => {
 
   // State
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [hasEnteredDetails, setHasEnteredDetails] = useState(false);
+  const [messages, setMessages] = useState(() => {
+    const saved = localStorage.getItem('pandit_chat_messages');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to parse saved messages:", e);
+      return [];
+    }
+  });
+  const [hasEnteredDetails, setHasEnteredDetails] = useState(() => {
+    const saved = localStorage.getItem('pandit_has_entered_details');
+    return saved === 'true';
+  });
   const [errorMsg, setErrorMsg] = useState('');
   const [showLowCoinsModal, setShowLowCoinsModal] = useState(false);
   const [pickerConfig, setPickerConfig] = useState(null);
   const [inputText, setInputText] = useState('');
 
   // Forms
-  const [personalForm, setPersonalForm] = useState({ 
-    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
+  const [personalForm, setPersonalForm] = useState(() => {
+    const saved = localStorage.getItem('pandit_user_profile');
+    try {
+      return saved ? JSON.parse(saved) : { 
+        name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
+      };
+    } catch (e) {
+      console.error("Failed to parse saved profile:", e);
+      return { 
+        name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
+      };
+    }
   });
-
-  // PERSISTENCE - Load from localStorage
-  useEffect(() => {
-    const savedMessages = localStorage.getItem('pandit_chat_messages');
-    const savedForm = localStorage.getItem('pandit_user_profile');
-    const savedEntered = localStorage.getItem('pandit_has_entered_details');
-
-    if (savedMessages) setMessages(JSON.parse(savedMessages));
-    if (savedForm) setPersonalForm(JSON.parse(savedForm));
-    if (savedEntered === 'true') setHasEnteredDetails(true);
-  }, []);
 
   // PERSISTENCE - Save to localStorage
   useEffect(() => {
@@ -141,6 +151,10 @@ const AskPandit = () => {
     initializePandit();
   }, [user, refreshUser]);
 
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
     scrollToBottom();
     // Auto-focus after response or message update
@@ -148,10 +162,6 @@ const AskPandit = () => {
        inputRef.current?.focus();
     }
   }, [messages, loading, hasEnteredDetails]);
-
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
   const handleNewChat = () => {
     localStorage.removeItem('pandit_chat_messages');

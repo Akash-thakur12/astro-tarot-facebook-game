@@ -84,7 +84,6 @@ const FortuneWheel = () => {
   const handleSpin = async () => {
     if (spinState === 'spinning' || spinState === 'fetching' || hasSpunToday) return;
     
-    console.log("SPIN STARTED");
     setSpinState('fetching');
     setShowPopup(false);
     setShowShower(false);
@@ -102,9 +101,7 @@ const FortuneWheel = () => {
         throw new Error(data.error || "Failed to spin");
       }
 
-      console.log("SPIN SUCCESSFUL - Refreshing user to update challenges");
       await refreshUser();
-      console.log("USER REFRESHED - dailySpinUsed should be true now");
 
       if (data.alreadySpun) {
         setHasSpunToday(true);
@@ -135,7 +132,6 @@ const FortuneWheel = () => {
         setSpinState('finished');
         setWonReward(targetReward);
         setShowPopup(true);
-        console.log("POPUP OPENED");
 
         if (targetReward.type !== 'miss') {
           setShowShower(true);
@@ -152,7 +148,6 @@ const FortuneWheel = () => {
   const handleClaim = async () => {
     if (isClaiming || !wonReward) return;
     
-    console.log("CLAIM CLICKED");
     setIsClaiming(true);
 
     try {
@@ -192,7 +187,6 @@ const FortuneWheel = () => {
       
       setShowPopup(false);
       setShowShower(false);
-      console.log("CLAIM SUCCESSFUL");
     } catch (error) {
       console.error("Claim error:", error);
       showToast(error.message || "Failed to claim reward");

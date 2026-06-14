@@ -57,7 +57,6 @@ const DailyBonus = () => {
       }
 
       await refreshUser();
-      console.log("Daily bonus claimed via API:", data.reward);
     } catch (error) {
       console.error("Claim Error:", error.message);
     } finally {

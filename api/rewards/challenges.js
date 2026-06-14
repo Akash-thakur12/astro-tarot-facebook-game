@@ -29,6 +29,9 @@ if (!apps || apps.length === 0) {
 const db = getFirestore();
 const adminAuth = getAuth();
 
+// Rate limiting map (in-memory, per Vercel instance)
+const rateLimits = new Map();
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -50,6 +53,20 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
+
+  // Basic Rate Limiting
+  const now = new Date();
+  const nowMs = now.getTime();
+  const userRate = rateLimits.get(uid) || { count: 0, resetTime: nowMs + 60000 };
+  if (nowMs > userRate.resetTime) {
+    userRate.count = 0;
+    userRate.resetTime = nowMs + 60000;
+  }
+  if (userRate.count >= 10) {
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
+  userRate.count++;
+  rateLimits.set(uid, userRate);
 
   const userRef = db.collection('users').doc(uid);
 

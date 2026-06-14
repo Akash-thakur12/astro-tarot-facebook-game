@@ -35,7 +35,6 @@ const RewardCenter = () => {
         }
 
         await refreshUser();
-        console.log("Ad reward claimed via API:", data.reward);
       } catch (error) {
         console.error("Ad Reward Error:", error.message);
       } finally {

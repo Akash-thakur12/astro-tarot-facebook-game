@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
-import { signInAnonymous } from '../services/authService';
 import { getUser } from '../services/userService';
 import { AuthContext } from './AuthContextInstance';
 
@@ -35,7 +34,6 @@ export const AuthProvider = ({ children }) => {
           unsubscribeSnapshot = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              console.log("DEBUG: AuthContext - User data updated from onSnapshot:", data.dailySpinUsed);
               setUser(data);
               setLoading(false);
             } else {

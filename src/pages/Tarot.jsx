@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
@@ -20,6 +20,13 @@ const Tarot = () => {
   const [isUnlockedByAd, setIsUnlockedByAd] = useState(false);
   const [history, setHistory] = useState([]);
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [particlePositions] = useState(() => 
+    Array.from({ length: 6 }).map(() => ({
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      delay: `${Math.random() * 2}s`
+    }))
+  );
 
   const isHindi = currentLanguage === 'Hindi';
 
@@ -65,6 +72,7 @@ const Tarot = () => {
     setSelectedCard(index);
     setIsMovingToCenter(true);
 
+    // eslint-disable-next-line react-hooks/purity
     const randomCard = tarotData[Math.floor(Math.random() * tarotData.length)];
     
     // Fire and forget backend operations
@@ -142,14 +150,6 @@ const Tarot = () => {
       }
     }, 2500);
   };
-
-  const particlePositions = useMemo(() => {
-    return Array.from({ length: 6 }).map(() => ({
-      top: `${Math.random() * 100}%`,
-      left: `${Math.random() * 100}%`,
-      delay: `${Math.random() * 2}s`
-    }));
-  }, []);
 
   const canReadNow = canReadTarotToday(user) || isUnlockedByAd;
 

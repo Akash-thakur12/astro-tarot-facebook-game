@@ -82,7 +82,7 @@ export default async function handler(req, res) {
   userRate.count++;
   rateLimits.set(uid, userRate);
 
-  const { mode, currentTone, userData, history } = req.body;
+  const { mode, userData, history } = req.body;
 
   if (!userData) {
     return res.status(400).json({ error: 'Missing userData in request body' });
