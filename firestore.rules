@@ -14,13 +14,22 @@ service cloud.firestore {
         && request.resource.data.streak == 1
         && request.resource.data.adsWatchedToday == 0;
       
-      // Hardened Update Rule: Only allow specific non-sensitive fields
+      // Hardened Update Rule: Strictly limit allowed fields
+      // Clients are FORBIDDEN from modifying: premium, subscriptionExpiry, lastPurchaseDate, coins, xp
       allow update: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['premium', 'subscriptionExpiry', 'lastPurchaseDate', 'coins', 'xp', 'dailyChallengesClaimed'])
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'photoURL', 'currentLanguage', 'lastActive']);
-            
-      // NOTE: Any attempt to update coins, xp, premium, or daily flags 
-      // from the client will now return PERMISSION_DENIED.
+            .hasOnly(['displayName', 'photoURL', 'currentLanguage', 'lastActive', 'dailyQuestionUsed', 'dailyTarotUsed', 'dailySpinUsed', 'lastQuestionDate', 'lastTarotReadingDate', 'lastSpinDate']);
+    }
+
+    // Premium Purchases Lockdown (Server-Authoritative Only)
+    match /premiumPurchases/{purchaseId} {
+      // Users can only read their own purchase records
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      
+      // Strictly block all client-side writes
+      allow write: if false;
     }
 
     // Tarot History Lockdown

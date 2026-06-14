@@ -39,8 +39,10 @@ export const AuthProvider = ({ children }) => {
               setUser(data);
               setLoading(false);
             } else {
-              // User doc doesn't exist yet, wait for provisioning
-              provisionUser(firebaseUser.uid);
+              // User doc doesn't exist yet. 
+              // Set a minimal user object so Home.jsx can call check-status API
+              setUser({ uid: firebaseUser.uid, isNewUser: true });
+              setLoading(false);
             }
           });
         } else {
@@ -52,17 +54,6 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
       }
     });
-
-    const provisionUser = async () => {
-      try {
-        const newUser = await signInAnonymous();
-        setUser(newUser);
-      } catch (err) {
-        console.error("Provisioning Error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
 
     return () => {
       unsubscribeAuth();
