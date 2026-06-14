@@ -405,86 +405,139 @@ const AskPandit = () => {
   const renderChatInterface = () => (
     <div className="flex flex-col flex-1 relative overflow-hidden h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 custom-scrollbar pb-32">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-50">
-            <span className="text-4xl">🔮</span>
-            <p className="text-white text-sm">Namaste {personalForm.name}.<br/>How can I guide you today?</p>
-          </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-            <div className={`max-w-[85%] px-5 py-3 rounded-[24px] text-sm leading-relaxed ${
-              msg.role === 'user' 
-                ? 'bg-mystic-gold text-mystic-indigo font-medium rounded-tr-none' 
-                : 'bg-white/10 text-white border border-white/5 rounded-tl-none'
-            }`}>
-              {msg.content}
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 md:py-10 space-y-8 custom-scrollbar pb-32 md:pb-40">
+        <div className="max-w-[800px] mx-auto w-full space-y-8">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6 opacity-40 py-20">
+              <span className="text-6xl animate-bounce">🔮</span>
+              <div className="space-y-2">
+                <h3 className="text-white text-xl font-bold">Namaste {personalForm.name}</h3>
+                <p className="text-white/60 text-sm max-w-xs mx-auto">Your spiritual journey begins here. How can I guide you today?</p>
+              </div>
             </div>
-          </div>
-        ))}
+          )}
 
-        {loading && (
-          <div className="flex justify-start animate-fade-in">
-            <div className="bg-white/10 text-mystic-gold px-5 py-3 rounded-[24px] rounded-tl-none text-xs font-black uppercase tracking-widest animate-pulse border border-white/5">
-              {t.thinking}
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+              <div className={`
+                relative px-6 py-4 md:px-7 md:py-5 rounded-[2rem] text-[15px] md:text-[16px] leading-[1.8] tracking-wide shadow-2xl
+                ${msg.role === 'user' 
+                  ? 'bg-mystic-gold text-mystic-indigo font-black max-w-[85%] md:max-w-[500px] rounded-tr-none' 
+                  : 'bg-white/5 text-white/90 border border-white/10 max-w-[95%] md:max-w-[700px] rounded-tl-none backdrop-blur-md'
+                }
+              `}>
+                {msg.content.split('\n').map((line, idx) => (
+                  <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
+                    {line}
+                  </p>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          ))}
 
-        {errorMsg && (
-          <div className="text-center px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold">
-            {errorMsg}
-          </div>
-        )}
-        <div ref={chatEndRef} />
+          {loading && (
+            <div className="flex justify-start animate-fade-in">
+              <div className="bg-white/5 border border-white/10 text-mystic-gold px-6 py-4 rounded-[2rem] rounded-tl-none flex items-center gap-3 backdrop-blur-md shadow-xl">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t.thinking}</span>
+              </div>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="max-w-xs mx-auto text-center px-6 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[11px] font-bold uppercase tracking-wider">
+              {errorMsg}
+            </div>
+          )}
+          <div ref={chatEndRef} className="h-4" />
+        </div>
       </div>
 
       {/* Input Area */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent pb-8">
-        <form onSubmit={handleSend} className="max-w-2xl mx-auto flex gap-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder={t.question}
-            className="flex-1 bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white text-sm focus:outline-none focus:border-mystic-gold/50 transition-all placeholder:text-white/20"
-          />
-          <button 
-            type="submit" 
-            disabled={loading || !inputText.trim()}
-            className="w-14 h-14 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all disabled:opacity-50"
+      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none bg-gradient-to-t from-[#020617] via-[#020617]/90 to-transparent pt-10">
+        <div className="max-w-[800px] mx-auto w-full px-4 pb-6 md:pb-10 pointer-events-auto">
+          <form 
+            onSubmit={handleSend} 
+            className="relative flex items-center group"
           >
-            <span className="text-xl">➔</span>
-          </button>
-        </form>
+            <div className="absolute inset-0 bg-mystic-gold/10 blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 rounded-full" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder={t.question}
+              className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-20 py-5 md:py-6 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.5)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
+            />
+            <button 
+              type="submit" 
+              disabled={loading || !inputText.trim()}
+              className="absolute right-3 w-12 h-12 md:w-14 md:h-14 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer z-10"
+            >
+              <span className="text-xl md:text-2xl font-black">➔</span>
+            </button>
+          </form>
+          
+          <div className="mt-3 text-center hidden md:block">
+             <p className="text-[9px] uppercase tracking-[0.3em] font-bold text-white/20">Pandit AI can provide spiritual guidance but use your own wisdom</p>
+          </div>
+        </div>
       </div>
     </div>
   );
 
   return (
-    <div className="flex flex-col w-full h-screen bg-[#020617] overflow-hidden">
+    <div className="flex flex-col w-full h-screen bg-[#020617] overflow-hidden selection:bg-mystic-gold selection:text-mystic-indigo">
       <PickerModal pickerConfig={pickerConfig} setPickerConfig={setPickerConfig} isHindi={isHindi} />
       
       {/* Header */}
-      <div className="px-6 pt-10 pb-4 flex justify-between items-center border-b border-white/5 bg-[#020617]/50 backdrop-blur-xl z-10">
-        <div className="flex-1" />
-        <h1 className="text-xl font-black premium-gradient-text text-white text-center flex-1">{t.title}</h1>
-        <div className="flex-1 flex justify-end">
-          {hasEnteredDetails && (
-            <button 
-              onClick={handleNewChat}
-              className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-white/60 hover:text-white hover:bg-white/10 transition-all"
-            >
-              🔄 {t.newChat}
-            </button>
-          )}
+      <div className="px-6 pt-10 pb-4 border-b border-white/5 bg-[#020617]/80 backdrop-blur-2xl z-[60]">
+        <div className="max-w-[800px] mx-auto w-full flex justify-between items-center">
+          <button 
+            onClick={() => navigate('/')}
+            className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+          >
+            ←
+          </button>
+          
+          <div className="flex flex-col items-center">
+            <h1 className="text-lg font-black premium-gradient-text text-white tracking-tight">{t.title}</h1>
+            <div className="flex items-center gap-1.5">
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+               <span className="text-[9px] font-black text-emerald-500/80 uppercase tracking-widest">Divine Presence Online</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {hasEnteredDetails && (
+              <button 
+                onClick={handleNewChat}
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-black text-white/60 hover:text-white hover:bg-white/10 transition-all"
+              >
+                🔄 {t.newChat}
+              </button>
+            )}
+            <div className="flex items-center gap-1.5 bg-mystic-gold/10 px-3 py-1.5 rounded-full border border-mystic-gold/20">
+               <span className="text-xs">🪙</span>
+               <span className="text-mystic-gold font-black text-xs">{user?.coins || 0}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {hasEnteredDetails ? renderChatInterface() : renderBirthDetailsForm()}
+      <div className="flex-1 overflow-hidden flex flex-col relative">
+        {hasEnteredDetails ? renderChatInterface() : (
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="max-w-2xl mx-auto w-full">
+              {renderBirthDetailsForm()}
+            </div>
+          </div>
+        )}
+      </div>
 
       {showLowCoinsModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
