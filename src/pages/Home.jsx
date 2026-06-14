@@ -170,18 +170,34 @@ const Home = () => {
 
       <div className="px-5 pt-8 space-y-6 relative z-10">
         
-        {/* TOP HEADER: UserMenu, Name, Coins */}
-        <div className="relative z-[100] bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-[2.5rem] shadow-lg transition-all duration-500">
-          <div className="flex items-center justify-between gap-4">
-            <UserMenu />
-            
-            <div 
-              onClick={() => navigate('/premium')}
-              className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-2xl border border-mystic-gold/30 cursor-pointer active:scale-95 transition-transform shrink-0"
-            >
-              <span className="text-xl drop-shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse">🪙</span>
-              <span className="text-mystic-gold font-black text-lg">{user?.coins || 0}</span>
+        {/* TOP HEADER: Identity & Coins */}
+        <div className="relative z-[100] flex items-center justify-between bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-[2.5rem] shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center shadow-lg">
+              {user?.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-lg">👤</span>
+              )}
             </div>
+            <div className="flex flex-col">
+              <span className="text-white font-bold text-sm tracking-wide">
+                {isHindi ? 'अतिथि खाता' : 'Guest Account'}
+              </span>
+              {user?.premium && (
+                <span className="text-[9px] uppercase tracking-widest text-mystic-gold font-black flex items-center gap-1">
+                  ⭐ {th.premium}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div 
+            onClick={() => navigate('/premium')}
+            className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-2xl border border-mystic-gold/30 cursor-pointer active:scale-95 transition-transform shrink-0"
+          >
+            <span className="text-xl drop-shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse">🪙</span>
+            <span className="text-mystic-gold font-black text-lg">{user?.coins || 0}</span>
           </div>
         </div>
 
@@ -272,6 +288,11 @@ const Home = () => {
             onClaim={handleClaimChallenges} 
             isClaimed={!!user?.dailyChallengesClaimed}
           />
+
+          {/* 7. ACCOUNT FOOTER SECTION */}
+          <div className="col-span-2 mt-4">
+             <UserMenu />
+          </div>
 
         </div>
         
