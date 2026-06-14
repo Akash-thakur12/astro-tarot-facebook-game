@@ -171,7 +171,7 @@ const Home = () => {
       <div className="px-5 pt-8 space-y-6 relative z-10">
         
         {/* TOP HEADER: UserMenu, Name, Coins */}
-        <div className="flex items-center justify-between bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-3xl shadow-lg">
+        <div className="relative z-[100] flex items-center justify-between bg-white/5 backdrop-blur-lg border border-white/10 p-4 rounded-3xl shadow-lg">
           <div className="flex items-center gap-3">
             <UserMenu />
             <div className="flex flex-col min-w-0">
