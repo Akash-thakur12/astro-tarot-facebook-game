@@ -6,6 +6,7 @@ import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
 import DailyChallengesCard from '../components/DailyChallengesCard';
 import DailyBonus from '../components/DailyBonus';
+import DailyStreakCard from '../components/DailyStreakCard';
 import UserMenu from '../components/auth/UserMenu';
 
 const Home = () => {
@@ -222,19 +223,7 @@ const Home = () => {
         <div className="grid grid-cols-2 gap-4">
           
           {/* 1. DAILY STREAK */}
-          <div className="col-span-2 bg-gradient-to-br from-orange-500/10 to-red-500/5 p-5 rounded-[2rem] border border-orange-500/20 flex justify-between items-center relative overflow-hidden group">
-            <div className="absolute -right-4 top-1/2 -translate-y-1/2 text-7xl opacity-20 drop-shadow-[0_0_15px_rgba(249,115,22,1)]">🔥</div>
-            <div>
-              <h3 className="text-white/60 text-[10px] uppercase tracking-widest font-bold mb-1">{th.streakTitle}</h3>
-              <div className="text-white font-black text-3xl flex items-baseline gap-1">
-                {streak} <span className="text-sm font-bold text-white/50 mb-1">{th.days}</span>
-              </div>
-              <p className="text-orange-400 text-[10px] font-bold mt-1">{th.nextReward}</p>
-            </div>
-            <div className="w-14 h-14 bg-orange-500/20 rounded-full flex items-center justify-center border border-orange-500/30 text-2xl shadow-[0_0_20px_rgba(249,115,22,0.2)]">
-              🔥
-            </div>
-          </div>
+          <DailyStreakCard />
 
           {/* 2. ASK PANDIT */}
           <div 

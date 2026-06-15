@@ -105,16 +105,11 @@ export default async function handler(req, res) {
     // 5. Transaction to prevent double-spins via race conditions
     const result = await db.runTransaction(async (t) => {
       const spinDoc = await t.get(spinRef);
-      
-      // Check if already spun
-      if (spinDoc.exists) {
-        return { alreadySpun: true };
-      }
-
-      // AUTO-CREATE user if missing
       const userDoc = await t.get(userRef);
+      
+      let userData;
       if (!userDoc.exists) {
-        t.set(userRef, {
+        userData = {
           uid,
           coins: 0,
           xp: 0,
@@ -125,33 +120,57 @@ export default async function handler(req, res) {
           dailyTarotUsed: false,
           dailySpinUsed: false,
           dailyChallengesClaimed: false,
-          joinedAt: FieldValue.serverTimestamp()
+          joinedAt: FieldValue.serverTimestamp(),
+          extraSpinsAvailable: 0
+        };
+        t.set(userRef, userData);
+      } else {
+        userData = userDoc.data();
+      }
+
+      // Check if already spun and if extra spins are available
+      if (spinDoc.exists) {
+        if ((userData.extraSpinsAvailable || 0) <= 0) {
+          return { alreadySpun: true };
+        }
+        // Use an extra spin
+        t.update(userRef, { 
+          extraSpinsAvailable: FieldValue.increment(-1) 
+        });
+      } else {
+        // Normal daily spin
+        t.update(userRef, {
+          dailySpinUsed: true,
+          lastSpinDate: FieldValue.serverTimestamp()
         });
       }
 
       // Generate Reward
       const wonReward = getWeightedReward();
 
-      // Restore tracking for Daily Challenges (but NO rewards yet)
-      t.set(userRef, {
-        dailySpinUsed: true,
-        lastSpinDate: FieldValue.serverTimestamp()
-      }, { merge: true });
-
       // Save Spin Record (Reward is PENDING until /api/claim-reward is called)
+      // Note: If using an extra spin, we need a unique ID for the claim flow.
+      // The current system uses {uid}_{todayStr} which only allows ONE claim per day.
+      // To support extra spins, we should either:
+      // 1. Change the claim flow to use a different ID strategy.
+      // 2. Clear the 'claimed' flag and overwrite the dailySpin doc (simplest but loses history).
+      // Let's go with option 2 for now to minimize changes to claim-reward.js.
+      
       t.set(spinRef, {
         uid: uid,
         spinDate: todayStr,
         rewardType: wonReward.type,
         rewardValue: wonReward.value,
         rewardId: wonReward.id,
-        claimed: false, // MANDATORY: Reward only granted after explicit claim
-        createdAt: FieldValue.serverTimestamp()
+        claimed: false, // RESET so user can claim the new reward
+        createdAt: FieldValue.serverTimestamp(),
+        isExtraSpin: spinDoc.exists
       });
 
       return { 
         alreadySpun: false, 
-        reward: wonReward 
+        reward: wonReward,
+        extraSpinsRemaining: (userData.extraSpinsAvailable || 0) - (spinDoc.exists ? 1 : 0)
       };
     });
 
