@@ -403,4 +403,3 @@ const Tarot = () => {
 };
 
 export default Tarot;
-xport default Tarot;
