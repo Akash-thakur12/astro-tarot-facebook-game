@@ -15,12 +15,12 @@ service cloud.firestore {
         && request.resource.data.adsWatchedToday == 0;
       
       // Hardened Update Rule: Strictly limit allowed fields
-      // Clients are FORBIDDEN from modifying: premium, subscriptionExpiry, lastPurchaseDate, coins, xp
+      // Clients are FORBIDDEN from modifying: premium, subscriptionExpiry, lastPurchaseDate, coins, xp, usage flags, and timestamps
       allow update: if request.auth != null && request.auth.uid == userId
         && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['premium', 'subscriptionExpiry', 'lastPurchaseDate', 'coins', 'xp', 'dailyChallengesClaimed'])
+            .hasAny(['premium', 'subscriptionExpiry', 'lastPurchaseDate', 'coins', 'xp', 'dailyChallengesClaimed', 'dailyQuestionUsed', 'dailyTarotUsed', 'dailySpinUsed', 'lastQuestionDate', 'lastTarotReadingDate', 'lastSpinDate'])
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'photoURL', 'currentLanguage', 'lastActive', 'dailyQuestionUsed', 'dailyTarotUsed', 'dailySpinUsed', 'lastQuestionDate', 'lastTarotReadingDate', 'lastSpinDate']);
+            .hasOnly(['displayName', 'photoURL', 'currentLanguage', 'lastActive']);
     }
 
     // Premium Purchases Lockdown (Server-Authoritative Only)

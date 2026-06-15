@@ -85,8 +85,9 @@ export default async function handler(req, res) {
     await db.runTransaction(async (t) => {
       // 0. Check and AUTO-CREATE user if missing
       const userDoc = await t.get(userRef);
+      let userData;
       if (!userDoc.exists) {
-        t.set(userRef, {
+        userData = {
           uid,
           coins: 0,
           xp: 0,
@@ -98,7 +99,24 @@ export default async function handler(req, res) {
           dailySpinUsed: false,
           dailyChallengesClaimed: false,
           joinedAt: FieldValue.serverTimestamp()
-        });
+        };
+        t.set(userRef, userData);
+      } else {
+        userData = userDoc.data();
+      }
+
+      // Daily Limit Validation for Free Users
+      if (!userData.premium) {
+        const lastRead = userData.lastTarotReadingDate?.toDate();
+        const now = new Date();
+        const isSameDay = lastRead && 
+          lastRead.getUTCDate() === now.getUTCDate() &&
+          lastRead.getUTCMonth() === now.getUTCMonth() &&
+          lastRead.getUTCFullYear() === now.getUTCFullYear();
+
+        if (isSameDay && userData.dailyTarotUsed) {
+          throw new Error("DAILY_LIMIT_REACHED");
+        }
       }
 
       // 1. Create History Entry
@@ -123,6 +141,9 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Tarot Save Error:", error);
+    if (error.message === "DAILY_LIMIT_REACHED") {
+      return res.status(403).json({ error: "Daily tarot reading limit reached. Please come back tomorrow or upgrade to Premium." });
+    }
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 }

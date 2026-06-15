@@ -83,8 +83,7 @@ export default async function handler(req, res) {
       } else if (rewardType === 'tarot') {
         userUpdates.bonusTarot = FieldValue.increment(rewardValue);
       } else if (rewardType === 'xp') {
-        // Based on existing logic: 50 XP
-        userUpdates.xp = FieldValue.increment(50);
+        userUpdates.xp = FieldValue.increment(rewardValue);
       }
 
       t.set(userRef, userUpdates, { merge: true });

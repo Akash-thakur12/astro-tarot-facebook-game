@@ -96,18 +96,32 @@ export default async function handler(req, res) {
         userData = userDoc.data();
       }
 
-      // Verify Requirements
-      const allTasksDone = 
-        userData.dailyQuestionUsed === true &&
-        userData.dailyTarotUsed === true &&
-        userData.dailySpinUsed === true;
+      // Verify Requirements using Server Timestamps (Reliable)
+      const now = new Date();
+      const isToday = (timestamp) => {
+        if (!timestamp) return false;
+        const d = timestamp.toDate();
+        return (
+          d.getUTCDate() === now.getUTCDate() &&
+          d.getUTCMonth() === now.getUTCMonth() &&
+          d.getUTCFullYear() === now.getUTCFullYear()
+        );
+      };
 
-      if (!allTasksDone) {
-        return { success: false, error: "Challenges not complete" };
+      const tarotDone = isToday(userData.lastTarotReadingDate) && userData.dailyTarotUsed;
+      const spinDone = isToday(userData.lastSpinDate) && userData.dailySpinUsed;
+      const questionDone = isToday(userData.lastQuestionDate) && userData.dailyQuestionUsed;
+
+      if (!tarotDone || !spinDone || !questionDone) {
+        return { 
+          success: false, 
+          error: "Challenges not complete",
+          status: { tarotDone, spinDone, questionDone }
+        };
       }
 
-      // Verify Not Already Claimed
-      if (userData.dailyChallengesClaimed === true) {
+      // Verify Not Already Claimed Today
+      if (userData.dailyChallengesClaimed && isToday(userData.lastChallengeClaimDate)) {
         return { success: false, error: "Already claimed today" };
       }
 
