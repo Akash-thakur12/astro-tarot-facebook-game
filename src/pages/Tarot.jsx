@@ -96,15 +96,22 @@ const Tarot = () => {
 
           if (!response.ok) {
             const data = await response.json();
+            // Handle 403 specifically to force UI reset
+            if (response.status === 403) {
+              setSelectedCard(null);
+              setShowResult(false);
+              setIsMovingToCenter(false);
+            }
             throw new Error(data.error || 'Failed to save reading');
           }
 
           await updateHistory();
           await refreshUser();
         }
-        setIsUnlockedByAd(false);
       } catch (err) {
         console.error("Tarot Save Error:", err.message);
+      } finally {
+        setIsUnlockedByAd(false);
       }
     })();
 
