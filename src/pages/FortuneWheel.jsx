@@ -28,6 +28,8 @@ const FortuneWheel = () => {
   const [isClaiming, setIsClaiming] = useState(false);
   const [toast, setToast] = useState(null);
 
+  const degreesPerSlice = 360 / REWARDS.length;
+
   // Read today's spin status from Firestore on load
   useEffect(() => {
     const checkStatus = async () => {
