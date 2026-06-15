@@ -81,7 +81,7 @@ export default async function handler(req, res) {
           lastLoginAt: FieldValue.serverTimestamp()
         };
         t.set(userRef, newUser);
-        return { resetPerformed: true, created: true, user: newUser };
+        return { success: true, resetPerformed: true, created: true };
       }
 
       const user = userDoc.data();
@@ -144,10 +144,10 @@ export default async function handler(req, res) {
 
       if (needsUpdate || updates.lastLoginAt) {
         t.update(userRef, updates);
-        return { resetPerformed: needsUpdate, updates };
+        return { success: true, resetPerformed: needsUpdate };
       }
 
-      return { resetPerformed: false };
+      return { success: true, resetPerformed: false };
     });
 
     return res.status(200).json(result);
