@@ -204,9 +204,9 @@ const AskPandit = () => {
     invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
-    tenCoins: isHindi ? '10 सिक्के' : '10 Coins',
+    tenCoins: isHindi ? '25 सिक्के' : '25 Coins',
     notEnough: isHindi ? 'सिक्के कम हैं' : 'Not enough coins',
-    modalSub: isHindi ? 'परामर्श के लिए 10 सिक्के या प्रीमियम सदस्यता आवश्यक है।' : 'Consulting requires 10 coins or a Premium subscription.',
+    modalSub: isHindi ? 'परामर्श के लिए 25 सिक्के या प्रीमियम सदस्यता आवश्यक है।' : 'Consulting requires 25 coins or a Premium subscription.',
     upgradeButton: isHindi ? 'प्रीमियम ₹49 अनलॉक करें' : 'Unlock Premium ₹49',
     earnButton: isHindi ? 'मुफ्त सिक्के कमाएं' : 'Watch Ad to Continue',
     maybeLater: isHindi ? 'बाद में' : 'Maybe Later',
@@ -300,7 +300,7 @@ const AskPandit = () => {
     setErrorMsg('');
 
     const isFree = !user?.premium && !user?.dailyQuestionUsed;
-    const hasEnoughCoins = (user?.coins || 0) >= 10;
+    const hasEnoughCoins = (user?.coins || 0) >= 25;
 
     if (!user?.premium && !isFree && !hasEnoughCoins) {
       setShowLowCoinsModal(true);

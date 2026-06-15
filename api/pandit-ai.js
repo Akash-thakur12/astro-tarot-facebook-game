@@ -35,6 +35,8 @@ if (!apps || apps.length === 0) {
 const db = getFirestore();
 const adminAuth = getAuth();
 
+const AI_QUESTION_COST = 25;
+
 // Rate limiting map (in-memory, per Vercel instance)
 const rateLimits = new Map();
 
@@ -143,8 +145,8 @@ export default async function handler(req, res) {
             t.update(userRef, { dailyQuestionUsed: true, lastQuestionDate: FieldValue.serverTimestamp() });
             usedFreePersonal = true;
           } else {
-            if ((userDataDoc.coins || 0) < 10) throw new Error("INSUFFICIENT_COINS");
-            t.update(userRef, { coins: FieldValue.increment(-10) });
+            if ((userDataDoc.coins || 0) < AI_QUESTION_COST) throw new Error("INSUFFICIENT_COINS");
+            t.update(userRef, { coins: FieldValue.increment(-AI_QUESTION_COST) });
             deductedCoins = true;
           }
         } else if (mode === 'compatibility') {
@@ -153,14 +155,14 @@ export default async function handler(req, res) {
             t.update(userRef, { dailyCompUsed: true, lastCompDate: FieldValue.serverTimestamp() });
             usedFreeComp = true;
           } else {
-            if ((userDataDoc.coins || 0) < 10) throw new Error("INSUFFICIENT_COINS");
-            t.update(userRef, { coins: FieldValue.increment(-10) });
+            if ((userDataDoc.coins || 0) < AI_QUESTION_COST) throw new Error("INSUFFICIENT_COINS");
+            t.update(userRef, { coins: FieldValue.increment(-AI_QUESTION_COST) });
             deductedCoins = true;
           }
         } else {
            // Default to chat deduction if unknown mode but proceeding
-           if ((userDataDoc.coins || 0) < 10) throw new Error("INSUFFICIENT_COINS");
-           t.update(userRef, { coins: FieldValue.increment(-10) });
+           if ((userDataDoc.coins || 0) < AI_QUESTION_COST) throw new Error("INSUFFICIENT_COINS");
+           t.update(userRef, { coins: FieldValue.increment(-AI_QUESTION_COST) });
            deductedCoins = true;
         }
       }
@@ -476,7 +478,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     if (deductedCoins || usedFreePersonal || usedFreeComp) {
       await db.runTransaction(async (t) => {
         if (deductedCoins) {
-          t.update(userRef, { coins: FieldValue.increment(25) });
+          t.update(userRef, { coins: FieldValue.increment(AI_QUESTION_COST) });
         }
         if (usedFreePersonal) {
           t.update(userRef, { dailyQuestionUsed: false });
