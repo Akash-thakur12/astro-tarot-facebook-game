@@ -89,17 +89,12 @@ const FortuneWheel = () => {
   };
 
   const handleSpin = async () => {
-    if (spinState === 'spinning' || spinState === 'fetching' || hasSpunToday) return;
+    if (spinState !== 'idle' || hasSpunToday) return;
     
-    // 1. Start generic "anticipation" spin immediately
-    setSpinState('spinning');
+    // 1. Enter fetching state (Wheel stays still)
+    setSpinState('fetching');
     setShowPopup(false);
     setShowShower(false);
-    setHasSpunToday(true); // Prevent double-trigger
-
-    // Initial faster rotation to feel responsive
-    const anticipationRotation = rotation + 1440; // 4 full spins
-    setRotation(anticipationRotation);
 
     try {
       const token = await auth.currentUser.getIdToken();
@@ -111,9 +106,9 @@ const FortuneWheel = () => {
 
       if (!res.ok) {
         setSpinState('idle');
-        setHasSpunToday(false);
-        if (res.status === 429) throw new Error("Too many requests.");
-        throw new Error(data.error || "Failed to spin");
+        if (res.status === 429) showToast("Too many requests.");
+        else showToast(data.error || "Failed to spin");
+        return;
       }
 
       if (data.alreadySpun) {
@@ -123,34 +118,37 @@ const FortuneWheel = () => {
         return; 
       }
 
+      // Reward Received - Start THE single animation
       const targetId = data.reward.id;
       const targetReward = REWARDS.find(r => r.id === targetId) || REWARDS[0];
+      
+      setHasSpunToday(true);
+      setSpinState('spinning');
 
-      // 2. Adjust final rotation based on the real result
-      const degreesPerSlice = 360 / REWARDS.length;
+      // 2. Exact single-call rotation calculation
+      const spins = 8; // Full circles
       const targetOffset = (360 - (targetId * degreesPerSlice));
       
-      // Calculate final rotation to land on the slice
-      // We are already at anticipationRotation, let's add at least 4 more full spins + offset
-      const finalRotation = anticipationRotation + 1440 + targetOffset;
+      // Calculate final absolute rotation based on current state
+      const currentBase = Math.floor(rotation / 360) * 360;
+      const finalRotation = currentBase + (spins * 360) + targetOffset;
+
       setRotation(finalRotation);
 
-      // Animation Duration matches transition-duration: 4000ms in CSS
+      // 3. Animation Completion (Matches 5000ms CSS duration)
       setTimeout(() => {
         setSpinState('finished');
         setWonReward(targetReward);
         setShowPopup(true);
-
         if (targetReward.type !== 'miss') {
           setShowShower(true);
         }
-      }, 4000);
+      }, 5000);
 
     } catch (error) {
       console.error("Spin error:", error);
       setSpinState('idle');
-      setHasSpunToday(false);
-      showToast(error.message || "Network error. Please try again.");
+      showToast("Network error. Please try again.");
     }
   };
 
@@ -190,7 +188,7 @@ const FortuneWheel = () => {
         showToast(`XP gained! (+${wonReward.value} XP)`);
       }
       
-      // CRITICAL: Only refresh state here to show updated coins after claim
+      // Sync global state
       await refreshUser();
       
       setShowPopup(false);
@@ -243,7 +241,7 @@ const FortuneWheel = () => {
       
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[250] bg-black/90 border border-mystic-gold text-mystic-gold px-6 py-3 rounded-full font-bold shadow-[0_0_20px_rgba(251,191,36,0.4)] animate-fade-in text-xs whitespace-nowrap uppercase tracking-widest">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[250] bg-black/90 border border-mystic-gold text-mystic-gold px-6 py-3 rounded-full font-bold shadow-[0_0_20px_rgba(251,191,36,0.4)] animate-fade-in text-xs whitespace-nowrap uppercase tracking-widest text-center">
           {toast}
         </div>
       )}
@@ -298,11 +296,12 @@ const FortuneWheel = () => {
             
             {/* The Spinning Wheel */}
             <div 
-              className="w-full h-full rounded-full relative transition-transform ease-[cubic-bezier(0.15,0.85,0.2,1)]"
+              className="w-full h-full rounded-full relative transition-transform"
               style={{ 
                 background: generateGradient(),
                 transform: `rotate(${rotation}deg)`,
-                transitionDuration: '4000ms'
+                transitionDuration: '5000ms',
+                transitionTimingFunction: 'cubic-bezier(0.15, 0.85, 0.2, 1)'
               }}
             >
               {/* Slice Borders (SVG Lines) */}
@@ -346,7 +345,9 @@ const FortuneWheel = () => {
               disabled={spinState === 'spinning' || spinState === 'fetching' || hasSpunToday || rewardAlreadyClaimed}
               className={`w-20 h-20 rounded-full border-4 border-mystic-gold bg-gradient-to-b from-[#18181b] to-black flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.5)] transition-transform ${spinState === 'spinning' || spinState === 'fetching' ? 'opacity-80 scale-95' : 'hover:scale-105 active:scale-95'}`}
             >
-              <span className="text-mystic-gold font-black uppercase tracking-widest text-xs">Spin</span>
+              <span className="text-mystic-gold font-black uppercase tracking-widest text-xs">
+                {spinState === 'fetching' ? '...' : 'Spin'}
+              </span>
             </button>
           </div>
 
