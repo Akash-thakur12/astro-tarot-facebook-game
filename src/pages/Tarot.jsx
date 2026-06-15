@@ -183,16 +183,16 @@ const Tarot = () => {
          <div className="absolute top-1/2 right-1/4 w-1 h-1 bg-white rounded-full animate-pulse opacity-10" />
       </div>
 
-      <div className="px-6 pt-10 pb-6 text-center space-y-3 relative z-10">
-        <h1 className="text-3xl font-black premium-gradient-text tracking-tight uppercase text-white drop-shadow-lg">🔮 {t.title}</h1>
-        <p className="text-white/30 text-[10px] max-w-[280px] mx-auto font-medium italic leading-relaxed">
+      <div className="px-6 pt-6 pb-4 text-center space-y-2 relative z-10">
+        <h1 className="text-2xl md:text-3xl font-black premium-gradient-text tracking-tight uppercase text-white drop-shadow-lg">🔮 {t.title}</h1>
+        <p className="text-white/30 text-[9px] max-w-[280px] mx-auto font-medium italic leading-relaxed">
           {t.subtitle}
         </p>
       </div>
 
       {!showResult ? (
-        <div className="px-4 space-y-6 relative z-10">
-          <p className="text-[9px] text-mystic-gold/60 uppercase tracking-[0.3em] font-black text-center mb-0">
+        <div className="px-4 space-y-4 relative z-10">
+          <p className="text-[8px] text-mystic-gold/60 uppercase tracking-[0.3em] font-black text-center mb-0">
             {t.instruction}
           </p>
 

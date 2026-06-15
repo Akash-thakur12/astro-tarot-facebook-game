@@ -9,10 +9,9 @@ const REWARDS = [
   { id: 1, label: "10 Coins", icon: "🪙", bg: "#d97706", type: 'coin', value: 10 },
   { id: 2, label: "20 Coins", icon: "🪙", bg: "#b45309", type: 'coin', value: 20 },
   { id: 3, label: "50 Coins", icon: "💰", bg: "#d97706", type: 'coin', value: 50 },
-  { id: 4, label: "100 Coins", icon: "💎", bg: "#f59e0b", type: 'coin', value: 100 },
-  { id: 5, label: "Bonus Tarot", icon: "🃏", bg: "#be185d", type: 'tarot', value: 1 },
-  { id: 6, label: "2x XP", icon: "⭐", bg: "#7e22ce", type: 'xp', value: 50 },
-  { id: 7, label: "Miss", icon: "💨", bg: "#334155", type: 'miss', value: 0 },
+  { id: 4, label: "Gold Chest", icon: "🏆", bg: "#f59e0b", type: 'coin', value: 100 },
+  { id: 5, label: "+25 XP", icon: "⭐", bg: "#7e22ce", type: 'xp', value: 25 },
+  { id: 6, label: "Miss", icon: "💨", bg: "#334155", type: 'miss', value: 0 },
 ];
 
 const FortuneWheel = () => {
@@ -54,6 +53,11 @@ const FortuneWheel = () => {
                   setShowShower(true);
                 }
               }
+            } else if (data.claimed) {
+              // Ensure popup is closed and reward cleared if already claimed
+              setShowPopup(false);
+              setWonReward(null);
+              setSpinState('claimed');
             }
           }
         }
@@ -71,10 +75,11 @@ const FortuneWheel = () => {
 
   // Generates the conic-gradient string for the wheel background
   const generateGradient = () => {
-    let gradient = "conic-gradient(from -22.5deg, ";
+    const degs = 360 / REWARDS.length;
+    let gradient = `conic-gradient(from ${-degs / 2}deg, `;
     REWARDS.forEach((r, i) => {
-      const startAngle = i * 45;
-      const endAngle = (i + 1) * 45;
+      const startAngle = i * degs;
+      const endAngle = (i + 1) * degs;
       gradient += `${r.bg} ${startAngle}deg ${endAngle}deg${i === REWARDS.length - 1 ? '' : ', '}`;
     });
     gradient += ")";
@@ -84,9 +89,15 @@ const FortuneWheel = () => {
   const handleSpin = async () => {
     if (spinState === 'spinning' || spinState === 'fetching' || hasSpunToday) return;
     
-    setSpinState('fetching');
+    // 1. Start generic "anticipation" spin immediately
+    setSpinState('spinning');
     setShowPopup(false);
     setShowShower(false);
+    setHasSpunToday(true); // Prevent double-trigger
+
+    // Initial faster rotation to feel responsive
+    const anticipationRotation = rotation + 1440; // 4 full spins
+    setRotation(anticipationRotation);
 
     try {
       const token = await auth.currentUser.getIdToken();
@@ -97,11 +108,11 @@ const FortuneWheel = () => {
       const data = await res.json();
 
       if (!res.ok) {
+        setSpinState('idle');
+        setHasSpunToday(false);
         if (res.status === 429) throw new Error("Too many requests.");
         throw new Error(data.error || "Failed to spin");
       }
-
-      await refreshUser();
 
       if (data.alreadySpun) {
         setHasSpunToday(true);
@@ -113,21 +124,16 @@ const FortuneWheel = () => {
       const targetId = data.reward.id;
       const targetReward = REWARDS.find(r => r.id === targetId) || REWARDS[0];
 
-      setSpinState('spinning');
-      setHasSpunToday(true); // Disable further spins immediately
-
-      // Calculate rotation: 8 full spins + target slice offset
-      const spins = 8; 
+      // 2. Adjust final rotation based on the real result
       const degreesPerSlice = 360 / REWARDS.length;
-      const targetRotation = (360 - (targetId * degreesPerSlice));
+      const targetOffset = (360 - (targetId * degreesPerSlice));
       
-      // Add extra spins to the current rotation
-      const currentBase = Math.floor(rotation / 360) * 360;
-      const finalRotation = currentBase + (spins * 360) + targetRotation;
-
+      // Calculate final rotation to land on the slice
+      // We are already at anticipationRotation, let's add at least 4 more full spins + offset
+      const finalRotation = anticipationRotation + 1440 + targetOffset;
       setRotation(finalRotation);
 
-      // Animation Duration: 5 seconds
+      // Animation Duration matches transition-duration: 4000ms in CSS
       setTimeout(() => {
         setSpinState('finished');
         setWonReward(targetReward);
@@ -136,12 +142,13 @@ const FortuneWheel = () => {
         if (targetReward.type !== 'miss') {
           setShowShower(true);
         }
-      }, 5000);
+      }, 4000);
 
     } catch (error) {
       console.error("Spin error:", error);
       setSpinState('idle');
-      showToast("Network error. Please try again.");
+      setHasSpunToday(false);
+      showToast(error.message || "Network error. Please try again.");
     }
   };
 
@@ -178,15 +185,15 @@ const FortuneWheel = () => {
       if (wonReward.type === 'coin') {
         showToast(`Reward claimed! +${wonReward.value} Coins`);
       } else if (wonReward.type === 'xp') {
-        showToast(`XP gained! (+50 XP)`);
-      } else if (wonReward.type === 'tarot') {
-        showToast(`Reward claimed! Bonus Tarot Unlocked`);
+        showToast(`XP gained! (+${wonReward.value} XP)`);
       }
       
-      // Sync global state
+      // CRITICAL: Only refresh state here to show updated coins after claim
       await refreshUser();
       
       setShowPopup(false);
+      setWonReward(null);
+      setSpinState('claimed');
       setShowShower(false);
     } catch (error) {
       console.error("Claim error:", error);
@@ -226,6 +233,9 @@ const FortuneWheel = () => {
     );
   };
 
+  const rewardAlreadyClaimed = spinState === 'claimed';
+  const shouldShowClaimModal = showPopup && wonReward && !rewardAlreadyClaimed;
+
   return (
     <div className="flex flex-col w-full h-screen bg-[#09090b] relative overflow-hidden font-sans">
       
@@ -252,7 +262,7 @@ const FortuneWheel = () => {
       <div className="absolute bottom-0 w-full h-1/3 bg-gradient-to-t from-mystic-purple/20 to-transparent pointer-events-none" />
 
       {/* Header */}
-      <div className="px-6 pt-10 pb-4 flex justify-between items-center relative z-10">
+      <div className="px-6 pt-6 pb-2 flex justify-between items-center relative z-10">
         <button 
           onClick={() => navigate('/')}
           className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white active:scale-95 transition-all"
@@ -265,18 +275,18 @@ const FortuneWheel = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center relative z-10 pb-20">
+      <div className="flex-1 flex flex-col items-center justify-center relative z-10 pb-12">
         
         {/* Title Area */}
-        <div className="text-center mb-10 space-y-2">
-          <h1 className="text-4xl font-black text-white uppercase tracking-tighter drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]">
+        <div className="text-center mb-6 space-y-1">
+          <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]">
             Fortune <span className="text-mystic-gold">Wheel</span>
           </h1>
-          <p className="text-white/50 text-xs font-bold uppercase tracking-widest">Spin daily for cosmic rewards</p>
+          <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest">Spin daily for cosmic rewards</p>
         </div>
 
         {/* Wheel Container */}
-        <div className="relative w-80 h-80 max-w-[90vw] max-h-[90vw]">
+        <div className="relative w-[340px] h-[340px] md:w-[400px] md:h-[400px] max-w-[95vw] max-h-[95vw]">
           
           {/* Outer Ring Glow */}
           <div className="absolute inset-[-10px] rounded-full bg-gradient-to-tr from-mystic-gold via-yellow-200 to-amber-600 animate-[spin_4s_linear_infinite] opacity-50 blur-[5px]" />
@@ -301,14 +311,14 @@ const FortuneWheel = () => {
                     x1="50" y1="50" x2="50" y2="0" 
                     stroke="rgba(0,0,0,0.5)" 
                     strokeWidth="0.8" 
-                    transform={`rotate(${i * 45 + 22.5} 50 50)`} 
+                    transform={`rotate(${i * degreesPerSlice + (degreesPerSlice / 2)} 50 50)`} 
                   />
                 ))}
               </svg>
 
               {/* Reward Content inside slices */}
               {REWARDS.map((reward, i) => {
-                const rot = i * 45; // Center of slice content
+                const rot = i * degreesPerSlice; // Center of slice content
                 return (
                   <div 
                     key={i} 
@@ -331,7 +341,7 @@ const FortuneWheel = () => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
             <button 
               onClick={handleSpin}
-              disabled={spinState === 'spinning' || spinState === 'fetching' || hasSpunToday}
+              disabled={spinState === 'spinning' || spinState === 'fetching' || hasSpunToday || rewardAlreadyClaimed}
               className={`w-20 h-20 rounded-full border-4 border-mystic-gold bg-gradient-to-b from-[#18181b] to-black flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.5)] transition-transform ${spinState === 'spinning' || spinState === 'fetching' ? 'opacity-80 scale-95' : 'hover:scale-105 active:scale-95'}`}
             >
               <span className="text-mystic-gold font-black uppercase tracking-widest text-xs">Spin</span>
@@ -356,9 +366,9 @@ const FortuneWheel = () => {
 
         {/* Daily Spin Status */}
         <div className="mt-12 text-center animate-fade-in">
-          <div className={`px-6 py-2.5 rounded-full border ${hasSpunToday ? 'bg-white/5 border-white/10 text-white/40' : 'bg-mystic-gold/10 border-mystic-gold/30 text-mystic-gold'} inline-block shadow-lg`}>
+          <div className={`px-6 py-2.5 rounded-full border ${hasSpunToday ? (rewardAlreadyClaimed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-white/5 border-white/10 text-white/40') : 'bg-mystic-gold/10 border-mystic-gold/30 text-mystic-gold'} inline-block shadow-lg`}>
             <span className="text-[11px] font-black uppercase tracking-widest">
-              {hasSpunToday ? 'Already Spun Today' : 'Daily Free Spin Available'}
+              {rewardAlreadyClaimed ? 'Reward Already Claimed' : (hasSpunToday ? 'Already Spun Today' : 'Daily Free Spin Available')}
             </span>
           </div>
         </div>
@@ -366,7 +376,7 @@ const FortuneWheel = () => {
       </div>
 
       {/* Reward Popup Modal */}
-      {showPopup && (
+      {shouldShowClaimModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="glass-card w-full max-w-sm rounded-[3rem] p-8 border border-mystic-gold/30 text-center relative overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-mystic-gold/10 to-transparent pointer-events-none" />

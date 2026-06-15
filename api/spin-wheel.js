@@ -42,9 +42,8 @@ const REWARD_POOL = [
   { id: 2, type: 'coin', value: 20, weight: 15 },
   { id: 3, type: 'coin', value: 50, weight: 10 },
   { id: 4, type: 'coin', value: 100, weight: 2 },
-  { id: 5, type: 'tarot', value: 1, weight: 8 },
-  { id: 6, type: 'xp', value: 2, weight: 5 }, // e.g., 2x XP multiplier
-  { id: 7, type: 'miss', value: 0, weight: 5 },
+  { id: 5, type: 'xp', value: 25, weight: 8 },
+  { id: 6, type: 'miss', value: 0, weight: 10 },
 ];
 
 const getWeightedReward = () => {

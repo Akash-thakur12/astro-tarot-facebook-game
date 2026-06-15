@@ -255,7 +255,6 @@ async function handleClaimReward(uid, res) {
       const { rewardType, rewardValue } = spinData;
 
       if (rewardType === 'coin') userUpdates.coins = FieldValue.increment(rewardValue);
-      else if (rewardType === 'tarot') userUpdates.bonusTarot = FieldValue.increment(rewardValue);
       else if (rewardType === 'xp') userUpdates.xp = FieldValue.increment(rewardValue);
 
       t.set(userRef, userUpdates, { merge: true });

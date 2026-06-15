@@ -356,19 +356,19 @@ const AskPandit = () => {
   };
 
   const renderBirthDetailsForm = () => (
-    <div className="px-6 space-y-6 animate-fade-in py-10">
-      <div className="glass-card p-6 rounded-[2rem] border-white/5 space-y-5">
-        <h2 className="text-mystic-gold text-xs font-black uppercase tracking-widest text-center">Enter Birth Details</h2>
+    <div className="px-6 space-y-4 animate-fade-in py-6">
+      <div className="glass-card p-6 rounded-[2rem] border-white/5 space-y-4">
+        <h2 className="text-mystic-gold text-[10px] font-black uppercase tracking-widest text-center">Birth Details</h2>
         <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="e.g. Rahul" />
         
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.gender}</label>
+        <div className="space-y-1.5">
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.gender}</label>
           <div className="grid grid-cols-3 gap-2">
             {genderOptions.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setPersonalForm({ ...personalForm, gender: opt.value })}
-                className={`py-3 text-xs font-bold rounded-2xl border transition-all ${
+                className={`py-2.5 text-[10px] font-bold rounded-xl border transition-all ${
                   personalForm.gender === opt.value 
                     ? 'bg-mystic-gold text-mystic-indigo border-mystic-gold' 
                     : 'bg-white/5 text-white/40 border-white/10 hover:border-white/20'
@@ -380,22 +380,22 @@ const AskPandit = () => {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
+        <div className="space-y-1.5">
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
           <div className="grid grid-cols-3 gap-2">
             <SelectorButton value={personalForm.dobDay} options={days} placeholder={t.day} title="Select Day" onSelect={(val) => setPersonalForm(p => ({ ...p, dobDay: val }))} setPickerConfig={setPickerConfig} />
             <SelectorButton value={personalForm.dobMonth} options={months} placeholder={t.month} title="Select Month" onSelect={(val) => setPersonalForm(p => ({ ...p, dobMonth: val }))} setPickerConfig={setPickerConfig} />
             <SelectorButton value={personalForm.dobYear} options={years} placeholder={t.year} title="Select Year" onSelect={(val) => setPersonalForm(p => ({ ...p, dobYear: val }))} setPickerConfig={setPickerConfig} />
           </div>
           {dobError && (
-            <div className="text-red-400 text-[10px] font-bold mt-1 ml-1 animate-fade-in">
+            <div className="text-red-400 text-[9px] font-bold mt-1 ml-1 animate-fade-in">
               {dobError}
             </div>
           )}
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.tob}</label>
+        <div className="space-y-1.5">
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.tob}</label>
           <div className="grid grid-cols-3 gap-2">
             <SelectorButton value={personalForm.tobHour} options={hours} placeholder={t.hour} title="Select Hour" onSelect={(val) => setPersonalForm(p => ({ ...p, tobHour: val }))} setPickerConfig={setPickerConfig} />
             <SelectorButton value={personalForm.tobMinute} options={minutes} placeholder={t.min} title="Select Minute" onSelect={(val) => setPersonalForm(p => ({ ...p, tobMinute: val }))} setPickerConfig={setPickerConfig} />
@@ -406,100 +406,93 @@ const AskPandit = () => {
         <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="e.g. New Delhi" />
       </div>
 
-      <Button fullWidth variant="gold" onClick={handleStartChat} disabled={!isFormValid} className="h-16 text-lg tracking-widest">
+      <Button fullWidth variant="gold" onClick={handleStartChat} disabled={!isFormValid} className="h-14 text-base tracking-widest">
         {t.startChat}
       </Button>
     </div>
   );
 
   const renderChatInterface = () => (
-    <div className="flex flex-col flex-1 relative overflow-hidden h-full">
+    <div className="flex-1 flex flex-col max-w-md mx-auto w-full relative overflow-hidden">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 md:py-10 space-y-8 custom-scrollbar pb-[180px] md:pb-[220px]">
-        <div className="max-w-md mx-auto w-full">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 opacity-40 py-20">
-              <span className="text-6xl animate-bounce">🔮</span>
-              <div className="space-y-2">
-                <h3 className="text-white text-xl font-bold">Namaste {personalForm.name}</h3>
-                <p className="text-white/60 text-sm max-w-xs mx-auto">Your spiritual journey begins here. How can I guide you today?</p>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 custom-scrollbar">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center min-h-[40vh] text-center space-y-4 opacity-40 py-6">
+            <span className="text-5xl animate-bounce">🔮</span>
+            <div className="space-y-1">
+              <h3 className="text-white text-lg font-bold">Namaste {personalForm.name}</h3>
+              <p className="text-white/60 text-xs max-w-xs mx-auto">Your spiritual journey begins here. How can I guide you today?</p>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-8">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+              <div className={`
+                relative px-6 py-4 rounded-[2rem] text-[15px] leading-[1.8] tracking-wide shadow-2xl
+                ${msg.role === 'user' 
+                  ? 'bg-mystic-gold text-mystic-indigo font-black max-w-[85%] rounded-tr-none' 
+                  : 'bg-white/5 text-white/90 border border-white/10 max-w-[95%] rounded-tl-none backdrop-blur-md'
+                }
+              `}>
+                {msg.content.split('\n').map((line, idx) => (
+                  <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start animate-fade-in">
+              <div className="bg-white/5 border border-white/10 text-mystic-gold px-6 py-4 rounded-[2rem] rounded-tl-none flex items-center gap-3 backdrop-blur-md shadow-xl">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t.thinking}</span>
               </div>
             </div>
           )}
 
-          <div className="space-y-8">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                <div className={`
-                  relative px-6 py-4 md:px-7 md:py-5 rounded-[2rem] text-[15px] md:text-[16px] leading-[1.8] tracking-wide shadow-2xl
-                  ${msg.role === 'user' 
-                    ? 'bg-mystic-gold text-mystic-indigo font-black max-w-[85%] md:max-w-[500px] rounded-tr-none' 
-                    : 'bg-white/5 text-white/90 border border-white/10 max-w-[95%] md:max-w-[700px] rounded-tl-none backdrop-blur-md'
-                  }
-                `}>
-                  {msg.content.split('\n').map((line, idx) => (
-                    <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div className="flex justify-start animate-fade-in">
-                <div className="bg-white/5 border border-white/10 text-mystic-gold px-6 py-4 rounded-[2rem] rounded-tl-none flex items-center gap-3 backdrop-blur-md shadow-xl">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <div className="w-2 h-2 bg-mystic-gold rounded-full animate-bounce" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t.thinking}</span>
-                </div>
-              </div>
-            )}
-
-            {errorMsg && (
-              <div className="max-w-xs mx-auto text-center px-6 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[11px] font-bold uppercase tracking-wider">
-                {errorMsg}
-              </div>
-            )}
-            <div ref={chatEndRef} className="h-4" />
-          </div>
+          {errorMsg && (
+            <div className="max-w-xs mx-auto text-center px-6 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[11px] font-bold uppercase tracking-wider">
+              {errorMsg}
+            </div>
+          )}
+          <div ref={chatEndRef} className="h-4" />
         </div>
       </div>
 
-      {/* Input Area - Floated Above Bottom */}
-      <div className="fixed bottom-6 md:bottom-10 left-0 right-0 z-50 pointer-events-none">
-        <div className="max-w-md mx-auto w-full px-4 pointer-events-auto">
-          {/* Gradient Backdrop for Readability */}
-          <div className="absolute inset-x-0 bottom-[-24px] md:bottom-[-40px] h-40 bg-gradient-to-t from-[#020617] via-[#020617]/95 to-transparent -z-10 pointer-events-none" />
-          
-          <form 
-            onSubmit={handleSend} 
-            className="relative flex items-center group mb-4"
+      {/* Input Area - Integrated at bottom of same max-width container */}
+      <div className="px-4 pb-6 pt-4 bg-gradient-to-t from-[#020617] via-[#020617] to-transparent border-t border-white/5">
+        <form 
+          onSubmit={handleSend} 
+          className="relative flex items-center group mb-4"
+        >
+          <div className="absolute inset-0 bg-mystic-gold/10 blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 rounded-full" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={t.question}
+            className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-16 py-5 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.6)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
+          />
+          <button 
+            type="submit" 
+            disabled={loading || !inputText.trim()}
+            className="absolute right-3 w-12 h-12 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer z-10"
           >
-            <div className="absolute inset-0 bg-mystic-gold/10 blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 rounded-full" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={t.question}
-              className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-20 py-5 md:py-6 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.6)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
-            />
-            <button 
-              type="submit" 
-              disabled={loading || !inputText.trim()}
-              className="absolute right-3 w-12 h-12 md:w-14 md:h-14 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer z-10"
-            >
-              <span className="text-xl md:text-2xl font-black">➔</span>
-            </button>
-          </form>
-          
-          <div className="text-center opacity-20 px-6">
-             <p className="text-[9px] md:text-[10px] uppercase tracking-[0.25em] font-bold leading-relaxed text-white">Pandit AI can provide spiritual guidance but use your own wisdom</p>
-          </div>
+            <span className="text-xl font-black">➔</span>
+          </button>
+        </form>
+        
+        <div className="text-center opacity-20 px-6">
+           <p className="text-[9px] uppercase tracking-[0.2em] font-bold leading-relaxed text-white">Pandit AI can provide spiritual guidance but use your own wisdom</p>
         </div>
       </div>
     </div>
