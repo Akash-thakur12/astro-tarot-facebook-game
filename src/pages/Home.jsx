@@ -52,12 +52,13 @@ const Home = () => {
     if (!user?.uid) return;
     try {
       const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/rewards/challenges', {
+      const response = await fetch('/api/rewards', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${idToken}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ action: 'challenges' })
       });
 
       const data = await response.json();

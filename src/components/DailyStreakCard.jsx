@@ -42,12 +42,13 @@ const DailyStreakCard = () => {
     setLoading(true);
     try {
       const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/rewards/daily-streak', {
+      const response = await fetch('/api/rewards', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${idToken}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ action: 'daily-streak' })
       });
       const data = await response.json();
       if (data.success) {

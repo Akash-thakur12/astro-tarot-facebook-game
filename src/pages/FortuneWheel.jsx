@@ -159,12 +159,13 @@ const FortuneWheel = () => {
       }
 
       const token = await auth.currentUser.getIdToken();
-      const res = await fetch('/api/claim-reward', {
+      const res = await fetch('/api/rewards', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ action: 'claim-reward' })
       });
       
       const data = await res.json();

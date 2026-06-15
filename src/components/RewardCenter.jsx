@@ -21,12 +21,13 @@ const RewardCenter = () => {
     setTimeout(async () => {
       try {
         const idToken = await auth.currentUser.getIdToken();
-        const response = await fetch('/api/rewards/ad-payout', {
+        const response = await fetch('/api/rewards', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${idToken}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({ action: 'ad-payout' })
         });
 
         const data = await response.json();
