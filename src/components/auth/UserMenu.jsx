@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { useLanguage } from '../../context/useLanguage';
 import { logOut, linkAccount } from '../../services/authService';
+import { auth } from '../../services/firebase';
 import Button from '../ui/Button';
 
 const UserMenu = () => {
@@ -29,6 +30,23 @@ const UserMenu = () => {
     setError(null);
     try {
       await linkAccount(provider);
+      
+      // Immediate profile sync to Firestore
+      const idToken = await auth.currentUser.getIdToken();
+      await fetch('/api/user/check-status', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          displayName: auth.currentUser.displayName,
+          photoURL: auth.currentUser.photoURL,
+          email: auth.currentUser.email,
+          provider: provider
+        })
+      });
+
       await refreshUser();
     } catch (err) {
       console.error("Linking Error:", err.code, err);

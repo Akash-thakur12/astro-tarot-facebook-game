@@ -29,7 +29,15 @@ const Login = () => {
       
       // Navigation is handled by the useEffect once user state is populated
     } catch (err) {
-      setError(err.message || "Authentication failed. Please try again.");
+      let friendlyMessage = err.message || "Authentication failed. Please try again.";
+      
+      if (err.code === 'auth/account-exists-with-different-credential') {
+        friendlyMessage = "An account already exists with this email using a different provider (e.g., Google). Please log in with that instead.";
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        friendlyMessage = "Login cancelled. Please try again when you're ready.";
+      }
+
+      setError(friendlyMessage);
       console.error(err);
       setLoading(false);
     }
