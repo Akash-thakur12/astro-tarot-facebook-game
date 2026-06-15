@@ -124,19 +124,29 @@ const Tarot = () => {
     }, 350); // Move (350ms)
   };
 
-  const handleWatchAd = async () => {
+  const handleWatchUnlock = async (method) => {
     if (!user?.uid) return;
     setIsWatchingAd(true);
+    
+    // Ads have a simulated delay, coins are instant
+    const delay = method === 'ad' ? 2500 : 500;
     
     setTimeout(async () => {
       try {
         const idToken = await auth.currentUser.getIdToken();
         const response = await fetch('/api/tarot/unlock-reading', {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${idToken}` }
+          headers: { 
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ method })
         });
 
-        if (!response.ok) throw new Error('Failed to unlock reading');
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to unlock reading');
+        }
 
         await refreshUser();
         setIsUnlockedByAd(true);
@@ -144,11 +154,11 @@ const Tarot = () => {
         setShowResult(false);
         setIsMovingToCenter(false);
       } catch (err) {
-        console.error("Failed to unlock tarot via ad:", err);
+        console.error(`Failed to unlock tarot via ${method}:`, err);
       } finally {
         setIsWatchingAd(false);
       }
-    }, 2500);
+    }, delay);
   };
 
   const canReadNow = canReadTarotToday(user) || isUnlockedByAd;
