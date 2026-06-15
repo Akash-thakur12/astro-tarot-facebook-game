@@ -126,8 +126,8 @@ export default async function handler(req, res) {
       }
 
       // Apply Reward
-      const coinReward = 50;
-      const xpReward = 20;
+      const coinReward = 20;
+      const xpReward = 50;
 
       t.update(userRef, {
         coins: FieldValue.increment(coinReward),

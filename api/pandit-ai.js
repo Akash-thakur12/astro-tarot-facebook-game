@@ -476,7 +476,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     if (deductedCoins || usedFreePersonal || usedFreeComp) {
       await db.runTransaction(async (t) => {
         if (deductedCoins) {
-          t.update(userRef, { coins: FieldValue.increment(10) });
+          t.update(userRef, { coins: FieldValue.increment(25) });
         }
         if (usedFreePersonal) {
           t.update(userRef, { dailyQuestionUsed: false });

@@ -96,7 +96,7 @@ export default async function handler(req, res) {
       }
 
       // Update coins and timestamp
-      const rewardAmount = 25;
+      const rewardAmount = 10;
       const newBalance = (userData.coins || 0) + rewardAmount;
 
       t.update(userRef, {

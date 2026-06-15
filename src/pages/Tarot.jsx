@@ -268,10 +268,21 @@ const Tarot = () => {
           {!canReadNow && (
             <div className="glass-card p-6 rounded-3xl border border-mystic-gold/20 text-center space-y-4 animate-fade-in">
                <h3 className="font-bold text-white uppercase tracking-wider text-sm">{t.sessionLimit}</h3>
-               <p className="text-xs text-white/40 leading-relaxed italic">{t.watchAd}</p>
-               <Button fullWidth variant="gold" onClick={handleWatchAd} disabled={isWatchingAd}>
-                  {isWatchingAd ? '...' : t.unlockButton}
-               </Button>
+               <p className="text-xs text-white/40 leading-relaxed italic">{t.unlockOptions}</p>
+               <div className="grid grid-cols-1 gap-3">
+                 <Button fullWidth variant="gold" onClick={() => handleWatchUnlock('ad')} disabled={isWatchingAd}>
+                    {isWatchingAd ? '...' : t.unlockAd}
+                 </Button>
+                 <Button 
+                   fullWidth 
+                   variant="outline" 
+                   onClick={() => handleWatchUnlock('coins')} 
+                   disabled={isWatchingAd || (user?.coins || 0) < 30}
+                   className="border-mystic-gold/30 text-mystic-gold"
+                 >
+                    {t.unlockCoins} (30 🪙)
+                 </Button>
+               </div>
             </div>
           )}
 
@@ -392,3 +403,4 @@ const Tarot = () => {
 };
 
 export default Tarot;
+xport default Tarot;

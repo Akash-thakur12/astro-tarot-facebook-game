@@ -68,14 +68,40 @@ export default async function handler(req, res) {
   userRate.count++;
   rateLimits.set(uid, userRate);
 
+  const { method } = req.body;
   const userRef = db.collection('users').doc(uid);
 
   try {
     // 3. Unlock Reading
-    await userRef.update({
-      dailyTarotUsed: false,
-      lastTarotUnlockDate: new Date()
+    const result = await db.runTransaction(async (t) => {
+      const userDoc = await t.get(userRef);
+      if (!userDoc.exists) throw new Error("USER_NOT_FOUND");
+      
+      const userData = userDoc.data();
+
+      if (method === 'coins') {
+        if ((userData.coins || 0) < 30) {
+          return { success: false, error: "INSUFFICIENT_COINS" };
+        }
+        t.update(userRef, { 
+          coins: FieldValue.increment(-30),
+          dailyTarotUsed: false,
+          lastTarotUnlockDate: FieldValue.serverTimestamp()
+        });
+      } else {
+        // Default to 'ad' method
+        t.update(userRef, {
+          dailyTarotUsed: false,
+          lastTarotUnlockDate: FieldValue.serverTimestamp()
+        });
+      }
+
+      return { success: true };
     });
+
+    if (!result.success) {
+      return res.status(403).json({ error: result.error });
+    }
 
     return res.status(200).json({ success: true });
 
