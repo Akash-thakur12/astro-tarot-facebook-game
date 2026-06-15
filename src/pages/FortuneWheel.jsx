@@ -33,7 +33,7 @@ const FortuneWheel = () => {
   // Read today's spin status from Firestore on load
   useEffect(() => {
     const checkStatus = async () => {
-      if (!user) return;
+      if (!user?.uid || spinState !== 'idle') return;
       try {
         const token = await auth.currentUser.getIdToken();
         const res = await fetch('/api/spin-status', {
@@ -68,7 +68,7 @@ const FortuneWheel = () => {
       }
     };
     checkStatus();
-  }, [user]);
+  }, [user?.uid]);
 
   const showToast = (message) => {
     setToast(message);
