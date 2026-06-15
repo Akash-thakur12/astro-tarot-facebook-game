@@ -52,7 +52,8 @@ export default async function handler(req, res) {
   }
 
   const userRef = db.collection('users').doc(uid);
-  const { displayName, photoURL, email, provider } = req.body;
+  const body = req.body || {};
+  const { displayName, photoURL, email, provider } = body;
 
   try {
     // 3. Unified Daily Reset & Profile Sync Logic
