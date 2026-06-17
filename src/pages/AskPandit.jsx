@@ -89,17 +89,21 @@ const AskPandit = () => {
   // State
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState(() => {
-    const saved = localStorage.getItem('pandit_chat_messages');
     try {
+      const saved = localStorage.getItem('pandit_chat_messages');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      console.error("Failed to parse saved messages:", e);
+      console.warn("Storage access denied for chat messages:", e);
       return [];
     }
   });
   const [hasEnteredDetails, setHasEnteredDetails] = useState(() => {
-    const saved = localStorage.getItem('pandit_has_entered_details');
-    return saved === 'true';
+    try {
+      const saved = localStorage.getItem('pandit_has_entered_details');
+      return saved === 'true';
+    } catch (e) {
+      return false;
+    }
   });
   const [errorMsg, setErrorMsg] = useState('');
   const [showLowCoinsModal, setShowLowCoinsModal] = useState(false);
@@ -108,13 +112,13 @@ const AskPandit = () => {
 
   // Forms
   const [personalForm, setPersonalForm] = useState(() => {
-    const saved = localStorage.getItem('pandit_user_profile');
     try {
+      const saved = localStorage.getItem('pandit_user_profile');
       return saved ? JSON.parse(saved) : { 
         name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
       };
     } catch (e) {
-      console.error("Failed to parse saved profile:", e);
+      console.warn("Storage access denied for user profile:", e);
       return { 
         name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
       };
@@ -123,9 +127,13 @@ const AskPandit = () => {
 
   // PERSISTENCE - Save to localStorage
   useEffect(() => {
-    localStorage.setItem('pandit_chat_messages', JSON.stringify(messages));
-    localStorage.setItem('pandit_user_profile', JSON.stringify(personalForm));
-    localStorage.setItem('pandit_has_entered_details', hasEnteredDetails ? 'true' : 'false');
+    try {
+      localStorage.setItem('pandit_chat_messages', JSON.stringify(messages));
+      localStorage.setItem('pandit_user_profile', JSON.stringify(personalForm));
+      localStorage.setItem('pandit_has_entered_details', hasEnteredDetails ? 'true' : 'false');
+    } catch (e) {
+      console.warn("Storage write denied in AskPandit:", e);
+    }
   }, [messages, personalForm, hasEnteredDetails]);
 
   useEffect(() => {
