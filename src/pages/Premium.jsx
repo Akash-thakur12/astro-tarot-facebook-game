@@ -7,7 +7,7 @@ import Button from '../components/ui/Button';
 
 const Premium = () => {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -70,7 +70,7 @@ const Premium = () => {
     setError(null);
 
     try {
-      const token = await auth.currentUser.getIdToken();
+      const token = await getToken();
 
       // 1. Create Order
       const orderRes = await fetch('/api/payments/create-order', {
@@ -93,10 +93,11 @@ const Premium = () => {
           // 3. Verify Payment
           try {
             setLoading(true);
+            const verifyToken = await getToken();
             const verifyRes = await fetch('/api/payments/verify-purchase', {
               method: 'POST',
               headers: { 
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${verifyToken}`,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -119,7 +120,7 @@ const Premium = () => {
           }
         },
         prefill: {
-          email: auth.currentUser.email || "",
+          email: user?.email || (auth.currentUser?.email || ""),
         },
         theme: {
           color: "#fbbf24" // Mystic Gold

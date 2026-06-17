@@ -4,7 +4,7 @@ import { useLanguage } from '../context/useLanguage';
 import { auth } from '../services/firebase';
 
 const RewardCenter = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const [isWatching, setIsWatching] = useState(false);
   
@@ -20,7 +20,7 @@ const RewardCenter = () => {
     // Simulate Ad watching duration
     setTimeout(async () => {
       try {
-        const idToken = await auth.currentUser.getIdToken();
+        const idToken = await getToken();
         const response = await fetch('/api/rewards', {
           method: 'POST',
           headers: {

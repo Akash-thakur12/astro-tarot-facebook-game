@@ -8,7 +8,7 @@ import Button from '../ui/Button';
 
 const UserMenu = () => {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -32,7 +32,7 @@ const UserMenu = () => {
       await linkAccount(provider);
       
       // Immediate profile sync to Firestore
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await getToken();
       await fetch('/api/user/check-status', {
         method: 'POST',
         headers: { 
@@ -40,9 +40,9 @@ const UserMenu = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          displayName: auth.currentUser.displayName,
-          photoURL: auth.currentUser.photoURL,
-          email: auth.currentUser.email,
+          displayName: user?.displayName || (auth.currentUser?.displayName || ''),
+          photoURL: user?.photoURL || (auth.currentUser?.photoURL || ''),
+          email: user?.email || (auth.currentUser?.email || ''),
           provider: provider
         })
       });

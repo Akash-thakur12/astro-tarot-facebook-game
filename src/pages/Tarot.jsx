@@ -6,9 +6,10 @@ import { getTarotHistory, canReadTarotToday } from '../services/userService';
 import { auth } from '../services/firebase';
 import tarotData from '../data/tarot_data.json';
 import Button from '../components/ui/Button';
+import { preloadRewardedAd, showRewardedAd } from '../services/fbAds';
 
 const Tarot = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const navigate = useNavigate();
   const [selectedCard, setSelectedCard] = useState(null);
@@ -17,6 +18,7 @@ const Tarot = () => {
   const [showGlowBurst, setShowGlowBurst] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
+  const [error, setError] = useState(null);
   const [isUnlockedByAd, setIsUnlockedByAd] = useState(false);
   const [history, setHistory] = useState([]);
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -38,13 +40,26 @@ const Tarot = () => {
   }, [user]);
 
   useEffect(() => {
+    // Preload Rewarded Ad for FB Instant Games
+    if (user?.uid && !canReadTarotToday(user)) {
+       preloadRewardedAd('REWARDED_TAROT_UNLOCK');
+    }
+
     const initializeTarot = async () => {
       if (user?.uid) {
         try {
-          const idToken = await auth.currentUser.getIdToken();
+          const idToken = await getToken();
           const response = await fetch('/api/user/check-status', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${idToken}` }
+            headers: { 
+              'Authorization': `Bearer ${idToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              displayName: user.displayName || '',
+              photoURL: user.photoURL || '',
+              provider: user.provider || 'firebase'
+            })
           });
           
           if (response.ok) {
@@ -61,7 +76,7 @@ const Tarot = () => {
     };
     
     initializeTarot();
-  }, [user, updateHistory, refreshUser]);
+  }, [user?.uid, updateHistory, refreshUser, getToken]);
 
   const handleCardClick = async (index) => {
     if (selectedCard !== null || isFlipping || isMovingToCenter) return;
@@ -79,7 +94,7 @@ const Tarot = () => {
     (async () => {
       try {
         if (user?.uid) {
-          const idToken = await auth.currentUser.getIdToken();
+          const idToken = await getToken();
           const response = await fetch('/api/tarot/save-reading', {
             method: 'POST',
             headers: {
@@ -134,38 +149,50 @@ const Tarot = () => {
   const handleWatchUnlock = async (method) => {
     if (!user?.uid) return;
     setIsWatchingAd(true);
-    
-    // Ads have a simulated delay, coins are instant
-    const delay = method === 'ad' ? 2500 : 500;
-    
-    setTimeout(async () => {
-      try {
-        const idToken = await auth.currentUser.getIdToken();
-        const response = await fetch('/api/tarot/unlock-reading', {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${idToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ method })
-        });
+    setError(null);
 
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to unlock reading');
+    try {
+      let adSuccess = true;
+
+      // Real Ad flow for FB Instant Games
+      if (method === 'ad' && window.FBInstant) {
+        adSuccess = await showRewardedAd();
+        if (!adSuccess) {
+           throw new Error('Ad was not completed or failed to load.');
         }
-
-        await refreshUser();
-        setIsUnlockedByAd(true);
-        setSelectedCard(null);
-        setShowResult(false);
-        setIsMovingToCenter(false);
-      } catch (err) {
-        console.error(`Failed to unlock tarot via ${method}:`, err);
-      } finally {
-        setIsWatchingAd(false);
+      } else if (method === 'ad') {
+        // Fallback simulated delay for Web mode
+        await new Promise(resolve => setTimeout(resolve, 2500));
       }
-    }, delay);
+
+      const idToken = await getToken();
+      const response = await fetch('/api/tarot/unlock-reading', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ method })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to unlock reading');
+      }
+
+      await refreshUser();
+      setIsUnlockedByAd(true);
+      setSelectedCard(null);
+      setShowResult(false);
+      setIsMovingToCenter(false);
+    } catch (err) {
+      console.error(`Failed to unlock tarot via ${method}:`, err);
+      setError(err.message);
+    } finally {
+      setIsWatchingAd(false);
+      // Attempt to preload next ad
+      if (window.FBInstant) preloadRewardedAd('REWARDED_TAROT_UNLOCK');
+    }
   };
 
   const canReadNow = canReadTarotToday(user) || isUnlockedByAd;
@@ -301,6 +328,7 @@ const Tarot = () => {
                     {t.unlockCoins} (30 🪙)
                  </Button>
                </div>
+               {error && <p className="text-[10px] text-red-400 font-bold mt-2 uppercase">⚠️ {error}</p>}
             </div>
           )}
 

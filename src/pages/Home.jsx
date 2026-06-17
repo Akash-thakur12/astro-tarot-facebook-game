@@ -11,7 +11,7 @@ import UserMenu from '../components/auth/UserMenu';
 
 const Home = () => {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage, setLanguage } = useLanguage();
   const [toast, setToast] = useState(null);
 
@@ -51,7 +51,7 @@ const Home = () => {
   const handleClaimChallenges = async () => {
     if (!user?.uid) return;
     try {
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await getToken();
       const response = await fetch('/api/rewards', {
         method: 'POST',
         headers: {
@@ -78,11 +78,23 @@ const Home = () => {
     const initializeHome = async () => {
       if (user?.uid) {
         try {
-          const idToken = await auth.currentUser.getIdToken();
+          const idToken = await getToken();
           
-          // Get provider info from Firebase user
-          const firebaseUser = auth.currentUser;
-          const provider = firebaseUser.isAnonymous ? 'anonymous' : (firebaseUser.providerData[0]?.providerId || 'social');
+          // Determine provider and metadata safely
+          let provider = 'firebase';
+          let email = user.email || '';
+          let displayName = user.displayName || '';
+          let photoURL = user.photoURL || '';
+
+          if (user.provider === 'fbinstant') {
+            provider = 'fbinstant';
+          } else if (auth.currentUser) {
+            const firebaseUser = auth.currentUser;
+            provider = firebaseUser.isAnonymous ? 'anonymous' : (firebaseUser.providerData[0]?.providerId || 'social');
+            email = firebaseUser.email || '';
+            displayName = firebaseUser.displayName || '';
+            photoURL = firebaseUser.photoURL || '';
+          }
 
           const response = await fetch('/api/user/check-status', {
             method: 'POST',
@@ -91,10 +103,10 @@ const Home = () => {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              email: firebaseUser.email,
-              provider: provider
+              displayName,
+              photoURL,
+              email,
+              provider
             })
           });
           if (response.ok) {
@@ -109,7 +121,7 @@ const Home = () => {
       }
     };
     initializeHome();
-  }, [user?.uid, refreshUser]);
+  }, [user?.uid, refreshUser, getToken]);
 
   const isHindi = currentLanguage === 'Hindi';
 

@@ -16,7 +16,7 @@ const REWARDS = [
 
 const FortuneWheel = () => {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   
   // Explicit State Management
   const [spinState, setSpinState] = useState('idle'); // 'idle' | 'spinning' | 'finished' | 'fetching'
@@ -35,7 +35,7 @@ const FortuneWheel = () => {
     const checkStatus = async () => {
       if (!user?.uid || spinState !== 'idle') return;
       try {
-        const token = await auth.currentUser.getIdToken();
+        const token = await getToken();
         const res = await fetch('/api/spin-status', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -97,7 +97,7 @@ const FortuneWheel = () => {
     setShowShower(false);
 
     try {
-      const token = await auth.currentUser.getIdToken();
+      const token = await getToken();
       const res = await fetch('/api/spin-wheel', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -165,7 +165,7 @@ const FortuneWheel = () => {
         return;
       }
 
-      const token = await auth.currentUser.getIdToken();
+      const token = await getToken();
       const res = await fetch('/api/rewards', {
         method: 'POST',
         headers: { 

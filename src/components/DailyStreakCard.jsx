@@ -15,7 +15,7 @@ const STREAK_REWARDS = [
 ];
 
 const DailyStreakCard = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const isHindi = currentLanguage === 'Hindi';
   const [loading, setLoading] = useState(false);
@@ -41,7 +41,7 @@ const DailyStreakCard = () => {
     if (!canClaim || loading) return;
     setLoading(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await getToken();
       const response = await fetch('/api/rewards', {
         method: 'POST',
         headers: { 

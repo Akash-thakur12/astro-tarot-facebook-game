@@ -4,7 +4,7 @@ import { useLanguage } from '../context/useLanguage';
 import { auth } from '../services/firebase';
 
 const DailyBonus = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const [timeLeft, setTimeLeft] = useState('');
   const [canClaim, setCanClaim] = useState(false);
@@ -42,7 +42,7 @@ const DailyBonus = () => {
     if (!canClaim || isClaiming) return;
     setIsClaiming(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await getToken();
       const response = await fetch('/api/rewards', {
         method: 'POST',
         headers: {

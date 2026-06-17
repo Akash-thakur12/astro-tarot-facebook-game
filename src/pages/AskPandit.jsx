@@ -79,7 +79,7 @@ const PickerModal = ({ pickerConfig, setPickerConfig, isHindi }) => {
 };
 
 const AskPandit = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const navigate = useNavigate();
   const isHindi = currentLanguage === 'Hindi';
@@ -132,10 +132,18 @@ const AskPandit = () => {
     const initializePandit = async () => {
       if (user?.uid) {
         try {
-          const idToken = await auth.currentUser.getIdToken();
+          const idToken = await getToken();
           const response = await fetch('/api/user/check-status', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${idToken}` }
+            headers: { 
+              'Authorization': `Bearer ${idToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              displayName: user.displayName || '',
+              photoURL: user.photoURL || '',
+              provider: user.provider || 'firebase'
+            })
           });
           if (response.ok) {
             const data = await response.json();
@@ -149,7 +157,7 @@ const AskPandit = () => {
       }
     };
     initializePandit();
-  }, [user, refreshUser]);
+  }, [user?.uid, refreshUser, getToken]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -322,9 +330,8 @@ const AskPandit = () => {
       const tone = detectTone(question);
       
       // CRITICAL FIX #3: Server-Side Authentication
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('User not authenticated');
-      const token = await currentUser.getIdToken();
+      const token = await getToken();
+      if (!token) throw new Error('Authentication token missing');
 
       const response = await fetch('/api/pandit-ai', {
         method: 'POST',

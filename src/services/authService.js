@@ -1,12 +1,26 @@
 import { 
   signInAnonymously, 
   signInWithPopup, 
+  signInWithCustomToken,
   signOut,
   linkWithPopup,
   GoogleAuthProvider,
   FacebookAuthProvider
 } from "firebase/auth";
 import { auth, googleProvider, facebookProvider } from "./firebase";
+
+/**
+ * Signs in with a custom token (Bridge mode)
+ */
+export const signInWithFBBridge = async (customToken) => {
+  try {
+    const userCredential = await signInWithCustomToken(auth, customToken);
+    return userCredential.user;
+  } catch (error) {
+    console.error("Custom Token Authentication Error:", error);
+    throw error;
+  }
+};
 
 /**
  * Signs in user anonymously
