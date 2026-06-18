@@ -382,11 +382,16 @@ Respond directly to the query. DO NOT ask for birth details again.`;
       
       const controller = new AbortController();
       const timeoutId = setTimeout(
-        () => controller.abort(),
+        () => {
+          console.log("ABORT CONTROLLER FIRED");
+          controller.abort();
+        },
         45000
       );
 
+      console.time("CUSTOM_AI_REQUEST");
       const response = await fetch(url, { signal: controller.signal });
+      console.timeEnd("CUSTOM_AI_REQUEST");
       clearTimeout(timeoutId);
 
       if (response.ok) {
@@ -412,7 +417,11 @@ Respond directly to the query. DO NOT ask for birth details again.`;
         console.log("Custom AI failed");
       }
     } catch (err) {
+      try { console.timeEnd("CUSTOM_AI_REQUEST"); } catch (timeErr) {}
       console.error("Custom AI fallback failed:", err.message);
+      console.log("err.name =", err.name);
+      console.log("err.message =", err.message);
+      console.log("err.stack =", err.stack);
       console.log("Custom AI failed");
       lastError = err;
     }
