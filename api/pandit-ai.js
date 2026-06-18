@@ -386,7 +386,7 @@ Respond directly to the query. DO NOT ask for birth details again.`;
           console.log("ABORT CONTROLLER FIRED");
           controller.abort();
         },
-        45000
+        90000
       );
 
       console.time("CUSTOM_AI_REQUEST");
