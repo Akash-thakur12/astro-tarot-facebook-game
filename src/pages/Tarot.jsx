@@ -193,8 +193,14 @@ const Tarot = () => {
         body: JSON.stringify({ method })
       });
 
-      if (!response.ok) {
-        const data = await response.json();
+      const contentType = response.headers.get("content-type");
+      if (!response.ok || !contentType || !contentType.includes("application/json")) {
+        const errorData = contentType && contentType.includes("application/json") ? await response.json() : {};
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.success) {
         throw new Error(data.error || 'Failed to unlock reading');
       }
 
@@ -340,10 +346,10 @@ const Tarot = () => {
                    fullWidth 
                    variant="outline" 
                    onClick={() => handleWatchUnlock('coins')} 
-                   disabled={isWatchingAd || (user?.coins || 0) < 30}
+                   disabled={isWatchingAd || (user?.coins || 0) < 40}
                    className="border-mystic-gold/30 text-mystic-gold"
                  >
-                    {t.unlockCoins} (30 🪙)
+                    {t.unlockCoins} (40 🪙)
                  </Button>
                </div>
                {error && <p className="text-[10px] text-red-400 font-bold mt-2 uppercase">⚠️ {error}</p>}

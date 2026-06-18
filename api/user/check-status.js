@@ -1,33 +1,7 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-
-// 1. Initialize Firebase Admin
-const apps = getApps();
-if (!apps || apps.length === 0) {
-  try {
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-
-    if (projectId && clientEmail && privateKey) {
-      initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey: privateKey.replace(/\\n/g, '\n'),
-        })
-      });
-    } else {
-      initializeApp();
-    }
-  } catch (e) {
-    if (!e.message?.includes('already exists')) throw e;
-  }
-}
+import { verifyIdToken } from '../_utils/auth.js';
 
 const db = getFirestore();
-const adminAuth = getAuth();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -44,11 +18,11 @@ export default async function handler(req, res) {
   let uid;
 
   try {
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    const decodedToken = await verifyIdToken(idToken);
     uid = decodedToken?.uid;
     if (!uid) throw new Error("No UID in token");
   } catch (error) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    return res.status(401).json({ error: 'Unauthorized: Invalid token', details: error.message });
   }
 
   const userRef = db.collection('users').doc(uid);
