@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../services/firebase';
 import { useAuth } from '../context/useAuth';
+import { preloadInterstitial, showInterstitial } from '../services/fbInterstitial';
+import { INTERSTITIAL_WHEEL_ID } from '../config/adConfig';
+import { playCoinSound } from '../services/audioService';
 import Button from '../components/ui/Button';
 
 const REWARDS = [
@@ -32,6 +34,7 @@ const FortuneWheel = () => {
 
   // Read today's spin status from Firestore on load
   useEffect(() => {
+    preloadInterstitial(INTERSTITIAL_WHEEL_ID);
     const checkStatus = async () => {
       if (!user?.uid || spinState !== 'idle') return;
       try {
@@ -141,8 +144,10 @@ const FortuneWheel = () => {
         setWonReward(targetReward);
         setShowPopup(true);
         if (targetReward.type !== 'miss') {
+          playCoinSound();
           setShowShower(true);
         }
+        showInterstitial();
       }, 5000);
 
     } catch (error) {

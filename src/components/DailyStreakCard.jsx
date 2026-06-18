@@ -5,13 +5,13 @@ import { useLanguage } from '../context/useLanguage';
 import Button from './ui/Button';
 
 const STREAK_REWARDS = [
-  { day: 1, coins: 10 },
-  { day: 2, coins: 15 },
-  { day: 3, coins: 20 },
-  { day: 4, coins: 25 },
-  { day: 5, coins: 30 },
-  { day: 6, coins: 40 },
-  { day: 7, coins: 50, extra: true }
+  { day: 1, coins: 3 },
+  { day: 2, coins: 5 },
+  { day: 3, coins: 8 },
+  { day: 4, coins: 10 },
+  { day: 5, coins: 12 },
+  { day: 6, coins: 14 },
+  { day: 7, coins: 15, extraSpin: true }
 ];
 
 const DailyStreakCard = () => {

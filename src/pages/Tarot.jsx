@@ -6,7 +6,16 @@ import { getTarotHistory, canReadTarotToday } from '../services/userService';
 import { auth } from '../services/firebase';
 import tarotData from '../data/tarot_data.json';
 import Button from '../components/ui/Button';
+import { playCardFlip } from '../services/audioService';
 import { preloadRewardedAd, showRewardedAd } from '../services/fbAds';
+import { preloadInterstitial, showInterstitial } from '../services/fbInterstitial';
+import { preloadBanner, showBanner, hideBanner } from '../services/fbBanner';
+import { 
+  REWARDED_TAROT_UNLOCK_ID, 
+  INTERSTITIAL_TAROT_ID, 
+  BANNER_TAROT_ID 
+} from '../config/adConfig';
+import { ShareDestinyButton } from '../components/social/SocialButtons';
 
 const Tarot = () => {
   const { user, refreshUser, getToken } = useAuth();
@@ -40,10 +49,12 @@ const Tarot = () => {
   }, [user]);
 
   useEffect(() => {
-    // Preload Rewarded Ad for FB Instant Games
+    // Preload Ads for FB Instant Games
     if (user?.uid && !canReadTarotToday(user)) {
-       preloadRewardedAd('REWARDED_TAROT_UNLOCK');
+       preloadRewardedAd(REWARDED_TAROT_UNLOCK_ID);
     }
+    preloadInterstitial(INTERSTITIAL_TAROT_ID);
+    preloadBanner(BANNER_TAROT_ID);
 
     const initializeTarot = async () => {
       if (user?.uid) {
@@ -76,6 +87,10 @@ const Tarot = () => {
     };
     
     initializeTarot();
+
+    return () => {
+      hideBanner();
+    };
   }, [user?.uid, updateHistory, refreshUser, getToken]);
 
   const handleCardClick = async (index) => {
@@ -133,6 +148,7 @@ const Tarot = () => {
     // Animation Pacing (Optimized for 1150ms total)
     setTimeout(() => {
       setIsFlipping(true);
+      playCardFlip();
       setTimeout(() => {
         setSelectedCard({ ...randomCard, index });
         setShowGlowBurst(true);
@@ -141,6 +157,8 @@ const Tarot = () => {
           setShowGlowBurst(false);
           setIsFlipping(false);
           setIsMovingToCenter(false);
+          showInterstitial();
+          showBanner();
         }, 350); // Reveal Wait (350ms)
       }, 450); // Flip (450ms)
     }, 350); // Move (350ms)
@@ -191,7 +209,7 @@ const Tarot = () => {
     } finally {
       setIsWatchingAd(false);
       // Attempt to preload next ad
-      if (window.FBInstant) preloadRewardedAd('REWARDED_TAROT_UNLOCK');
+      if (window.FBInstant) preloadRewardedAd(REWARDED_TAROT_UNLOCK_ID);
     }
   };
 
@@ -204,7 +222,7 @@ const Tarot = () => {
     sessionLimit: isHindi ? 'सत्र सीमा' : 'Session Limit',
     unlockOptions: isHindi ? 'एक अतिरिक्त रीडिंग अनलॉक करने के लिए चुनें।' : 'Choose how to unlock an additional reading.',
     unlockAd: isHindi ? 'विज्ञापन देखें (मुफ्त)' : 'Watch Ad (Free)',
-    unlockCoins: isHindi ? '30 सिक्के खर्च करें' : 'Spend 30 Coins',
+    unlockCoins: isHindi ? '40 सिक्के खर्च करें' : 'Spend 40 Coins',
     pastRevelations: isHindi ? 'पिछली भविष्यवाणियां' : 'Past Revelations',
     justNow: isHindi ? 'अभी' : 'Just now',
     backToTemple: isHindi ? 'मंदिर वापस जाएं' : 'Back to Temple',
@@ -426,7 +444,8 @@ const Tarot = () => {
               </div>
 
               <div className="pt-4">
-                 <Button variant="outline" fullWidth onClick={() => {setShowResult(false); setSelectedCard(null);}} className="rounded-2xl border-white/10 text-white/60">
+                 <ShareDestinyButton cardName={selectedCard?.name} />
+                 <Button variant="outline" fullWidth onClick={() => {setShowResult(false); setSelectedCard(null); hideBanner();}} className="rounded-2xl border-white/10 text-white/60 mt-3">
                     {t.closeReading}
                  </Button>
               </div>

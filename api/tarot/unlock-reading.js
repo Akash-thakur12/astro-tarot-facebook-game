@@ -80,11 +80,11 @@ export default async function handler(req, res) {
       const userData = userDoc.data();
 
       if (method === 'coins') {
-        if ((userData.coins || 0) < 30) {
+        if ((userData.coins || 0) < 40) {
           return { success: false, error: "INSUFFICIENT_COINS" };
         }
         t.update(userRef, { 
-          coins: FieldValue.increment(-30),
+          coins: FieldValue.increment(-40),
           dailyTarotUsed: false,
           lastTarotUnlockDate: FieldValue.serverTimestamp()
         });

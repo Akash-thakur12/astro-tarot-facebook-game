@@ -272,7 +272,7 @@ async function handleClaimReward(uid, res) {
 }
 
 async function handleDailyStreak(uid, res) {
-  const STREAK_REWARDS = { 1: { coins: 10 }, 2: { coins: 15 }, 3: { coins: 20 }, 4: { coins: 25 }, 5: { coins: 30 }, 6: { coins: 40 }, 7: { coins: 50, extraSpin: true } };
+  const STREAK_REWARDS = { 1: { coins: 5 }, 2: { coins: 7 }, 3: { coins: 10 }, 4: { coins: 12 }, 5: { coins: 15 }, 6: { coins: 20 }, 7: { coins: 25, extraSpin: true } };
   const userRef = db.collection('users').doc(uid);
 
   try {
@@ -316,5 +316,8 @@ async function handleDailyStreak(uid, res) {
   } catch (error) {
     console.error("Streak Error:", error);
     return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+ Error' });
   }
 }

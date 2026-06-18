@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { AudioProvider } from './context/AudioContext';
 import Layout from './components/layout/Layout';
 import Home from './pages/Home';
 import Tarot from './pages/Tarot';
@@ -18,8 +19,9 @@ function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <Layout>
-          <Routes>
+        <AudioProvider>
+          <Layout>
+            <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/privacy" element={<Privacy />} />
@@ -62,6 +64,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
+        </AudioProvider>
       </AuthProvider>
     </LanguageProvider>
   );

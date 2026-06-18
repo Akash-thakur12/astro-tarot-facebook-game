@@ -53,9 +53,9 @@ export default async function handler(req, res) {
     key_secret: process.env.RAZORPAY_KEY_SECRET,
   });
 
-  // 3. Create Order (₹49 = 4900 paise)
+  // 3. Create Order (₹99 = 9900 paise)
   const options = {
-    amount: 4900, 
+    amount: 9900, 
     currency: "INR",
     receipt: `receipt_${Date.now()}`,
     notes: {

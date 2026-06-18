@@ -35,7 +35,7 @@ if (!apps || apps.length === 0) {
 const db = getFirestore();
 const adminAuth = getAuth();
 
-const AI_QUESTION_COST = 25;
+const AI_QUESTION_COST = 30; // Increased from 25
 
 // Rate limiting map (in-memory, per Vercel instance)
 const rateLimits = new Map();

@@ -93,7 +93,7 @@ export default async function handler(req, res) {
         uid,
         paymentId: razorpay_payment_id,
         orderId: razorpay_order_id,
-        amount: amount || 4900, 
+        amount: amount || 9900, 
         verified: true,
         createdAt: FieldValue.serverTimestamp()
       });

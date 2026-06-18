@@ -24,7 +24,7 @@ const Premium = () => {
         "Ad-Free Experience",
         "Priority Spiritual Guidance"
       ],
-      price: "₹49",
+      price: "₹99",
       duration: "per month",
       upgradeBtn: "Upgrade to Seeker Status",
       processing: "Opening Sacred Gateway...",
@@ -42,7 +42,7 @@ const Premium = () => {
         "विज्ञापन-मुक्त अनुभव",
         "प्राथमिक आध्यात्मिक मार्गदर्शन"
       ],
-      price: "₹49",
+      price: "₹99",
       duration: "प्रति माह",
       upgradeBtn: "सीकर स्टेटस में अपग्रेड करें",
       processing: "पवित्र द्वार खुल रहा है...",

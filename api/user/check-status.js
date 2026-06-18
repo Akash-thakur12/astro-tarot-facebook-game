@@ -69,7 +69,7 @@ export default async function handler(req, res) {
           photoURL: photoURL || null,
           email: email || null,
           provider: provider || 'anonymous',
-          coins: 100, // Matching firestore.rules expected default
+          coins: 40, // High profit economy: Starting coins reduced to 40
           xp: 0,
           streak: 1,
           premium: false,

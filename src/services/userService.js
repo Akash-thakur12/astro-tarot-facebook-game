@@ -5,7 +5,9 @@ import {
   query,
   orderBy,
   limit,
-  getDocs
+  getDocs,
+  addDoc,
+  serverTimestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -58,4 +60,54 @@ export const canReadTarotToday = (user) => {
     lastReadDate.getMonth() !== now.getMonth() ||
     lastReadDate.getFullYear() !== now.getFullYear()
   );
+};
+
+/**
+ * Saves a pandit message to user's history collection
+ */
+export const savePanditMessage = async (uid, role, content) => {
+  if (!uid || !content) return null;
+  try {
+    const historyRef = collection(db, COLLECTION, uid, "panditHistory");
+    const newDoc = await addDoc(historyRef, {
+      role,
+      content,
+      timestamp: serverTimestamp()
+    });
+    return newDoc.id;
+  } catch (error) {
+    console.error("Error saving pandit message to Firestore:", error);
+    return null;
+  }
+};
+
+/**
+ * Retrieves the latest 100 messages from pandit history
+ */
+export const getPanditHistory = async (uid) => {
+  if (!uid) return null;
+  try {
+    const historyRef = collection(db, COLLECTION, uid, "panditHistory");
+    const q = query(
+      historyRef, 
+      orderBy("timestamp", "desc"), 
+      limit(100)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const docs = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        role: data.role,
+        content: data.content,
+        timestamp: data.timestamp
+      };
+    });
+    // Reverse to return ascending order for chat UI
+    return docs.reverse();
+  } catch (error) {
+    console.error("Error getting pandit history from Firestore:", error);
+    return null;
+  }
 };

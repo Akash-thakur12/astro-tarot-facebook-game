@@ -1,3 +1,4 @@
+import { playButtonSound } from '../../services/audioService';
 
 const Button = ({ 
   children, 
@@ -20,9 +21,15 @@ const Button = ({
   const widthStyle = fullWidth ? 'w-full' : '';
   const isDisabled = disabled || loading;
 
+  const handleClick = (e) => {
+    if (isDisabled) return;
+    playButtonSound();
+    if (onClick) onClick(e);
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       disabled={isDisabled}
       className={`${baseStyles} ${variants[variant]} ${widthStyle} ${isDisabled ? 'opacity-50 cursor-not-allowed grayscale' : ''} ${className}`}
       {...props}

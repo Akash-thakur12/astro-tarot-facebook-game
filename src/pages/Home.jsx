@@ -2,18 +2,26 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
+import { useAudio } from '../context/AudioContext';
 import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
 import DailyChallengesCard from '../components/DailyChallengesCard';
 import DailyBonus from '../components/DailyBonus';
 import DailyStreakCard from '../components/DailyStreakCard';
 import UserMenu from '../components/auth/UserMenu';
+import Leaderboard from '../components/social/Leaderboard';
+import { updateXPLeaderboard, updateCoinsLeaderboard, updateStreakLeaderboard } from '../services/fbLeaderboard';
+import { preloadBanner, showBanner, hideBanner } from '../services/fbBanner';
+import { BANNER_HOME_ID } from '../config/adConfig';
+import { PlayWithFriendsButton } from '../components/social/SocialButtons';
 
 const Home = () => {
   const navigate = useNavigate();
   const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage, setLanguage } = useLanguage();
+  const { soundEnabled, toggleSound } = useAudio();
   const [toast, setToast] = useState(null);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const showToast = (message) => {
     setToast(message);
@@ -73,6 +81,22 @@ const Home = () => {
       showToast(err.message || "Failed to claim reward");
     }
   };
+
+  useEffect(() => {
+    if (user) {
+      if (user.xp) updateXPLeaderboard(user.xp);
+      if (user.coins) updateCoinsLeaderboard(user.coins);
+      if (user.streakDay) updateStreakLeaderboard(user.streakDay);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    preloadBanner(BANNER_HOME_ID);
+    showBanner();
+    return () => {
+      hideBanner();
+    };
+  }, []);
 
   useEffect(() => {
     const initializeHome = async () => {
@@ -160,8 +184,19 @@ const Home = () => {
       <div className="absolute top-0 right-0 w-64 h-64 bg-mystic-gold/10 blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-mystic-purple/10 blur-[100px] pointer-events-none" />
 
-      {/* LANGUAGE SELECTOR */}
-      <div className="absolute top-4 right-4 z-[110]">
+      <div className="absolute top-4 right-4 z-[110] flex gap-2">
+         <button 
+           onClick={() => setShowLeaderboard(true)}
+           className="bg-black/40 backdrop-blur-md rounded-full px-3 py-1.5 border border-mystic-gold/40 shadow-[0_0_15px_rgba(251,191,36,0.2)] text-[10px] font-black transition-all text-mystic-gold hover:text-white"
+         >
+           🏆 {isHindi ? 'लीडरबोर्ड' : 'LEADERBOARD'}
+         </button>
+         <button 
+           onClick={toggleSound}
+           className="bg-black/40 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10 shadow-2xl text-[10px] font-black transition-all text-white/60 hover:text-white"
+         >
+           {soundEnabled ? '🔊 Sound ON' : '🔇 Sound OFF'}
+         </button>
          <div className="flex bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 shadow-2xl">
             <button 
               onClick={() => setLanguage('English')}
@@ -235,6 +270,11 @@ const Home = () => {
         {/* MAIN CARDS GRID */}
         <div className="grid grid-cols-2 gap-4">
           
+          {/* 0. SOCIAL */}
+          <div className="col-span-2">
+            <PlayWithFriendsButton />
+          </div>
+
           {/* 1. DAILY STREAK */}
           <DailyStreakCard />
 
@@ -301,6 +341,8 @@ const Home = () => {
         
         <div className="h-10"></div> {/* Bottom Padding */}
       </div>
+
+      {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
     </div>
   );
 };

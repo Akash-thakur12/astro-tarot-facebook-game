@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { auth } from '../services/firebase';
+import { savePanditMessage, getPanditHistory } from '../services/userService';
+import { preloadInterstitial, showInterstitial } from '../services/fbInterstitial';
+import { INTERSTITIAL_PANDIT_ID } from '../config/adConfig';
 import Button from '../components/ui/Button';
 
 // Extracted outside the main component to prevent re-renders on state changes causing focus loss
@@ -88,55 +91,68 @@ const AskPandit = () => {
 
   // State
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pandit_chat_messages');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.warn("Storage access denied for chat messages:", e);
-      return [];
-    }
-  });
-  const [hasEnteredDetails, setHasEnteredDetails] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pandit_has_entered_details');
-      return saved === 'true';
-    } catch (e) {
-      return false;
-    }
-  });
+  const [messages, setMessages] = useState([]);
+  const [hasEnteredDetails, setHasEnteredDetails] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showLowCoinsModal, setShowLowCoinsModal] = useState(false);
   const [pickerConfig, setPickerConfig] = useState(null);
   const [inputText, setInputText] = useState('');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Forms
-  const [personalForm, setPersonalForm] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pandit_user_profile');
-      return saved ? JSON.parse(saved) : { 
-        name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
-      };
-    } catch (e) {
-      console.warn("Storage access denied for user profile:", e);
-      return { 
-        name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
-      };
-    }
+  const [personalForm, setPersonalForm] = useState({ 
+    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
   });
+
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoaded(false);
+      if (!user?.uid) {
+        setMessages([]);
+        setHasEnteredDetails(false);
+        return;
+      }
+      
+      // Local storage fallback for immediate UI
+      try {
+        const savedProfile = localStorage.getItem(`pandit_user_profile_${user.uid}`);
+        if (savedProfile) setPersonalForm(JSON.parse(savedProfile));
+        
+        const savedEntered = localStorage.getItem(`pandit_has_entered_details_${user.uid}`);
+        setHasEnteredDetails(savedEntered === 'true');
+        
+        const savedMsgs = localStorage.getItem(`pandit_chat_messages_${user.uid}`);
+        if (savedMsgs) setMessages(JSON.parse(savedMsgs));
+      } catch(e) {}
+
+      // Fetch from Firestore
+      try {
+        const firestoreHistory = await getPanditHistory(user.uid);
+        if (firestoreHistory !== null) {
+          setMessages(firestoreHistory);
+        }
+      } catch (e) {
+        console.warn("Firestore error, staying on local data.", e);
+      }
+      setIsLoaded(true);
+    };
+    loadData();
+  }, [user?.uid]);
 
   // PERSISTENCE - Save to localStorage
   useEffect(() => {
+    if (!isLoaded || !user?.uid) return;
     try {
-      localStorage.setItem('pandit_chat_messages', JSON.stringify(messages));
-      localStorage.setItem('pandit_user_profile', JSON.stringify(personalForm));
-      localStorage.setItem('pandit_has_entered_details', hasEnteredDetails ? 'true' : 'false');
+      localStorage.setItem(`pandit_chat_messages_${user.uid}`, JSON.stringify(messages));
+      localStorage.setItem(`pandit_user_profile_${user.uid}`, JSON.stringify(personalForm));
+      localStorage.setItem(`pandit_has_entered_details_${user.uid}`, hasEnteredDetails ? 'true' : 'false');
     } catch (e) {
       console.warn("Storage write denied in AskPandit:", e);
     }
-  }, [messages, personalForm, hasEnteredDetails]);
+  }, [messages, personalForm, hasEnteredDetails, isLoaded, user?.uid]);
 
   useEffect(() => {
+    preloadInterstitial(INTERSTITIAL_PANDIT_ID);
     const initializePandit = async () => {
       if (user?.uid) {
         try {
@@ -180,9 +196,11 @@ const AskPandit = () => {
   }, [messages, loading, hasEnteredDetails]);
 
   const handleNewChat = () => {
-    localStorage.removeItem('pandit_chat_messages');
-    localStorage.removeItem('pandit_user_profile');
-    localStorage.removeItem('pandit_has_entered_details');
+    if (user?.uid) {
+      localStorage.removeItem(`pandit_chat_messages_${user.uid}`);
+      localStorage.removeItem(`pandit_user_profile_${user.uid}`);
+      localStorage.removeItem(`pandit_has_entered_details_${user.uid}`);
+    }
     setMessages([]);
     setHasEnteredDetails(false);
     setPersonalForm({ 
@@ -220,10 +238,10 @@ const AskPandit = () => {
     invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
-    tenCoins: isHindi ? '25 सिक्के' : '25 Coins',
+    tenCoins: isHindi ? '40 सिक्के' : '40 Coins',
     notEnough: isHindi ? 'सिक्के कम हैं' : 'Not enough coins',
-    modalSub: isHindi ? 'परामर्श के लिए 25 सिक्के या प्रीमियम सदस्यता आवश्यक है।' : 'Consulting requires 25 coins or a Premium subscription.',
-    upgradeButton: isHindi ? 'प्रीमियम ₹49 अनलॉक करें' : 'Unlock Premium ₹49',
+    modalSub: isHindi ? 'परामर्श के लिए 40 सिक्के या प्रीमियम सदस्यता आवश्यक है।' : 'Consulting requires 40 coins or a Premium subscription.',
+    upgradeButton: isHindi ? 'प्रीमियम ₹99 अनलॉक करें' : 'Unlock Premium ₹99',
     earnButton: isHindi ? 'मुफ्त सिक्के कमाएं' : 'Watch Ad to Continue',
     maybeLater: isHindi ? 'बाद में' : 'Maybe Later',
     newChat: isHindi ? 'नई चैट' : 'New Chat'
@@ -316,7 +334,7 @@ const AskPandit = () => {
     setErrorMsg('');
 
     const isFree = !user?.premium && !user?.dailyQuestionUsed;
-    const hasEnoughCoins = (user?.coins || 0) >= 25;
+    const hasEnoughCoins = (user?.coins || 0) >= 30;
 
     if (!user?.premium && !isFree && !hasEnoughCoins) {
       setShowLowCoinsModal(true);
@@ -327,6 +345,11 @@ const AskPandit = () => {
     const newUserMessage = { role: 'user', content: question };
     const updatedMessages = [...messages, newUserMessage];
     setMessages(updatedMessages); // Update state for UI
+    
+    // FIRESTORE: Save user message
+    if (user?.uid) {
+      savePanditMessage(user.uid, 'user', question);
+    }
 
     setLoading(true);
 
@@ -358,10 +381,18 @@ const AskPandit = () => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'API Request Failed');
 
-      setMessages(prev => [...prev, { role: 'model', content: data.text }]);
+      const aiResponseText = data.text;
+      setMessages(prev => [...prev, { role: 'model', content: aiResponseText }]);
+      
+      // FIRESTORE: Save model message
+      if (user?.uid) {
+        savePanditMessage(user.uid, 'model', aiResponseText);
+      }
       
       // Sync global user state to reflect coin deduction immediately
       await refreshUser();
+      
+      showInterstitial();
     } catch (error) {
       console.error("AI Error:", error);
       setErrorMsg("Pandit AI is currently meditating. Please try again.");
