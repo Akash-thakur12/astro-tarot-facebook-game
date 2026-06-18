@@ -470,8 +470,17 @@ CURRENT AGE: ${ageDisplay}
 
 Respond directly to the query. DO NOT ask for birth details again.`;
 
-          const historyText = Array.isArray(history) 
-            ? history.map(msg => `${msg.role === 'user' ? 'User' : 'Pandit AI'}: ${msg.content}`).join('\n')
+          const recentHistory = Array.isArray(history)
+            ? history.slice(-2)
+            : [];
+
+          const historyText = recentHistory.length > 0
+            ? recentHistory
+                .map(
+                  msg =>
+                    `${msg.role === 'user' ? 'User' : 'Pandit AI'}: ${(msg.content || '').substring(0, 300)}`
+                )
+                .join('\n')
             : "No previous history";
 
           fullPrompt = `---\n\n${systemInstruction}\n\n${profileContext}\n\nPREVIOUS CONVERSATION:\n\n${historyText}\n\nUSER QUESTION:\n\n${userData.question || "Tell me about my destiny"}\n\n---`;
@@ -482,13 +491,22 @@ Respond directly to the query. DO NOT ask for birth details again.`;
         }
 
         console.log("Custom AI using same context as Gemini");
-        const compactPrompt = fullPrompt.replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim();
+        const compactPrompt = fullPrompt
+          .replace(/\r?\n/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
         console.log("FULL PROMPT LENGTH =", fullPrompt.length);
         console.log("COMPACT PROMPT LENGTH =", compactPrompt.length);
+        console.log("HISTORY LENGTH =", Array.isArray(history) ? history.length : 0);
+
         const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(compactPrompt)}?token=${AI_TOKEN}`;
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          45000
+        );
 
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
