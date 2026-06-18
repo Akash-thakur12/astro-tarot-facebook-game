@@ -40,6 +40,20 @@ service cloud.firestore {
       // Strictly block all client-side writes (handled by /api/tarot/save-reading)
       allow write: if false;
     }
+
+    // Pandit History Subcollection
+    match /users/{userId}/panditHistory/{messageId} {
+      // User may read own messages
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
+      // User may create new messages
+      allow create: if request.auth != null
+                    && request.auth.uid == userId;
+
+      // Prevent editing or deleting history
+      allow update, delete: if false;
+    }
     
     // Default: Deny everything else
     match /{document=**} {

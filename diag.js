@@ -59,6 +59,36 @@ async function diagnose() {
       console.error('1.5-flash Error Message:', e.message);
     }
 
+    // 4. Test Custom AI Fallback
+    const AI_BASE_URL = process.env.AI_BASE_URL;
+    const AI_TOKEN = process.env.AI_TOKEN;
+    const AI_MODEL = process.env.AI_MODEL;
+
+    if (AI_BASE_URL && AI_TOKEN && AI_MODEL) {
+      console.log('\n4. Testing Custom AI Fallback...');
+      const fallbackPrompt = 'hi';
+      const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(fallbackPrompt)}?token=${AI_TOKEN}`;
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Custom AI Success:', data.response || 'No response field');
+        } else {
+          console.error(`Custom AI Error: HTTP ${response.status}`);
+        }
+      } catch (e) {
+        console.error('Custom AI Error:', e.message);
+      }
+    } else {
+      console.log('\n4. Custom AI Fallback not configured (skipping test).');
+    }
+
   } catch (err) {
     console.error('Global Error:', err);
   }

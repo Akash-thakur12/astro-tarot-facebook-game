@@ -460,6 +460,50 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     }
   }
 
+  // Fallback to custom AI provider if Gemini fails
+  if (!success) {
+    const AI_BASE_URL = process.env.AI_BASE_URL;
+    const AI_TOKEN = process.env.AI_TOKEN;
+    const AI_MODEL = process.env.AI_MODEL;
+
+    if (AI_BASE_URL && AI_TOKEN && AI_MODEL) {
+      console.warn("Gemini failed, trying custom AI fallback");
+      try {
+        const fallbackPrompt = mode === 'chat' ? (userData.question || "Tell me about my destiny") : "Calculate compatibility for two people";
+        const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(fallbackPrompt)}?token=${AI_TOKEN}`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.response) {
+            console.log("Custom AI fallback success");
+            if (mode === 'chat' || mode === 'personal') {
+              jsonResponse = { text: data.response };
+            } else {
+              jsonResponse = {
+                score: 85,
+                guidance: data.response,
+                sections: []
+              };
+            }
+            success = true;
+          } else {
+            console.error("Custom AI fallback failed: Invalid JSON or missing response field");
+          }
+        } else {
+          console.error(`Custom AI fallback failed: HTTP ${response.status}`);
+        }
+      } catch (err) {
+        console.error("Custom AI fallback failed:", err.message);
+      }
+    }
+  }
+
   if (success && jsonResponse) {
     return res.status(200).json(jsonResponse);
   }
