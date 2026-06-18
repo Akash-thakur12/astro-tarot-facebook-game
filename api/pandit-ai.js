@@ -482,7 +482,10 @@ Respond directly to the query. DO NOT ask for birth details again.`;
         }
 
         console.log("Custom AI using same context as Gemini");
-        const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(fullPrompt)}?token=${AI_TOKEN}`;
+        const compactPrompt = fullPrompt.replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim();
+        console.log("FULL PROMPT LENGTH =", fullPrompt.length);
+        console.log("COMPACT PROMPT LENGTH =", compactPrompt.length);
+        const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(compactPrompt)}?token=${AI_TOKEN}`;
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
