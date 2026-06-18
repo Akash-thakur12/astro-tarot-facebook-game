@@ -469,8 +469,46 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     if (AI_BASE_URL && AI_TOKEN && AI_MODEL) {
       console.warn("Gemini failed, trying custom AI fallback");
       try {
-        const fallbackPrompt = mode === 'chat' ? (userData.question || "Tell me about my destiny") : "Calculate compatibility for two people";
-        const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(fallbackPrompt)}?token=${AI_TOKEN}`;
+        console.log("Sending complete Gemini prompt to custom AI");
+        
+        let fullPrompt = "";
+        if (mode === 'chat' || mode === 'personal') {
+          const { name, gender, dobDay, dobMonth, dobYear, tobHour, tobMinute, tobPeriod, pob } = userData;
+          let ageDisplay = "Unknown";
+          try {
+            if (dobDay && dobMonth && dobYear) {
+              const today = new Date();
+              const birthDate = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
+              let age = today.getFullYear() - birthDate.getFullYear();
+              const m = today.getMonth() - birthDate.getMonth();
+              if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+              ageDisplay = age;
+            }
+          } catch (e) {}
+
+          const profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE:
+Name: ${name || 'Unknown'}
+Gender: ${gender || 'Unknown'}
+Birth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}
+Birth Time: ${tobHour || '?'}:${tobMinute || '?'} ${tobPeriod || ''}
+Birth Place: ${pob || 'Unknown'}
+CURRENT AGE: ${ageDisplay}
+
+Respond directly to the query. DO NOT ask for birth details again.`;
+
+          const historyText = Array.isArray(history) 
+            ? history.map(msg => `${msg.role === 'user' ? 'User' : 'Pandit AI'}: ${msg.content}`).join('\n')
+            : "No previous history";
+
+          fullPrompt = `---\n\n${systemInstruction}\n\n${profileContext}\n\nPREVIOUS CONVERSATION:\n\n${historyText}\n\nUSER QUESTION:\n\n${userData.question || "Tell me about my destiny"}\n\n---`;
+        } else {
+          // Compatibility mode fallback
+          const { p1, p2 } = userData;
+          fullPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}\nPerson 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}\n\nInstructions: Generate relationship compatibility analysis.`;
+        }
+
+        console.log("Custom AI using same context as Gemini");
+        const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(fullPrompt)}?token=${AI_TOKEN}`;
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
