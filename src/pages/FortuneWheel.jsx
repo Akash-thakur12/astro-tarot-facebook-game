@@ -180,11 +180,13 @@ const FortuneWheel = () => {
         body: JSON.stringify({ action: 'claim-reward' })
       });
       
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to claim reward");
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+        const errorData = contentType && contentType.includes("application/json") ? await res.json() : {};
+        throw new Error(errorData.error || `Server error: ${res.status}`);
       }
+
+      const data = await res.json();
 
       // Success
       if (wonReward.type === 'coin') {

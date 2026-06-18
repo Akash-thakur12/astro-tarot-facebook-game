@@ -30,10 +30,13 @@ const RewardCenter = () => {
           body: JSON.stringify({ action: 'ad-payout' })
         });
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to claim ad reward');
+        const contentType = response.headers.get("content-type");
+        if (!response.ok || !contentType || !contentType.includes("application/json")) {
+          const errorData = contentType && contentType.includes("application/json") ? await response.json() : {};
+          throw new Error(errorData.error || `Server error: ${response.status}`);
         }
+
+        const data = await response.json();
 
         await refreshUser();
       } catch (error) {

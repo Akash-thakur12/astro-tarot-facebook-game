@@ -52,10 +52,13 @@ const DailyBonus = () => {
         body: JSON.stringify({ action: 'daily-bonus' })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to claim reward');
+      const contentType = response.headers.get("content-type");
+      if (!response.ok || !contentType || !contentType.includes("application/json")) {
+        const errorData = contentType && contentType.includes("application/json") ? await response.json() : {};
+        throw new Error(errorData.error || `Server error: ${response.status}`);
       }
+
+      const data = await response.json();
 
       await refreshUser();
     } catch (error) {

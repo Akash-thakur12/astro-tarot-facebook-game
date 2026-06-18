@@ -318,6 +318,4 @@ async function handleDailyStreak(uid, res) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 }
- Error' });
-  }
-}
+
