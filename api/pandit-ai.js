@@ -236,6 +236,29 @@ Current Season: ${season}`;
     STRICT OUTPUT FORMAT:
     Return ONLY valid JSON. All keys must be double-quoted. No markdown code blocks.
     Always end the response with one natural follow-up question.
+
+    FEW-SHOT EXAMPLES:
+    Example 1 (Hinglish/English Input):
+    USER:
+    Mera career kaisa rahega?
+    
+    ASSISTANT JSON:
+    {
+      "prediction": "🔮 **Prediction**\\nBeta, aapki Kundali mein Surya aur Budh ki yuti dasha chal rahi hai, jo ki career mein bade badlaav ka sanket de rahi hai.\\n\\n✨ **Detailed explanation**\\nJanma Kundali ke dasve bhav mein shubh grahon ki drishti hone se agle 6 mahine aapke liye atyant mahatvapurna rahenge. Mehnat rang layegi aur padonnati ke strong yog hain.\\n\\n❤️ **Career insights**\\nNaukri mein sthairya aayega. Yadi aap business ka soch rahe hain, toh October ke baad ka samay shubh rahega.\\n\\n🪔 **Remedy / Upay**\\nPratyek Raviwar ko Surya Dev ko jal arpit karein aur 'Om Suryaya Namah' ka jaap karein.\\n\\n🌟 **Lucky Factors**\\nLucky Color: Deep Blue, Lucky Number: 8, Auspicious Day: Saturday.\\n\\n🙏 **Positive closing blessing**\\nSurya Dev aapko yash aur kirti pradaan karein. Kalyan ho!\\n\\nAapka agla prashn kya hai?",
+      "reasoning": "Sun and Mercury conjunction in the 10th house indicating career progression.",
+      "guidance": "Focus on discipline and respect authorities to maximize planetary gains."
+    }
+
+    Example 2 (Hindi Input):
+    USER:
+    मेरी शादी कब होगी?
+    
+    ASSISTANT JSON:
+    {
+      "prediction": "🔮 **Prediction**\\nपुत्री, आपके सप्तम भाव में बृहस्पति देव की शुभ दृष्टि पड़ रही है, जिसके प्रभाव से शीघ्र ही विवाह के शुभ योग बन रहे हैं।\\n\\n✨ **Detailed explanation**\\nकुंडली के अनुसार, अगले 12 महीनों में गुरु और शुक्र का गोचर अनुकूल रहेगा। विवाह की बातचीत जल्द ही पक्की होने की संभावना है।\\n\\n❤️ **Love insights**\\nजीवनसाथी अत्यंत समझदार, शांत स्वभाव और आपका सम्मान करने वाला होगा।\\n\\n🪔 **Remedy / Upay**\\nप्रत्येक गुरुवार को विष्णु सहस्रनाम का पाठ करें और गाय को चने की दाल खिलाएं।\\n\\n🌟 **Lucky Factors**\\nLucky Color: Yellow, Lucky Number: 3, Auspicious Day: Thursday.\\n\\n🙏 **Positive closing blessing**\\nभगवान विष्णु और मां लक्ष्मी आपके जीवन को प्रेम और खुशियों से भर दें। कल्याण हो!\\n\\nक्या आप जीवनसाथी के स्वभाव के बारे में कुछ जानना चाहते हैं?",
+      "reasoning": "Jupiter transit aspects the 7th house, forming strong marriage yog.",
+      "guidance": "Seek blessings of elders and keep fasts on Thursdays for swift results."
+    }
     
     REQUIRED JSON SCHEMA:
     {
@@ -313,11 +336,11 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     contents.push({ role: 'user', parts: [{ text: compPrompt }] });
   }
 
-  // Construct compact prompt for API providers
+  // Construct prompt for API providers
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
     const recentHistory = Array.isArray(history)
-      ? history.slice(-2)
+      ? history.slice(-10)
       : [];
 
     const historyText = recentHistory.length > 0
@@ -335,11 +358,6 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     const { p1, p2 } = userData;
     fullPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}\nPerson 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}\n\nInstructions: Generate relationship compatibility analysis.`;
   }
-
-  const compactPrompt = fullPrompt
-    .replace(/\r?\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 
   let jsonResponse = null;
   let success = false;
@@ -391,61 +409,108 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
 
   // 1. Try Primary Render API Provider
   const primaryModels = [
-    "gpt-5-nano",
     "claude-opus-4.8",
-    "deepseek-v4-pro"
+    "deepseek-v4-pro",
+    "gpt-5-nano"
   ];
 
   for (const modelName of primaryModels) {
-    console.log("Trying model:", modelName);
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 30000); // 30,000 ms timeout per Render API request
+    let attempts = 0;
+    const maxModelAttempts = 2;
+    let modelSuccess = false;
 
-      const response = await fetch("https://ai-hu-xxx92.onrender.com/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: modelName,
-          message: compactPrompt
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+    while (attempts < maxModelAttempts && !modelSuccess) {
+      attempts++;
+      console.log("Trying model:", modelName);
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 30000); // 30,000 ms timeout per Render API request
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+        const response = await fetch("https://ai-hu-xxx92.onrender.com/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: modelName,
+            message: fullPrompt
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
 
-      const data = await response.json();
-      if (!data || !data.response) {
-        throw new Error("Invalid response or missing response field from Render API");
-      }
-
-      const text = data.response;
-      const parsedData = parseModelResponse(text, mode);
-
-      if (mode === 'chat' || mode === 'personal') {
-        jsonResponse = {
-          text: parsedData.prediction || ""
-        };
-      } else {
-        if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
-          throw new Error("Invalid compatibility response shape");
+        // 6. If HTTP 502 occurs: console.error raw body.
+        if (response.status === 502) {
+          const errorBody = await response.text();
+          console.error("HTTP 502 error body =", errorBody);
+          throw new Error(`HTTP 502 error: ${errorBody}`);
         }
-        jsonResponse = parsedData;
-      }
 
-      console.log("Model success:", modelName);
-      success = true;
-      break; // Exit loop on success
-    } catch (err) {
-      console.error("Model failed:", modelName, err);
-      lastError = err;
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        console.log("HTTP status =", response.status);
+
+        const rawText = await response.text();
+
+        console.log("RAW RESPONSE =", rawText);
+
+        let data;
+
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          console.error("JSON parse failed:", e);
+          throw e;
+        }
+
+        console.log("PARSED RESPONSE =", data);
+
+        const aiText =
+          data.response ||
+          data.text ||
+          data.message ||
+          data.content;
+
+        if (!aiText) {
+          throw new Error("No AI text found");
+        }
+
+        const text = aiText;
+        const parsedData = parseModelResponse(text, mode);
+
+        if (mode === 'chat' || mode === 'personal') {
+          jsonResponse = {
+            text: parsedData.prediction || ""
+          };
+        } else {
+          if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
+            throw new Error("Invalid compatibility response shape");
+          }
+          jsonResponse = parsedData;
+        }
+
+        console.log("Model success:", modelName);
+        success = true;
+        modelSuccess = true;
+        break; // Exit loop on success
+      } catch (err) {
+        console.error("Model failed:", modelName, err);
+        lastError = err;
+
+        // Wait 2 seconds before retry if we have attempts left
+        if (attempts < maxModelAttempts) {
+          console.log(`Waiting 2 seconds before retrying model ${modelName}...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    }
+
+    if (success) {
+      break;
     }
   }
 
@@ -460,62 +525,76 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     ];
 
     for (const modelName of geminiModels) {
-      console.log("Trying model:", modelName);
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction
-        });
+      let attempts = 0;
+      const maxModelAttempts = 2;
+      let modelSuccess = false;
 
-        const result = await model.generateContent({
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            responseMimeType: "application/json"
+      while (attempts < maxModelAttempts && !modelSuccess) {
+        attempts++;
+        console.log("Trying model:", modelName);
+        try {
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            systemInstruction
+          });
+
+          const result = await model.generateContent({
+            contents,
+            generationConfig: {
+              temperature: 0.7,
+              responseMimeType: "application/json"
+            }
+          });
+
+          if (!result || !result.response) {
+            throw new Error("No response from Gemini");
           }
-        });
 
-        if (!result || !result.response) {
-          throw new Error("No response from Gemini");
-        }
+          const text = result.response.text();
+          console.log("RAW GEMINI RESPONSE:", text);
 
-        const text = result.response.text();
-        console.log("RAW GEMINI RESPONSE:", text);
-
-        if (!text || !text.trim()) {
-          throw new Error("Empty Gemini response");
-        }
-
-        const parsedData = parseModelResponse(text, mode);
-
-        if (mode === 'chat' || mode === 'personal') {
-          jsonResponse = {
-            text: parsedData.prediction || ""
-          };
-        } else {
-          if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
-             throw new Error("Invalid compatibility response shape");
+          if (!text || !text.trim()) {
+            throw new Error("Empty Gemini response");
           }
-          jsonResponse = parsedData;
-        }
 
-        console.log("Model success:", modelName);
-        success = true;
-        break; // Exit loop on success
-      } catch (err) {
-        console.error("Model failed:", modelName, err);
-        lastError = err;
+          const parsedData = parseModelResponse(text, mode);
 
-        const statusCode = err?.status || err?.response?.status || "Unknown";
-        if (statusCode === 429 || statusCode === 503 || err.message?.includes("quota") || err.message?.includes("429")) {
-          console.warn(`Fallback triggered from ${modelName} due to status ${statusCode}.`);
-          continue;
-        }
+          if (mode === 'chat' || mode === 'personal') {
+            jsonResponse = {
+              text: parsedData.prediction || ""
+            };
+          } else {
+            if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
+               throw new Error("Invalid compatibility response shape");
+            }
+            jsonResponse = parsedData;
+          }
 
-        if (statusCode === 404) {
-          console.warn(`Model ${modelName} not found. Trying next...`);
-          continue;
+          console.log("Model success:", modelName);
+          success = true;
+          modelSuccess = true;
+          break; // Exit loop on success
+        } catch (err) {
+          console.error("Model failed:", modelName, err);
+          lastError = err;
+
+          const statusCode = err?.status || err?.response?.status || "Unknown";
+          if (statusCode === 429 || statusCode === 503 || err.message?.includes("quota") || err.message?.includes("429")) {
+            console.warn(`Fallback triggered from ${modelName} due to status ${statusCode}.`);
+          } else if (statusCode === 404) {
+            console.warn(`Model ${modelName} not found. Trying next...`);
+          }
+
+          // Wait 2 seconds before retry if we have attempts left
+          if (attempts < maxModelAttempts) {
+            console.log(`Waiting 2 seconds before retrying model ${modelName}...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         }
+      }
+
+      if (success) {
+        break;
       }
     }
   }
