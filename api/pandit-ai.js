@@ -245,12 +245,13 @@ Current Season: ${season}`;
     }`;
 
   let contents = [];
+  let ageDisplay = "Unknown";
+  let profileContext = "";
 
   if (mode === 'chat' || mode === 'personal') {
     const { name, gender, dobDay, dobMonth, dobYear, tobHour, tobMinute, tobPeriod, pob } = userData;
     
     // Calculate current age server-side
-    let ageDisplay = "Unknown";
     try {
       if (dobDay && dobMonth && dobYear) {
         const today = new Date();
@@ -266,7 +267,7 @@ Current Season: ${season}`;
       console.error("Age calculation error:", e);
     }
 
-    const profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE:
+    profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE:
 Name: ${name || 'Unknown'}
 Gender: ${gender || 'Unknown'}
 Birth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}
@@ -312,136 +313,155 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     contents.push({ role: 'user', parts: [{ text: compPrompt }] });
   }
 
-  // Try Custom AI First
-  const AI_BASE_URL = process.env.AI_BASE_URL;
-  const AI_TOKEN = process.env.AI_TOKEN;
-  const AI_MODEL = process.env.AI_MODEL;
+  // Construct compact prompt for API providers
+  let fullPrompt = "";
+  if (mode === 'chat' || mode === 'personal') {
+    const recentHistory = Array.isArray(history)
+      ? history.slice(-2)
+      : [];
+
+    const historyText = recentHistory.length > 0
+      ? recentHistory
+          .map(
+            msg =>
+              `${msg.role === 'user' ? 'User' : 'Pandit AI'}: ${(msg.content || '').substring(0, 300)}`
+          )
+          .join('\n')
+      : "No previous history";
+
+    fullPrompt = `---\n\n${systemInstruction}\n\n${profileContext}\n\nPREVIOUS CONVERSATION:\n\n${historyText}\n\nUSER QUESTION:\n\n${userData.question || "Tell me about my destiny"}\n\n---`;
+  } else {
+    // Compatibility mode fallback
+    const { p1, p2 } = userData;
+    fullPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}\nPerson 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}\n\nInstructions: Generate relationship compatibility analysis.`;
+  }
+
+  const compactPrompt = fullPrompt
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   let jsonResponse = null;
   let success = false;
   let lastError = null;
 
-  if (AI_BASE_URL && AI_TOKEN && AI_MODEL) {
-    console.log("Trying Custom AI first");
+  // Helper parser function
+  function parseModelResponse(text, currentMode) {
+    let cleanedText = text.trim();
+    cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+    
+    let parsedData = null;
     try {
-      let fullPrompt = "";
-      if (mode === 'chat' || mode === 'personal') {
-        const { name, gender, dobDay, dobMonth, dobYear, tobHour, tobMinute, tobPeriod, pob } = userData;
-        let ageDisplay = "Unknown";
-        try {
-          if (dobDay && dobMonth && dobYear) {
-            const today = new Date();
-            const birthDate = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-            ageDisplay = age;
-          }
-        } catch (e) {}
-
-        const profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE:
-Name: ${name || 'Unknown'}
-Gender: ${gender || 'Unknown'}
-Birth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}
-Birth Time: ${tobHour || '?'}:${tobMinute || '?'} ${tobPeriod || ''}
-Birth Place: ${pob || 'Unknown'}
-CURRENT AGE: ${ageDisplay}
-
-Respond directly to the query. DO NOT ask for birth details again.`;
-
-        const recentHistory = Array.isArray(history)
-          ? history.slice(-2)
-          : [];
-
-        const historyText = recentHistory.length > 0
-          ? recentHistory
-              .map(
-                msg =>
-                  `${msg.role === 'user' ? 'User' : 'Pandit AI'}: ${(msg.content || '').substring(0, 300)}`
-              )
-              .join('\n')
-          : "No previous history";
-
-        fullPrompt = `---\n\n${systemInstruction}\n\n${profileContext}\n\nPREVIOUS CONVERSATION:\n\n${historyText}\n\nUSER QUESTION:\n\n${userData.question || "Tell me about my destiny"}\n\n---`;
-      } else {
-        // Compatibility mode fallback
-        const { p1, p2 } = userData;
-        fullPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}\nPerson 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}\n\nInstructions: Generate relationship compatibility analysis.`;
-      }
-
-      const compactPrompt = fullPrompt
-        .replace(/\r?\n/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      console.log("FULL PROMPT LENGTH =", fullPrompt.length);
-      console.log("COMPACT PROMPT LENGTH =", compactPrompt.length);
-      console.log("HISTORY LENGTH =", Array.isArray(history) ? history.length : 0);
-
-      const url = `${AI_BASE_URL}/${AI_MODEL}/message/${encodeURIComponent(compactPrompt)}?token=${AI_TOKEN}`;
+      parsedData = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.warn("JSON.parse failed, attempting regex fallback:", parseError.message);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => {
-          console.log("ABORT CONTROLLER FIRED");
-          controller.abort();
-        },
-        90000
-      );
+      const extractField = (field) => {
+        const regex = new RegExp(`"?${field}"?\\s*:\\s*"(.*?)"`, "is");
+        const match = cleanedText.match(regex);
+        return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : "";
+      };
 
-      console.time("CUSTOM_AI_REQUEST");
-      const response = await fetch(url, { signal: controller.signal });
-      console.timeEnd("CUSTOM_AI_REQUEST");
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.response) {
-          console.log("Custom AI success");
-          if (mode === 'chat' || mode === 'personal') {
-            jsonResponse = { text: data.response };
-          } else {
-            jsonResponse = {
-              score: 85,
-              guidance: data.response,
-              sections: []
-            };
-          }
-          success = true;
-        } else {
-          console.error("Custom AI fallback failed: Invalid JSON or missing response field");
-          console.log("Custom AI failed");
+      if (currentMode === 'chat' || currentMode === 'personal') {
+        parsedData = {
+          prediction: extractField("prediction"),
+          reasoning: extractField("reasoning"),
+          guidance: extractField("guidance")
+        };
+        
+        if (!parsedData.prediction && !parsedData.reasoning && !parsedData.guidance) {
+          parsedData = {
+            prediction: cleanedText,
+            reasoning: "",
+            guidance: ""
+          };
         }
       } else {
-        console.error(`Custom AI fallback failed: HTTP ${response.status}`);
-        console.log("Custom AI failed");
+        const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
+        const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
+        parsedData = {
+          score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
+          guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
+          sections: []
+        };
       }
-    } catch (err) {
-      try { console.timeEnd("CUSTOM_AI_REQUEST"); } catch (timeErr) {}
-      console.error("Custom AI fallback failed:", err.message);
-      console.log("err.name =", err.name);
-      console.log("err.message =", err.message);
-      console.log("err.stack =", err.stack);
-      console.log("Custom AI failed");
-      lastError = err;
     }
-  } else {
-    console.log("Custom AI failed");
+    return parsedData;
   }
 
-  // Fallback to Gemini if Custom AI fails
+  // 1. Try Primary Render API Provider
+  const primaryModels = [
+    "gpt-5-nano",
+    "claude-opus-4.8",
+    "deepseek-v4-pro"
+  ];
+
+  for (const modelName of primaryModels) {
+    console.log("Trying model:", modelName);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 30000); // 30,000 ms timeout per Render API request
+
+      const response = await fetch("https://ai-hu-xxx92.onrender.com/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: modelName,
+          message: compactPrompt
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data || !data.response) {
+        throw new Error("Invalid response or missing response field from Render API");
+      }
+
+      const text = data.response;
+      const parsedData = parseModelResponse(text, mode);
+
+      if (mode === 'chat' || mode === 'personal') {
+        jsonResponse = {
+          text: parsedData.prediction || ""
+        };
+      } else {
+        if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
+          throw new Error("Invalid compatibility response shape");
+        }
+        jsonResponse = parsedData;
+      }
+
+      console.log("Model success:", modelName);
+      success = true;
+      break; // Exit loop on success
+    } catch (err) {
+      console.error("Model failed:", modelName, err);
+      lastError = err;
+    }
+  }
+
+  // 2. Try Secondary Gemini Provider Fallback
   if (!success) {
     console.log("Trying Gemini");
+    const genAI = new GoogleGenerativeAI(API_KEY);
 
-    const models = [
+    const geminiModels = [
       "gemini-2.0-flash",
       "gemini-flash-latest"
     ];
 
-    for (const modelName of models) {
+    for (const modelName of geminiModels) {
+      console.log("Trying model:", modelName);
       try {
-        console.log("Attempting model:", modelName);
-        
         const model = genAI.getGenerativeModel({
           model: modelName,
           systemInstruction
@@ -466,79 +486,28 @@ Respond directly to the query. DO NOT ask for birth details again.`;
           throw new Error("Empty Gemini response");
         }
 
-        let cleanedText = text.trim();
-        // Remove any potential markdown code blocks
-        cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-        
-        let parsedData = null;
-        try {
-          parsedData = JSON.parse(cleanedText);
-        } catch (parseError) {
-          console.warn("JSON.parse failed, attempting regex fallback:", parseError.message);
-          
-          // Regex Fallback Parser - handles both "key": and key:
-          const extractField = (field) => {
-            const regex = new RegExp(`"?${field}"?\\s*:\\s*"(.*?)"`, "is");
-            const match = cleanedText.match(regex);
-            return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : "";
-          };
+        const parsedData = parseModelResponse(text, mode);
 
-          if (mode === 'chat' || mode === 'personal') {
-            parsedData = {
-              prediction: extractField("prediction"),
-              reasoning: extractField("reasoning"),
-              guidance: extractField("guidance")
-            };
-            
-            if (!parsedData.prediction && !parsedData.reasoning && !parsedData.guidance) {
-              parsedData = {
-                prediction: cleanedText,
-                reasoning: "",
-                guidance: ""
-              };
-            }
-          } else {
-            // Compatibility mode fallback
-            const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
-            const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
-            parsedData = {
-              score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
-              guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
-              sections: []
-            };
-          }
-        }
-
-        // Final Normalization and Shape Validation
         if (mode === 'chat' || mode === 'personal') {
-          // Return only the prediction text which now contains the standardized headers
           jsonResponse = {
             text: parsedData.prediction || ""
           };
         } else {
-          // Compatibility mode validation
           if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
              throw new Error("Invalid compatibility response shape");
           }
           jsonResponse = parsedData;
         }
 
-        console.log("Gemini success");
         console.log("Model success:", modelName);
         success = true;
         break; // Exit loop on success
+      } catch (err) {
+        console.error("Model failed:", modelName, err);
+        lastError = err;
 
-      } catch (error) {
-        lastError = error;
-        const statusCode = error?.status || error?.response?.status || "Unknown";
-        console.error("Model failed:", modelName, {
-          message: error.message,
-          status: statusCode,
-          details: error.response?.data || "No extra data"
-        });
-
-        // If it's a 429 (quota) or 503 (unavailable), continue to the next model
-        if (statusCode === 429 || statusCode === 503 || error.message?.includes("quota") || error.message?.includes("429")) {
+        const statusCode = err?.status || err?.response?.status || "Unknown";
+        if (statusCode === 429 || statusCode === 503 || err.message?.includes("quota") || err.message?.includes("429")) {
           console.warn(`Fallback triggered from ${modelName} due to status ${statusCode}.`);
           continue;
         }
