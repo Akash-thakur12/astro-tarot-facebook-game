@@ -373,7 +373,17 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
   // Construct prompt for API providers
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
-    fullPrompt = `${systemInstruction}\n\n${userData.question || "Tell me about my destiny"}`;
+    fullPrompt = ` 
+ ${systemInstruction} 
+ 
+ USER PROFILE: 
+ 
+ ${profileContext} 
+ 
+ USER QUESTION: 
+ 
+ ${userData.question || "Tell me about my destiny"} 
+ `;
   } else {
     // Compatibility mode fallback
     const { p1, p2 } = userData;
