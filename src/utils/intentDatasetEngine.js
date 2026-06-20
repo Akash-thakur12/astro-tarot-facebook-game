@@ -7,6 +7,7 @@ import visa from '../data/intents/visa.json' with { type: 'json' };
 import health from '../data/intents/health.json' with { type: 'json' };
 import mental_stress from '../data/intents/mental_stress.json' with { type: 'json' };
 import child_when from '../data/intents/child_when.json' with { type: 'json' };
+import married_life from '../data/intents/married_life.json' with { type: 'json' };
 
 const datasets = {
   marriage_when,
@@ -17,7 +18,8 @@ const datasets = {
   visa,
   health,
   mental_stress,
-  child_when
+  child_when,
+  married_life
 };
 
 /**
@@ -26,7 +28,7 @@ const datasets = {
  * 
  * @param {string} intent - The detected intent.
  * @param {number} seed - The deterministic seed value.
- * @returns {string|null} The dataset entry, or null if not found.
+ * @returns {object|string|null} The dataset entry (structured JSON object or raw string), or null if not found.
  */
 export function getIntentPrediction(intent, seed) {
   const dataset = datasets[intent];

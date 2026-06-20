@@ -13,6 +13,7 @@ import Privacy from './pages/Privacy';
 import DataDeletion from './pages/DataDeletion';
 import Terms from './pages/Terms';
 import Login from './pages/Login';
+import Profile from './pages/Profile';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
@@ -59,6 +60,14 @@ function App() {
                 <FortuneWheel />
               </ProtectedRoute>
             } />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute allowAnonymous={true}>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Catch-all: Redirect to Home */}
             <Route path="*" element={<Navigate to="/" replace />} />

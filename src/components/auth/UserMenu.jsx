@@ -69,6 +69,13 @@ const UserMenu = () => {
         <div className="absolute top-0 right-0 w-20 h-20 bg-mystic-gold/10 blur-2xl rounded-full pointer-events-none" />
         
         <div className="space-y-3 relative z-10">
+          <button 
+            onClick={() => navigate('/profile')}
+            className="w-full h-11 rounded-xl border border-mystic-gold/20 bg-mystic-gold/5 text-mystic-gold hover:text-white hover:bg-mystic-gold/15 transition-all duration-300 text-[10px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-2"
+          >
+            👤 {isHindi ? 'मेरी प्रोफ़ाइल' : 'My Profile'}
+          </button>
+
           {!isAnonymous && (
             <div className="flex items-center gap-3 px-2 mb-2 pb-3 border-b border-white/5">
               <div className="w-10 h-10 rounded-full border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center shadow-lg">

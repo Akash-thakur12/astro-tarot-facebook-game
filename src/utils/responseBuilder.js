@@ -1,8 +1,17 @@
 import { xmur3, mulberry32 } from './prng.js';
-import { humanize } from './humanizer.js';
+import { humanize, buildStructuredResponse } from './humanizer.js';
 import { getHoroscope } from './horoscopeEngine.js';
 import { getIntentPrediction } from './intentDatasetEngine.js';
 import openings from '../data/openings.json' with { type: 'json' };
+
+// List of intents supported by buildStructuredResponse (deprecated)
+// const structuredIntents = [
+//   'marriage_when',
+//   'government_job',
+//   'business',
+//   'health',
+//   'child_when'
+// ];
 
 /**
  * Builds a deterministic response using JSON arrays and a hash seed.
@@ -17,10 +26,16 @@ export function buildResponse(uid, intent, date) {
   const seed = seedFn();
   const rand = mulberry32(seed);
 
-  // Try to load prediction from specific intent dataset
-  const intentPred = getIntentPrediction(intent, seed);
-  if (intentPred) {
-    return humanize(intentPred, seed);
+  const data = getIntentPrediction(intent, seed);
+
+  if (data && typeof data === "object") {
+    const structuredResponse = buildStructuredResponse(data, seed);
+    return humanize(structuredResponse, seed);
+  }
+
+  // Legacy string prediction fallback from intent datasets (if any)
+  if (data) {
+    return humanize(data, seed);
   }
 
   // Fallback to existing horoscopeEngine

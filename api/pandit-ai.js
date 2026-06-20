@@ -5,6 +5,24 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { buildResponse } from '../src/utils/responseBuilder.js';
 import { detectIntent } from '../src/utils/intentDetector.js';
 import { xmur3, mulberry32 } from '../src/utils/prng.js';
+import { normalizeFacts } from '../src/utils/memoryEngine.js';
+import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
+
+function getFactValue(field) {
+  if (!field) return null;
+  if (field.currentValue !== undefined) return field.currentValue;
+  if (field.value !== undefined) return field.value;
+  return null;
+}
+
+function getFactReliability(field) {
+  if (!field) return 0;
+  if (field.reliability !== undefined) return field.reliability;
+  if (field.confidence !== undefined) {
+    return Math.round((field.confidence / 5) * 100);
+  }
+  return 0;
+}
 
 // Initialize Firebase Admin securely using modern SDK API
 const apps = getApps();
@@ -221,10 +239,123 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to verify account balance' });
   }
 
+  // === CONTRADICTION SAFETY LAYER (PHASE 29B) ===
+  const factsRef = db.collection('users').doc(uid).collection('facts').doc('current');
+  let factsDoc;
+  try {
+    factsDoc = await factsRef.get();
+  } catch (e) {
+    console.error("Error reading facts from Firestore:", e);
+  }
+
+  let facts = {
+    married: { value: null, confidence: 0 },
+    hasChildren: { value: null, confidence: 0 },
+    hasJob: { value: null, confidence: 0 },
+    hasBusiness: { value: null, confidence: 0 },
+    gender: { value: null, confidence: 0 }
+  };
+
+  if (factsDoc && factsDoc.exists) {
+    facts = { ...facts, ...factsDoc.data() };
+  }
+
+  // Scan current question and history for new facts to update
+  const questionText = (userData.question || '').trim();
+  const newFacts = normalizeFacts(questionText);
+
+  const { storedFacts, updated } = updateEvidenceMemory(facts, newFacts, 'user', questionText);
+  facts = storedFacts;
+
+  if (updated) {
+    try {
+      await factsRef.set(facts);
+    } catch (e) {
+      console.error("Error writing updated facts to Firestore:", e);
+    }
+  }
+
+  // === USER PROFILE INJECTION (PHASE 30B) ===
+  const profileRef = db.collection('users').doc(uid).collection('profile').doc('main');
+  let profileDoc;
+  try {
+    profileDoc = await profileRef.get();
+  } catch (e) {
+    console.error("Error reading user profile from Firestore:", e);
+  }
+
+  let profile = null;
+  if (profileDoc && profileDoc.exists) {
+    profile = profileDoc.data();
+  }
+
+  // Age calculation helper
+  function calculateAge(dobString) {
+    if (!dobString) return "Unknown";
+    try {
+      const today = new Date();
+      const birthDate = new Date(dobString);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    } catch (err) {
+      console.error("Age calculation error:", err);
+      return "Unknown";
+    }
+  }
+
+  const jobTypes = [
+    "Private Job",
+    "Government Job",
+    "Doctor",
+    "Engineer",
+    "Teacher",
+    "Lawyer",
+    "Army",
+    "Police",
+    "Student"
+  ];
+  const businessTypes = [
+    "Business Owner",
+    "Trader",
+    "Freelancer",
+    "Content Creator",
+    "Self Employed"
+  ];
+
+  const userMarried = (profile?.maritalStatus === 'Married') || (getFactValue(facts.married) === true);
+  const userHasChildren = (getFactValue(facts.hasChildren) === true);
+  const userHasJob = (profile && jobTypes.includes(profile.occupation)) || (getFactValue(facts.hasJob) === true);
+  const userHasBusiness = (profile && businessTypes.includes(profile.occupation)) || (getFactValue(facts.hasBusiness) === true);
+  const userIsBusinessOwner = (profile && businessTypes.includes(profile.occupation)) || (getFactValue(facts.hasBusiness) === true);
+
+  // Summary memory generation if chat history > 100 messages
+  let summaryText = "";
+  if (Array.isArray(history) && history.length > 100) {
+    const marriedStr = getFactValue(facts.married) === true ? "is married" : (getFactValue(facts.married) === false ? "is single" : "relationship status is unknown");
+    const jobStr = getFactValue(facts.hasBusiness) === true ? "runs a business" : (getFactValue(facts.hasJob) === true ? "has a job" : "career status is unknown");
+    const childrenStr = getFactValue(facts.hasChildren) === true ? "has children" : "does not have children";
+    
+    const recentIntents = [];
+    const recentMsgs = history.slice(-10);
+    recentMsgs.forEach(m => {
+      if (m.role === 'user' && m.content) {
+        const dIntent = detectIntent(m.content);
+        if (dIntent !== 'general' && !recentIntents.includes(dIntent)) {
+          recentIntents.push(dIntent);
+        }
+      }
+    });
+    const topics = recentIntents.map(i => i.replace('_', ' ')).join(', ') || "relationship and life path matters";
+    summaryText = `User ${marriedStr}, ${jobStr}, ${childrenStr} and recently discussed ${topics}.`;
+  }
+
   // Hybrid Routing Logic (Deterministic Local Fallback)
   if (mode === 'chat' || mode === 'personal') {
-    const question = (userData.question || '').trim();
-    detectedIntent = detectIntent(question);
+    detectedIntent = detectIntent(questionText);
 
     const datasetIntents = [
       'marriage_when',
@@ -235,8 +366,20 @@ export default async function handler(req, res) {
       'visa',
       'health',
       'mental_stress',
-      'child_when'
+      'child_when',
+      'married_life'
     ];
+
+    // Apply contradiction logic redirections
+    if (userMarried && detectedIntent === 'marriage_when') {
+      console.log("[Contradiction Safety] User is already married - redirecting intent to married_life");
+      detectedIntent = 'married_life';
+    }
+
+    if (userHasChildren && detectedIntent === 'child_when') {
+      console.log("[Contradiction Safety] User already has children - redirecting intent to general");
+      detectedIntent = 'general';
+    }
 
     if (datasetIntents.includes(detectedIntent)) {
       const seedFn = xmur3(uid + detectedIntent + todayString);
@@ -292,13 +435,19 @@ CRITICAL RULES:
 5. Understand jokes, humor, and emotions.
 6. Avoid fake astrology terms and unnecessary planet/house names.
 7. Plain text only. No headings, sections, markdown, emojis.
-8. Maximum 120 words. No follow-up questions.
+8. Maximum 150 words.
 9. Never say "As an AI", "I'm an AI", or mention being artificial.
 10. Use simple Hindi + Hinglish.
 11. Be confident, positive, and natural.
-Use only this context:
-${dateContext}
-`;
+12. RESPONSE STRUCTURE:
+   - Opening observation about kundali
+   - Logical reasoning
+   - Prediction
+   - Timeline
+   - Remedy
+   - Curiosity follow-up
+13. NEVER start every answer with "Shiv ji ki kripa" - vary your openings.
+14. Add natural, human-like conversation only.`;
 
   let contents = [];
   let ageDisplay = "Unknown";
@@ -334,8 +483,9 @@ CURRENT AGE: ${ageDisplay}
 Respond directly to the query. DO NOT ask for birth details again.`;
 
     contents = [{ role: 'user', parts: [{ text: profileContext }] }];
-    if (Array.isArray(history) && history.length > 0) {
-      history.forEach(msg => {
+    const activeHistory = Array.isArray(history) ? history.slice(-20) : [];
+    if (activeHistory.length > 0) {
+      activeHistory.forEach(msg => {
         if (msg && msg.role && msg.content) {
           contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
         }
@@ -370,66 +520,90 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
   }
 
   // Construct prompt for API providers
+  // Construct prompt for API providers
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
-    // Step 2: Extract latest user facts (reverse order to prioritize latest)
-    let factMemory = "";
-    const knownFacts = new Set();
+    let promptSections = [];
 
-    if (Array.isArray(history) && history.length > 0) {
-      // Iterate from latest to oldest
-      for (let i = history.length - 1; i >= 0; i--) {
-        const msg = history[i];
-        if (msg && msg.role === "user" && msg.content) {
-          const text = msg.content.toLowerCase().trim();
-          
-          // Check for key fact phrases and add to factMemory if not already present
-          const checkAndAddFact = (phrase, factStatement) => {
-            if (text.includes(phrase) && !knownFacts.has(factStatement)) {
-              knownFacts.add(factStatement);
-              factMemory = factStatement + "\n" + factMemory; // Prepend to keep latest first
-            }
-          };
+    // 1. USER PROFILE SECTION (Part 6)
+    let userProfileBlock = "USER PROFILE\n";
+    if (profile) {
+      const age = calculateAge(profile.dob);
+      const location = [profile.district, profile.state, profile.country].filter(Boolean).join(', ') || 'Unknown';
+      userProfileBlock += `Name: ${profile.name || 'Unknown'}
+Gender: ${profile.gender || 'Unknown'}
+Age: ${age}
+Marital Status: ${profile.maritalStatus || 'Unknown'}
+Occupation: ${profile.occupation || 'Unknown'}
+Education: ${profile.education || 'Unknown'}
+Location: ${location}`;
+    } else {
+      userProfileBlock += `Name: ${userData.name || 'Unknown'}
+Gender: ${userData.gender || 'Unknown'}
+Age: ${ageDisplay || 'Unknown'}
+Marital Status: Unknown
+Occupation: Unknown
+Education: Unknown
+Location: Unknown`;
+    }
+    promptSections.push(userProfileBlock);
 
-          checkAndAddFact("meri shadi ho chuki", "User's marriage is already done.");
-          checkAndAddFact("meri wife hai", "User has a wife.");
-          checkAndAddFact("mera beta hai", "User has a son.");
-          checkAndAddFact("meri beti hai", "User has a daughter.");
-          checkAndAddFact("mera business hai", "User has a business.");
-          checkAndAddFact("main job karta", "User has a job.");
-          checkAndAddFact("main engineer hu", "User is an engineer.");
-          checkAndAddFact("main delhi me rehta", "User lives in Delhi.");
-          checkAndAddFact("mera divorce ho gaya", "User is divorced.");
-          checkAndAddFact("meri shaadi ho chuki", "User's marriage is already done.");
-          checkAndAddFact("meri shaadi ho gayi", "User's marriage is already done.");
-          checkAndAddFact("meri shadi ho gayi", "User's marriage is already done.");
-        }
-      }
+    // 2. FACT MEMORY SECTION
+    let factMemoryBlock = "FACT MEMORY\n";
+    if (getFactValue(facts.married) !== null) factMemoryBlock += `User is ${getFactValue(facts.married) ? "married" : "single"}.\n`;
+    if (getFactValue(facts.hasChildren) !== null) factMemoryBlock += `User ${getFactValue(facts.hasChildren) ? "has children" : "does not have children"}.\n`;
+    if (getFactValue(facts.hasJob) !== null) factMemoryBlock += `User ${getFactValue(facts.hasJob) ? "has a job" : "does not have a job"}.\n`;
+    if (getFactValue(facts.hasBusiness) !== null) factMemoryBlock += `User ${getFactValue(facts.hasBusiness) ? "runs a business" : "does not run a business"}.\n`;
+    if (getFactValue(facts.gender) !== null) factMemoryBlock += `User gender is ${getFactValue(facts.gender)}.\n`;
+    promptSections.push(factMemoryBlock.trim());
+
+    // 3. SUMMARY MEMORY SECTION
+    if (summaryText) {
+      promptSections.push(`SUMMARY MEMORY\n${summaryText}`);
     }
 
-    // Convert history to a readable string
-    let conversationHistory = "";
-    if (Array.isArray(history) && history.length > 0) {
-      conversationHistory = "CONVERSATION:\n";
-      history.forEach(msg => {
+    // 4. CONVERSATION SECTION
+    let conversationHistory = "CONVERSATION:\n";
+    const activeHistory = Array.isArray(history) ? history.slice(-20) : [];
+    if (activeHistory.length > 0) {
+      activeHistory.forEach(msg => {
         if (msg && msg.role && msg.content) {
           const roleLabel = msg.role === "user" ? "USER" : "PANDIT";
           conversationHistory += `${roleLabel}: ${msg.content}\n`;
         }
       });
     }
+    promptSections.push(conversationHistory.trim());
 
-    // Step 3: Inject factMemory into fullPrompt
-    fullPrompt = ` 
-${systemInstruction}
+    // Adjust system instruction for personalization & contradiction rules (Part 7 & 8)
+    let activeSystemInstruction = systemInstruction;
+    const occupation = profile?.occupation || '';
+    const isEngineer = (profile?.education || '').toLowerCase().includes('engineer') || (profile?.occupation || '').toLowerCase().includes('engineer');
+    
+    let personalizationRule = "";
+    if (occupation === "Student") {
+      personalizationRule = "\nCRITICAL: Since the user is a student, focus predictions and guidance on education, exams, studies, concentration, and scholarships.";
+    } else if (isEngineer) {
+      personalizationRule = "\nCRITICAL: Since the user is an engineer, focus predictions and guidance on promotions, technical career growth, skill development, and overseas opportunities.";
+    } else if (occupation === "Business Owner") {
+      personalizationRule = "\nCRITICAL: Since the user is a business owner, focus predictions and guidance on business expansion, clients, cashflow, and market opportunities.";
+    } else if (occupation === "Homemaker") {
+      personalizationRule = "\nCRITICAL: Since the user is a homemaker, focus predictions and guidance on family harmony, domestic happiness, children's well-being, and peace.";
+    } else if (occupation === "Retired") {
+      personalizationRule = "\nCRITICAL: Since the user is retired, focus predictions and guidance on health, longevity, spirituality, peace of mind, and simple remedies.";
+    }
+    activeSystemInstruction += personalizationRule;
 
-Known facts:
-${factMemory}
+    if (userIsBusinessOwner) {
+      activeSystemInstruction += "\nCRITICAL BUSINESS OWNER RULE: If the user asks about getting a job, unemployment, or searching for work, DO NOT frame your answer around them being unemployed. Instead, describe this transition as career expansion, cashflow improvements, and business growth opportunities.";
+    }
 
-Profile:
-${profileContext}
+    activeSystemInstruction += `\nUse only this context:\n${dateContext}\n`;
 
-${conversationHistory}
+    fullPrompt = `
+${activeSystemInstruction}
+
+${promptSections.join('\n\n')}
 
 Question:
 ${userData.question || "Tell me about my destiny"}
@@ -571,7 +745,3 @@ ${userData.question || "Tell me about my destiny"}
     error: isQuotaError ? "Quota exceeded" : (lastError?.message || "Internal Server Error"),
   });
 }
-
-
-
-

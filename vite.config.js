@@ -17,4 +17,7 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    include: ['tests/memoryEngine.spec.js', 'tests/evidenceMemoryEngine.spec.js'],
+  },
 })

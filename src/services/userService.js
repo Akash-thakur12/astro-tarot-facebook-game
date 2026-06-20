@@ -1,6 +1,7 @@
 import { 
   doc, 
   getDoc, 
+  setDoc,
   collection,
   query,
   orderBy,
@@ -10,6 +11,7 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { updateEvidenceMemory } from "../utils/evidenceMemoryEngine.js";
 
 const COLLECTION = "users";
 
@@ -109,5 +111,119 @@ export const getPanditHistory = async (uid) => {
   } catch (error) {
     console.error("Error getting pandit history from Firestore:", error);
     return null;
+  }
+};
+
+/**
+ * Retrieves the user profile from users/{uid}/profile/main
+ */
+export const getUserProfile = async (uid) => {
+  if (!uid) return null;
+  try {
+    const profileRef = doc(db, COLLECTION, uid, "profile", "main");
+    const profileSnap = await getDoc(profileRef);
+    if (profileSnap.exists()) {
+      return profileSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting user profile from Firestore:", error);
+    return null;
+  }
+};
+
+/**
+ * Saves or updates user profile in users/{uid}/profile/main using merge:true
+ */
+export const saveUserProfile = async (uid, profileData, existingProfile = null) => {
+  if (!uid || !profileData) return null;
+  try {
+    const profileRef = doc(db, COLLECTION, uid, "profile", "main");
+    const createdAt = existingProfile?.createdAt || new Date().toISOString();
+    const updatedAt = new Date().toISOString();
+
+    const dataToSave = {
+      ...profileData,
+      profileVersion: 1,
+      profileCompleted: true,
+      createdAt,
+      updatedAt
+    };
+
+    await setDoc(profileRef, dataToSave, { merge: true });
+
+    // Sync profile attributes to Evidence Memory Engine
+    try {
+      const factsRef = doc(db, COLLECTION, uid, "facts", "current");
+      const factsSnap = await getDoc(factsRef);
+
+      let facts = {
+        married: { value: null, confidence: 0 },
+        hasChildren: { value: null, confidence: 0 },
+        hasJob: { value: null, confidence: 0 },
+        hasBusiness: { value: null, confidence: 0 },
+        gender: { value: null, confidence: 0 }
+      };
+
+      if (factsSnap.exists()) {
+        facts = { ...facts, ...factsSnap.data() };
+      }
+
+      const newFacts = {};
+
+      // Marital Status mapping
+      if (profileData.maritalStatus === "Married") {
+        newFacts.married = true;
+      } else if (profileData.maritalStatus === "Single") {
+        newFacts.married = false;
+      }
+
+      // Occupation mapping
+      const jobTypes = [
+        "Private Job",
+        "Government Job",
+        "Doctor",
+        "Engineer",
+        "Teacher",
+        "Lawyer",
+        "Army",
+        "Police",
+        "Student"
+      ];
+      const businessTypes = [
+        "Business Owner",
+        "Trader",
+        "Freelancer",
+        "Content Creator",
+        "Self Employed"
+      ];
+
+      if (jobTypes.includes(profileData.occupation)) {
+        newFacts.hasJob = true;
+      } else if (businessTypes.includes(profileData.occupation)) {
+        newFacts.hasBusiness = true;
+      } else if (profileData.occupation === "Unemployed") {
+        newFacts.hasJob = false;
+      }
+
+      if (Object.keys(newFacts).length > 0) {
+        const { storedFacts, updated } = updateEvidenceMemory(
+          facts,
+          newFacts,
+          "profile",
+          "Sync from profile details"
+        );
+        if (updated) {
+          await setDoc(factsRef, storedFacts, { merge: true });
+        }
+      }
+    } catch (syncError) {
+      console.error("Error syncing profile to evidence memory:", syncError);
+    }
+
+    return dataToSave;
+  } catch (error) {
+    console.error("Error saving user profile to Firestore:", error);
+    throw error;
   }
 };
