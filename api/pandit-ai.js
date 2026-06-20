@@ -111,27 +111,27 @@ export default async function handler(req, res) {
 
     if (greetings.includes(questionText)) {
       return res.status(200).json({
-        text: "🙏 Namaste! Main Pandit AI hoon. Aaj kis vishay par margdarshan chahiye?"
+        text: "Namaste! Main Pandit ji hoon. Aaj kis vishay par margdarshan chahiye?"
       });
     }
     if (thanks.includes(questionText)) {
       return res.status(200).json({
-        text: "🙏 Kalyan ho! Aashirwad sada aapke saath hai."
+        text: "Kalyan ho! Aashirwad sada aapke saath hai."
       });
     }
     if (ok.includes(questionText)) {
       return res.status(200).json({
-        text: "🙏 Aashirwad! Grahon ki sthiti par vishwas rakhein. Kuch aur jaanna chahte hain?"
+        text: "Aashirwad! Grahon ki sthiti par vishwas rakhein. Kuch aur jaanna chahte hain?"
       });
     }
     if (morning.includes(questionText)) {
       return res.status(200).json({
-        text: "🌅 Shubh Prabhat! Suryadev aapko urja aur safalta pradaan karein. Kalyan ho!"
+        text: "Shubh Prabhat! Suryadev aapko urja aur safalta pradaan karein. Kalyan ho!"
       });
     }
     if (night.includes(questionText)) {
       return res.status(200).json({
-        text: "🌌 Shubh Ratri! Chandradev aapko shanti pradaan karein. Shubh swapna!"
+        text: "Shubh Ratri! Chandradev aapko shanti pradaan karein. Shubh swapna!"
       });
     }
   }
@@ -283,22 +283,21 @@ Current Season: ${season}`;
 
   console.log("GENERATED DATE CONTEXT:", dateFormatted, weekdayName, season);
 
-  const systemInstruction = `You are a warm Indian astrology pandit. 
-Rules: 
-Reply like a normal astrologer chatting with the user. 
-Answer only what the user asked. 
-Use simple Hindi + Hinglish. 
-Plain text only. 
-No headings. 
-No sections. 
-No markdown. 
-No emojis. 
-Maximum 120 words. 
-No follow-up questions. 
-Never say you are AI. 
-Be confident, positive and natural. 
-Use only this context: 
-${dateContext} 
+  const systemInstruction = `You are a warm, experienced Indian astrology pandit ji (NOT an AI).
+CRITICAL RULES:
+1. If the user gives new information, accept it as absolute truth immediately.
+2. NEVER contradict the KNOWN FACTS section - prioritize latest user facts above everything else.
+3. NEVER repeat old predictions - only talk about current facts.
+4. Talk naturally like a family pandit talking to a relative.
+5. Understand jokes, humor, and emotions.
+6. Avoid fake astrology terms and unnecessary planet/house names.
+7. Plain text only. No headings, sections, markdown, emojis.
+8. Maximum 120 words. No follow-up questions.
+9. Never say "As an AI", "I'm an AI", or mention being artificial.
+10. Use simple Hindi + Hinglish.
+11. Be confident, positive, and natural.
+Use only this context:
+${dateContext}
 `;
 
   let contents = [];
@@ -373,17 +372,68 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
   // Construct prompt for API providers
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
+    // Step 2: Extract latest user facts (reverse order to prioritize latest)
+    let factMemory = "";
+    const knownFacts = new Set();
+
+    if (Array.isArray(history) && history.length > 0) {
+      // Iterate from latest to oldest
+      for (let i = history.length - 1; i >= 0; i--) {
+        const msg = history[i];
+        if (msg && msg.role === "user" && msg.content) {
+          const text = msg.content.toLowerCase().trim();
+          
+          // Check for key fact phrases and add to factMemory if not already present
+          const checkAndAddFact = (phrase, factStatement) => {
+            if (text.includes(phrase) && !knownFacts.has(factStatement)) {
+              knownFacts.add(factStatement);
+              factMemory = factStatement + "\n" + factMemory; // Prepend to keep latest first
+            }
+          };
+
+          checkAndAddFact("meri shadi ho chuki", "User's marriage is already done.");
+          checkAndAddFact("meri wife hai", "User has a wife.");
+          checkAndAddFact("mera beta hai", "User has a son.");
+          checkAndAddFact("meri beti hai", "User has a daughter.");
+          checkAndAddFact("mera business hai", "User has a business.");
+          checkAndAddFact("main job karta", "User has a job.");
+          checkAndAddFact("main engineer hu", "User is an engineer.");
+          checkAndAddFact("main delhi me rehta", "User lives in Delhi.");
+          checkAndAddFact("mera divorce ho gaya", "User is divorced.");
+          checkAndAddFact("meri shaadi ho chuki", "User's marriage is already done.");
+          checkAndAddFact("meri shaadi ho gayi", "User's marriage is already done.");
+          checkAndAddFact("meri shadi ho gayi", "User's marriage is already done.");
+        }
+      }
+    }
+
+    // Convert history to a readable string
+    let conversationHistory = "";
+    if (Array.isArray(history) && history.length > 0) {
+      conversationHistory = "CONVERSATION:\n";
+      history.forEach(msg => {
+        if (msg && msg.role && msg.content) {
+          const roleLabel = msg.role === "user" ? "USER" : "PANDIT";
+          conversationHistory += `${roleLabel}: ${msg.content}\n`;
+        }
+      });
+    }
+
+    // Step 3: Inject factMemory into fullPrompt
     fullPrompt = ` 
- ${systemInstruction} 
- 
- USER PROFILE: 
- 
- ${profileContext} 
- 
- USER QUESTION: 
- 
- ${userData.question || "Tell me about my destiny"} 
- `;
+${systemInstruction}
+
+Known facts:
+${factMemory}
+
+Profile:
+${profileContext}
+
+${conversationHistory}
+
+Question:
+${userData.question || "Tell me about my destiny"}
+`;
   } else {
     // Compatibility mode fallback
     const { p1, p2 } = userData;
