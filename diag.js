@@ -1,4 +1,20 @@
 import OpenAI from 'openai';
+import fs from 'fs';
+
+if (fs.existsSync('.env.production.local')) {
+  const content = fs.readFileSync('.env.production.local', 'utf8');
+  content.split(/\r?\n/).forEach(line => {
+    const parts = line.split('=');
+    if (parts.length > 1) {
+      const key = parts[0].trim();
+      let val = parts.slice(1).join('=').trim();
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1);
+      }
+      process.env[key] = val;
+    }
+  });
+}
 
 const BEDROCK_API_KEY = process.env.BEDROCK_API_KEY;
 const BEDROCK_BASE_URL = process.env.BEDROCK_BASE_URL;
@@ -19,11 +35,11 @@ async function diagnose() {
   });
 
   const models = [
-    "deepseek.v3:1:0",
     "deepseek.v3.2",
-    "qwen.qwen3-32b-v1:0",
-    "google.gemma-3-27b-it",
-    "mistral.voxtral-mini-3b-2507"
+    "google.gemma-3-4b-it",
+    "mistral.voxtral-mini-3b-2507",
+    "mistral.ministral-3-3b-instruct",
+    "qwen.qwen3-32b-v1:0"
   ];
 
   for (const modelName of models) {

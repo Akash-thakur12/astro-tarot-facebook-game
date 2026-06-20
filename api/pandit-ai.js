@@ -2,6 +2,9 @@ import OpenAI from 'openai';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { buildResponse } from '../src/utils/responseBuilder.js';
+import { detectIntent } from '../src/utils/intentDetector.js';
+import { xmur3, mulberry32 } from '../src/utils/prng.js';
 
 // Initialize Firebase Admin securely using modern SDK API
 const apps = getApps();
@@ -73,6 +76,12 @@ export default async function handler(req, res) {
   // CRITICAL FIX #6: Rate Limiting
   const now = new Date();
   const nowMs = now.getTime();
+  const dayStr = String(now.getDate()).padStart(2, '0');
+  const monthNum = now.getMonth(); // 0-indexed
+  const monthStr = String(monthNum + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const todayString = `${year}-${monthStr}-${dayStr}`;
+
   const userRate = rateLimits.get(uid) || { count: 0, resetTime: nowMs + 60000 };
   if (nowMs > userRate.resetTime) {
     userRate.count = 0;
@@ -85,6 +94,7 @@ export default async function handler(req, res) {
   rateLimits.set(uid, userRate);
 
   const { mode, userData, history } = req.body;
+  let detectedIntent = 'general';
 
   if (!userData) {
     return res.status(400).json({ error: 'Missing userData in request body' });
@@ -92,10 +102,36 @@ export default async function handler(req, res) {
 
   if (mode === 'chat' || mode === 'personal') {
     const questionText = (userData.question || '').trim().toLowerCase();
+    
     const greetings = ['hi', 'hlo', 'hello', 'hey', 'namaste', 'namaskar'];
+    const thanks = ['thanks', 'thank you'];
+    const ok = ['ok', 'okay', 'hmm'];
+    const morning = ['good morning'];
+    const night = ['good night'];
+
     if (greetings.includes(questionText)) {
       return res.status(200).json({
         text: "🙏 Namaste! Main Pandit AI hoon. Aaj kis vishay par margdarshan chahiye?"
+      });
+    }
+    if (thanks.includes(questionText)) {
+      return res.status(200).json({
+        text: "🙏 Kalyan ho! Aashirwad sada aapke saath hai."
+      });
+    }
+    if (ok.includes(questionText)) {
+      return res.status(200).json({
+        text: "🙏 Aashirwad! Grahon ki sthiti par vishwas rakhein. Kuch aur jaanna chahte hain?"
+      });
+    }
+    if (morning.includes(questionText)) {
+      return res.status(200).json({
+        text: "🌅 Shubh Prabhat! Suryadev aapko urja aur safalta pradaan karein. Kalyan ho!"
+      });
+    }
+    if (night.includes(questionText)) {
+      return res.status(200).json({
+        text: "🌌 Shubh Ratri! Chandradev aapko shanti pradaan karein. Shubh swapna!"
       });
     }
   }
@@ -185,6 +221,40 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to verify account balance' });
   }
 
+  // Hybrid Routing Logic (Deterministic Local Fallback)
+  if (mode === 'chat' || mode === 'personal') {
+    const question = (userData.question || '').trim();
+    detectedIntent = detectIntent(question);
+
+    const datasetIntents = [
+      'marriage_when',
+      'government_job',
+      'ex_back',
+      'breakup',
+      'business',
+      'visa',
+      'health',
+      'mental_stress',
+      'child_when'
+    ];
+
+    if (datasetIntents.includes(detectedIntent)) {
+      const seedFn = xmur3(uid + detectedIntent + todayString);
+      const seed = seedFn();
+      const rand = mulberry32(seed);
+      const randVal = rand();
+      if (randVal < 0.60) {
+        console.log(`[Hybrid Routing] Immediate local response (60% route) for intent "${detectedIntent}" (seed: ${seed}, rand: ${randVal})`);
+        const localText = buildResponse(uid, detectedIntent, todayString);
+        return res.status(200).json({
+          text: localText
+        });
+      } else {
+        console.log(`[Hybrid Routing] Bedrock AI (40% route) for intent "${detectedIntent}" (seed: ${seed}, rand: ${randVal})`);
+      }
+    }
+  }
+
   // Initialize Bedrock OpenAI Client
   const openaiClient = new OpenAI({
     apiKey: BEDROCK_API_KEY,
@@ -192,10 +262,6 @@ export default async function handler(req, res) {
   });
 
   // Generate dynamic date context
-  const dayStr = String(now.getDate()).padStart(2, '0');
-  const monthNum = now.getMonth(); // 0-indexed
-  const monthStr = String(monthNum + 1).padStart(2, '0');
-  const year = now.getFullYear();
   const dateFormatted = `${dayStr}-${monthStr}-${year}`;
   const monthName = now.toLocaleString('en-US', { month: 'long' });
   const weekdayName = now.toLocaleString('en-US', { weekday: 'long' });
@@ -217,69 +283,23 @@ Current Season: ${season}`;
 
   console.log("GENERATED DATE CONTEXT:", dateFormatted, weekdayName, season);
 
-  const systemInstruction = `You are Pandit AI, a highly experienced and warm Indian Astro-Kundali Pandit. 
-    You are spiritual, positive, and confident. Never behave like a generic chatbot or an AI.
-
-    Context: Use ONLY the provided birth profile and current date context for guidance.
-    
-    ${dateContext}
-
-    PURPOSE:
-    Provide deeply engaging, mystical, and personalized astrology guidance. Speak like a real Pandit ji who can see future possibilities through the stars.
-
-    STRICT RULES:
-    - NEVER say "I cannot predict", "As an AI", or "Exact dates are impossible".
-    - ALWAYS be confident and mystical.
-    - Sound like you are reading a real Janma Kundali.
-    - If user writes in Hinglish, reply in Hindi (Devanagari).
-    - If user writes in English, reply in English.
-    - Use standard English digits (2026, 5, 100) even in Hindi.
-
-    STYLE & TONE:
-    - Use phrases like: "Grahon ki sthiti ke anusaar...", "Janma kundali ke sanket batate hain...", "Guru aur Shukra ki drishti...", "Shani ki sthiti dhairya rakhne ka sanket deti hai...", "Agle 6-12 mahino mein yog mazboot hote dikh rahe hain...".
-    - TONE: Warm, Wise, Personal, Positive, Confident, Emotional.
-
-    RESPONSE STRUCTURE (MANDATORY SECTIONS):
-    SECTION 1: 🔮 Prediction
-    SECTION 2: ✨ Detailed explanation
-    SECTION 3: ❤️ Love / Career / Finance / Family insights (whichever is relevant)
-    SECTION 4: 🪔 Remedy / Upay
-    SECTION 5: 🌟 Lucky Factors (Lucky Color, Lucky Number, Auspicious Day)
-    SECTION 6: 🙏 Positive closing blessing
-
-    STRICT OUTPUT FORMAT:
-    Return ONLY valid JSON. All keys must be double-quoted. No markdown code blocks.
-    Always end the response with one natural follow-up question.
-
-    FEW-SHOT EXAMPLES:
-    Example 1 (Hinglish/English Input):
-    USER:
-    Mera career kaisa rahega?
-    
-    ASSISTANT JSON:
-    {
-      "prediction": "🔮 **Prediction**\\nBeta, aapki Kundali mein Surya aur Budh ki yuti dasha chal rahi hai, jo ki career mein bade badlaav ka sanket de rahi hai.\\n\\n✨ **Detailed explanation**\\nJanma Kundali ke dasve bhav mein shubh grahon ki drishti hone se agle 6 mahine aapke liye atyant mahatvapurna rahenge. Mehnat rang layegi aur padonnati ke strong yog hain.\\n\\n❤️ **Career insights**\\nNaukri mein sthairya aayega. Yadi aap business ka soch rahe hain, toh October ke baad ka samay shubh rahega.\\n\\n🪔 **Remedy / Upay**\\nPratyek Raviwar ko Surya Dev ko jal arpit karein aur 'Om Suryaya Namah' ka jaap karein.\\n\\n🌟 **Lucky Factors**\\nLucky Color: Deep Blue, Lucky Number: 8, Auspicious Day: Saturday.\\n\\n🙏 **Positive closing blessing**\\nSurya Dev aapko yash aur kirti pradaan karein. Kalyan ho!\\n\\nAapka agla prashn kya hai?",
-      "reasoning": "Sun and Mercury conjunction in the 10th house indicating career progression.",
-      "guidance": "Focus on discipline and respect authorities to maximize planetary gains."
-    }
-
-    Example 2 (Hindi Input):
-    USER:
-    मेरी शादी कब होगी?
-    
-    ASSISTANT JSON:
-    {
-      "prediction": "🔮 **Prediction**\\nपुत्री, आपके सप्तम भाव में बृहस्पति देव की शुभ दृष्टि पड़ रही है, जिसके प्रभाव से शीघ्र ही विवाह के शुभ योग बन रहे हैं।\\n\\n✨ **Detailed explanation**\\nकुंडली के अनुसार, अगले 12 महीनों में गुरु और शुक्र का गोचर अनुकूल रहेगा। विवाह की बातचीत जल्द ही पक्की होने की संभावना है।\\n\\n❤️ **Love insights**\\nजीवनसाथी अत्यंत समझदार, शांत स्वभाव और आपका सम्मान करने वाला होगा।\\n\\n🪔 **Remedy / Upay**\\nप्रत्येक गुरुवार को विष्णु सहस्रनाम का पाठ करें और गाय को चने की दाल खिलाएं।\\n\\n🌟 **Lucky Factors**\\nLucky Color: Yellow, Lucky Number: 3, Auspicious Day: Thursday.\\n\\n🙏 **Positive closing blessing**\\nभगवान विष्णु और मां लक्ष्मी आपके जीवन को प्रेम और खुशियों से भर दें। कल्याण हो!\\n\\nक्या आप जीवनसाथी के स्वभाव के बारे में कुछ जानना चाहते हैं?",
-      "reasoning": "Jupiter transit aspects the 7th house, forming strong marriage yog.",
-      "guidance": "Seek blessings of elders and keep fasts on Thursdays for swift results."
-    }
-    
-    REQUIRED JSON SCHEMA:
-    {
-      "prediction": "The complete structured reading containing all 6 sections (using emojis and bold headers) and the follow-up question. Use double newlines between sections.",
-      "reasoning": "A very brief symbolic note (1 sentence).",
-      "guidance": "Key spiritual takeaway (1 sentence)."
-    }`;
+  const systemInstruction = `You are a warm Indian astrology pandit. 
+Rules: 
+Reply like a normal astrologer chatting with the user. 
+Answer only what the user asked. 
+Use simple Hindi + Hinglish. 
+Plain text only. 
+No headings. 
+No sections. 
+No markdown. 
+No emojis. 
+Maximum 120 words. 
+No follow-up questions. 
+Never say you are AI. 
+Be confident, positive and natural. 
+Use only this context: 
+${dateContext} 
+`;
 
   let contents = [];
   let ageDisplay = "Unknown";
@@ -353,20 +373,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
   // Construct prompt for API providers
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
-    const recentHistory = Array.isArray(history)
-      ? history.slice(-10)
-      : [];
-
-    const historyText = recentHistory.length > 0
-      ? recentHistory
-          .map(
-            msg =>
-              `${msg.role === 'user' ? 'User' : 'Pandit AI'}: ${(msg.content || '').substring(0, 300)}`
-          )
-          .join('\n')
-      : "No previous history";
-
-    fullPrompt = `---\n\n${systemInstruction}\n\n${profileContext}\n\nPREVIOUS CONVERSATION:\n\n${historyText}\n\nUSER QUESTION:\n\n${userData.question || "Tell me about my destiny"}\n\n---`;
+    fullPrompt = `${systemInstruction}\n\n${userData.question || "Tell me about my destiny"}`;
   } else {
     // Compatibility mode fallback
     const { p1, p2 } = userData;
@@ -377,7 +384,7 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
   let success = false;
   let lastError = null;
 
-  // Helper parser function
+  // Helper parser function (for compatibility mode only)
   function parseModelResponse(text, currentMode) {
     let cleanedText = text.trim();
     cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
@@ -386,48 +393,24 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     try {
       parsedData = JSON.parse(cleanedText);
     } catch (parseError) {
-      console.warn("JSON.parse failed, attempting regex fallback:", parseError.message);
-      
-      const extractField = (field) => {
-        const regex = new RegExp(`"?${field}"?\\s*:\\s*"(.*?)"`, "is");
-        const match = cleanedText.match(regex);
-        return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : "";
+      const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
+      const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
+      parsedData = {
+        score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
+        guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
+        sections: []
       };
-
-      if (currentMode === 'chat' || currentMode === 'personal') {
-        parsedData = {
-          prediction: extractField("prediction"),
-          reasoning: extractField("reasoning"),
-          guidance: extractField("guidance")
-        };
-        
-        if (!parsedData.prediction && !parsedData.reasoning && !parsedData.guidance) {
-          parsedData = {
-            prediction: cleanedText,
-            reasoning: "",
-            guidance: ""
-          };
-        }
-      } else {
-        const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
-        const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
-        parsedData = {
-          score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
-          guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
-          sections: []
-        };
-      }
     }
     return parsedData;
   }
 
   // Try Bedrock Fallback Chain
   const bedrockModels = [
-    "deepseek.v3:1:0",
     "deepseek.v3.2",
-    "qwen.qwen3-32b-v1:0",
-    "google.gemma-3-27b-it",
-    "mistral.voxtral-mini-3b-2507"
+    "google.gemma-3-4b-it",
+    "mistral.voxtral-mini-3b-2507",
+    "mistral.ministral-3-3b-instruct",
+    "qwen.qwen3-32b-v1:0"
   ];
 
   for (const modelName of bedrockModels) {
@@ -448,16 +431,12 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
         throw new Error("Empty output");
       }
 
-      const parsedData = parseModelResponse(aiText, mode);
-
       if (mode === 'chat' || mode === 'personal') {
-        if (!parsedData || !parsedData.prediction) {
-          throw new Error("Invalid response");
-        }
         jsonResponse = {
-          text: parsedData.prediction || ""
+          text: aiText.trim()
         };
       } else {
+        const parsedData = parseModelResponse(aiText, mode);
         if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
           throw new Error("Invalid response");
         }
@@ -480,6 +459,19 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
 
   // If we reach here, all models failed
   console.log("All providers failed");
+
+  if (mode === 'chat' || mode === 'personal') {
+    console.log("Using offline horoscope fallback");
+    try {
+      const fallbackText = buildResponse(uid, detectedIntent, todayString);
+      return res.status(200).json({
+        text: fallbackText
+      });
+    } catch (fallbackError) {
+      console.error("Offline fallback failed:", fallbackError);
+    }
+  }
+
   console.error("ALL MODELS FAILED. Final error state recorded.");
   const finalStatusCode = lastError?.status || lastError?.response?.status || 500;
   const isQuotaError = finalStatusCode === 429 || lastError?.message?.includes("quota") || lastError?.message?.includes("429");
