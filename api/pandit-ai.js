@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -90,9 +90,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing userData in request body' });
   }
 
-  const API_KEY = process.env.GEMINI_API_KEY;
-  if (!API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured.' });
+  if (mode === 'chat' || mode === 'personal') {
+    const questionText = (userData.question || '').trim().toLowerCase();
+    const greetings = ['hi', 'hlo', 'hello', 'hey', 'namaste', 'namaskar'];
+    if (greetings.includes(questionText)) {
+      return res.status(200).json({
+        text: "🙏 Namaste! Main Pandit AI hoon. Aaj kis vishay par margdarshan chahiye?"
+      });
+    }
+  }
+
+  const BEDROCK_API_KEY = process.env.BEDROCK_API_KEY;
+  const BEDROCK_BASE_URL = process.env.BEDROCK_BASE_URL;
+  if (!BEDROCK_API_KEY || !BEDROCK_BASE_URL) {
+    return res.status(500).json({ error: 'BEDROCK_API_KEY or BEDROCK_BASE_URL not configured.' });
   }
 
   // CRITICAL FIX #4: Move Coin Logic To Backend
@@ -174,8 +185,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to verify account balance' });
   }
 
-  // Initialize Gemini
-  const genAI = new GoogleGenerativeAI(API_KEY);
+  // Initialize Bedrock OpenAI Client
+  const openaiClient = new OpenAI({
+    apiKey: BEDROCK_API_KEY,
+    baseURL: BEDROCK_BASE_URL,
+  });
 
   // Generate dynamic date context
   const dayStr = String(now.getDate()).padStart(2, '0');
@@ -407,195 +421,56 @@ Generate a relationship compatibility analysis returning STRICTLY a JSON object 
     return parsedData;
   }
 
-  // 1. Try Primary Render API Provider
-  const primaryModels = [
-    "claude-opus-4.8",
-    "deepseek-v4-pro",
-    "gpt-5-nano"
+  // Try Bedrock Fallback Chain
+  const bedrockModels = [
+    "deepseek.v3:1:0",
+    "deepseek.v3.2",
+    "qwen.qwen3-32b-v1:0",
+    "google.gemma-3-27b-it",
+    "mistral.voxtral-mini-3b-2507"
   ];
 
-  for (const modelName of primaryModels) {
-    let attempts = 0;
-    const maxModelAttempts = 2;
-    let modelSuccess = false;
+  for (const modelName of bedrockModels) {
+    console.log("Trying model:", modelName);
+    try {
+      const response = await openaiClient.chat.completions.create({
+        model: modelName,
+        messages: [
+          { role: 'user', content: fullPrompt }
+        ],
+        temperature: 0.7
+      }, {
+        timeout: 30000 // 30 seconds timeout
+      });
 
-    while (attempts < maxModelAttempts && !modelSuccess) {
-      attempts++;
-      console.log("Trying model:", modelName);
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-        }, 30000); // 30,000 ms timeout per Render API request
-
-        const response = await fetch("https://ai-hu-xxx92.onrender.com/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: modelName,
-            message: fullPrompt
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        // 6. If HTTP 502 occurs: console.error raw body.
-        if (response.status === 502) {
-          const errorBody = await response.text();
-          console.error("HTTP 502 error body =", errorBody);
-          throw new Error(`HTTP 502 error: ${errorBody}`);
-        }
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        console.log("HTTP status =", response.status);
-
-        const rawText = await response.text();
-
-        console.log("RAW RESPONSE =", rawText);
-
-        let data;
-
-        try {
-          data = JSON.parse(rawText);
-        } catch (e) {
-          console.error("JSON parse failed:", e);
-          throw e;
-        }
-
-        console.log("PARSED RESPONSE =", data);
-
-        const aiText =
-          data.response ||
-          data.text ||
-          data.message ||
-          data.content;
-
-        if (!aiText) {
-          throw new Error("No AI text found");
-        }
-
-        const text = aiText;
-        const parsedData = parseModelResponse(text, mode);
-
-        if (mode === 'chat' || mode === 'personal') {
-          jsonResponse = {
-            text: parsedData.prediction || ""
-          };
-        } else {
-          if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
-            throw new Error("Invalid compatibility response shape");
-          }
-          jsonResponse = parsedData;
-        }
-
-        console.log("Model success:", modelName);
-        success = true;
-        modelSuccess = true;
-        break; // Exit loop on success
-      } catch (err) {
-        console.error("Model failed:", modelName, err);
-        lastError = err;
-
-        // Wait 2 seconds before retry if we have attempts left
-        if (attempts < maxModelAttempts) {
-          console.log(`Waiting 2 seconds before retrying model ${modelName}...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+      const aiText = response.choices?.[0]?.message?.content;
+      if (!aiText || !aiText.trim()) {
+        throw new Error("Empty output");
       }
-    }
 
-    if (success) {
+      const parsedData = parseModelResponse(aiText, mode);
+
+      if (mode === 'chat' || mode === 'personal') {
+        if (!parsedData || !parsedData.prediction) {
+          throw new Error("Invalid response");
+        }
+        jsonResponse = {
+          text: parsedData.prediction || ""
+        };
+      } else {
+        if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
+          throw new Error("Invalid response");
+        }
+        jsonResponse = parsedData;
+      }
+
+      console.log("Model success:", modelName);
+      success = true;
       break;
-    }
-  }
-
-  // 2. Try Secondary Gemini Provider Fallback
-  if (!success) {
-    console.log("Trying Gemini");
-    const genAI = new GoogleGenerativeAI(API_KEY);
-
-    const geminiModels = [
-      "gemini-2.0-flash",
-      "gemini-flash-latest"
-    ];
-
-    for (const modelName of geminiModels) {
-      let attempts = 0;
-      const maxModelAttempts = 2;
-      let modelSuccess = false;
-
-      while (attempts < maxModelAttempts && !modelSuccess) {
-        attempts++;
-        console.log("Trying model:", modelName);
-        try {
-          const model = genAI.getGenerativeModel({
-            model: modelName,
-            systemInstruction
-          });
-
-          const result = await model.generateContent({
-            contents,
-            generationConfig: {
-              temperature: 0.7,
-              responseMimeType: "application/json"
-            }
-          });
-
-          if (!result || !result.response) {
-            throw new Error("No response from Gemini");
-          }
-
-          const text = result.response.text();
-          console.log("RAW GEMINI RESPONSE:", text);
-
-          if (!text || !text.trim()) {
-            throw new Error("Empty Gemini response");
-          }
-
-          const parsedData = parseModelResponse(text, mode);
-
-          if (mode === 'chat' || mode === 'personal') {
-            jsonResponse = {
-              text: parsedData.prediction || ""
-            };
-          } else {
-            if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
-               throw new Error("Invalid compatibility response shape");
-            }
-            jsonResponse = parsedData;
-          }
-
-          console.log("Model success:", modelName);
-          success = true;
-          modelSuccess = true;
-          break; // Exit loop on success
-        } catch (err) {
-          console.error("Model failed:", modelName, err);
-          lastError = err;
-
-          const statusCode = err?.status || err?.response?.status || "Unknown";
-          if (statusCode === 429 || statusCode === 503 || err.message?.includes("quota") || err.message?.includes("429")) {
-            console.warn(`Fallback triggered from ${modelName} due to status ${statusCode}.`);
-          } else if (statusCode === 404) {
-            console.warn(`Model ${modelName} not found. Trying next...`);
-          }
-
-          // Wait 2 seconds before retry if we have attempts left
-          if (attempts < maxModelAttempts) {
-            console.log(`Waiting 2 seconds before retrying model ${modelName}...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-      }
-
-      if (success) {
-        break;
-      }
+    } catch (err) {
+      console.error("Model failed:", modelName);
+      console.error(err);
+      lastError = err;
     }
   }
 
