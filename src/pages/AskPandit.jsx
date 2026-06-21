@@ -218,15 +218,15 @@ const AskPandit = () => {
   }, [user?.uid, refreshUser, getToken]);
 
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
   };
 
   useEffect(() => {
     scrollToBottom();
-    // Auto-focus after response or message update
-    if (!loading && hasEnteredDetails) {
-       inputRef.current?.focus();
-    }
+    // Auto-focus removed to prevent viewport shift race conditions on mobile
   }, [messages, loading, hasEnteredDetails]);
 
   const handleNewChat = () => {
