@@ -558,7 +558,7 @@ const AskPandit = () => {
   const renderChatInterface = () => (
     <div className="flex-1 flex flex-col max-w-md mx-auto w-full relative overflow-hidden">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-6 custom-scrollbar">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center min-h-[40vh] text-center space-y-4 opacity-40 py-6">
             <span className="text-5xl animate-bounce">🔮</span>
@@ -642,7 +642,7 @@ const AskPandit = () => {
   );
 
   return (
-    <div className="flex flex-col w-full h-screen bg-[#020617] overflow-hidden selection:bg-mystic-gold selection:text-mystic-indigo">
+    <div className="flex flex-col w-full h-[100dvh] bg-[#020617] overflow-hidden selection:bg-mystic-gold selection:text-mystic-indigo">
       <PickerModal pickerConfig={pickerConfig} setPickerConfig={setPickerConfig} isHindi={isHindi} />
       
       {/* Header */}
