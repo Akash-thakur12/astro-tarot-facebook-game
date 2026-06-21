@@ -223,6 +223,7 @@ export default async function handler(req, res) {
 
   const { mode, userData, history } = req.body;
   let detectedIntent = 'general';
+  let marriedGuardInstruction = "";
 
   if (!userData) {
     return res.status(400).json({ error: 'Missing userData in request body' });
@@ -486,13 +487,18 @@ export default async function handler(req, res) {
 
   // Intent detection and contradiction routing
   if (mode === 'chat' || mode === 'personal') {
-    detectedIntent = detectIntent(questionText);
+    const originalIntent = detectIntent(questionText);
     detectedIntent = resolveIntentContradiction(
-      detectedIntent,
+      originalIntent,
       profile,
       facts,
       questionText
     );
+
+    const isMarried = (profile && profile.maritalStatus === 'Married') || (getFactValue(facts.married) === true);
+    if (isMarried && originalIntent === 'marriage_when') {
+      marriedGuardInstruction = `\nCRITICAL:\nThe user is already married.\nNever predict a first marriage.\nDo not say 'you will get married soon'.\nInterpret the question as married life, relationship quality, spouse matters or remarriage context.\nIf necessary politely explain that the profile already indicates marriage.`;
+    }
   }
   // Client is initialized lazily inside generateAIResponse in services/aiService.js
   // Generate dynamic date context
@@ -651,6 +657,8 @@ Place of Birth: Unknown`;
     if (userIsBusinessOwner) {
       activeSystemInstruction += "\nCRITICAL BUSINESS OWNER RULE: If the user asks about getting a job, unemployment, or searching for work, DO NOT frame your answer around them being unemployed. Instead, describe this transition as career expansion, cashflow improvements, and business growth opportunities.";
     }
+
+    activeSystemInstruction += marriedGuardInstruction;
 
     activeSystemInstruction += followUpInstruction;
 
