@@ -47,24 +47,12 @@
   color: white;
 }
 
-html {
-  height: 100%;
-  overflow: hidden;
-}
-
 body {
   margin: 0;
   min-height: 100dvh;
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
   font-family: 'Inter', sans-serif;
   background-color: #020617;
-}
-
-#root {
-  height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .kundali-grid {
