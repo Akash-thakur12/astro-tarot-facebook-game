@@ -341,6 +341,7 @@ export default async function handler(req, res) {
 
   // Scan current question and history for new facts to update
   const questionText = sanitizePromptInput((userData.question || '').trim());
+  let userQueryForLLM = questionText;
   const newFacts = normalizeFacts(questionText);
 
   const { storedFacts, updated } = updateEvidenceMemory(facts, newFacts, 'user', questionText);
@@ -495,9 +496,24 @@ export default async function handler(req, res) {
       questionText
     );
 
-    const isMarried = (profile && profile.maritalStatus === 'Married') || (getFactValue(facts.married) === true);
+    const isMarried = (profile?.maritalStatus === "Married") || (getFactValue(facts.married) === true);
     if (isMarried && originalIntent === 'marriage_when') {
-      marriedGuardInstruction = `\nCRITICAL:\nThe user is already married.\nNever predict a first marriage.\nDo not say 'you will get married soon'.\nInterpret the question as married life, relationship quality, spouse matters or remarriage context.\nIf necessary politely explain that the profile already indicates marriage.`;
+      marriedGuardInstruction = `
+CRITICAL:
+The user is already married.
+Never predict a first marriage.
+Never say:
+- tumhari shadi hogi
+- jaldi vivah hoga
+- acchi patni milegi
+
+Always interpret this as:
+- married life
+- spouse relationship
+- family harmony
+- remarriage only if explicitly asked.
+`;
+      userQueryForLLM = "Main pehle se vivahit hoon. Mujhe apne vivaahik jeevan, patni ke saath sambandh aur parivarik samanjasya ke baare mein margdarshan chahiye.";
     }
   }
   // Client is initialized lazily inside generateAIResponse in services/aiService.js
@@ -671,7 +687,7 @@ ${promptSections.join('\n\n')}
 
 <user_query>
 [PRIORITY 1 ⭐⭐⭐⭐⭐] LATEST USER QUESTION:
-${sanitizePromptInput(userData.question || "Tell me about my destiny")}
+${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 </user_query>
 `;
   } else {
