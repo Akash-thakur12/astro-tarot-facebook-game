@@ -57,8 +57,6 @@ export default async function handler(req, res) {
       fbPlayerId: playerId
     });
 
-    console.log(`Bridge: Verified & Generated custom token for FB Player ${playerId}`);
-
     return res.status(200).json({
       success: true,
       customToken

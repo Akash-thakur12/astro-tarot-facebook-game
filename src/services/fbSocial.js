@@ -2,7 +2,6 @@ import { isFBInstant } from './fbinstant';
 
 export const shareTarotResult = async (cardName) => {
   if (!isFBInstant()) {
-    console.log("Web Fallback: Using Web Share API or Clipboard");
     const text = '🔮 I just discovered my destiny in AstroTarot!\nCan you reveal your future too?';
     if (navigator.share) {
       try {
@@ -44,7 +43,6 @@ export const shareTarotResult = async (cardName) => {
 
 export const chooseFriendsContext = async () => {
   if (!isFBInstant()) {
-    console.log("Web Fallback: Cannot open FB friends context outside FB.");
     throw new Error('Play with Friends is only available on Facebook');
   }
 
@@ -60,7 +58,6 @@ export const chooseFriendsContext = async () => {
 
 export const sendChallengeUpdate = async (message) => {
   if (!isFBInstant()) {
-    console.log("Web Fallback: Cannot send FB update outside FB.");
     return false;
   }
 

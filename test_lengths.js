@@ -23,7 +23,7 @@ Current Season: Summer
     - Use standard English digits (2026, 5, 100) even in Hindi.
 
     STYLE & TONE:
-    - Use phrases like: "Grahon ki sthiti ke anusaar...", "Janma kundali ke sanket batate hain...", "Guru aur Shukra ki drishti...", "Shani ki sthiti dhairya rakhne ka sanket deti hai...", "Agle 6-12 mahino mein yog mazboot hote dikh rahe hain...".
+    - Use phrases like: "ग्रहों की स्थिति के अनुसार...", "जन्म कुंडली के संकेत बताते हैं...", "गुरु और शुक्र की दृष्टि...", "शनि की स्थिति धैर्य रखने का संकेत देती है...", "अगले 6-12 महीनों में योग मजबूत होते दिख रहे हैं...".
     - TONE: Warm, Wise, Personal, Positive, Confident, Emotional.
 
     RESPONSE STRUCTURE (MANDATORY SECTIONS):
@@ -56,7 +56,7 @@ CURRENT AGE: 36
 Respond directly to the query. DO NOT ask for birth details again.`;
 
 const historyText = `User: Namaste Pandit ji.
-Pandit AI: Namaste Rahul beta. Grahon ki chaal batati hai ki aapka bhavishya ujjwal hai.
+Pandit AI: नमस्ते राहुल बेटा। ग्रहों की चाल बताती है कि आपका भविष्य उज्ज्वल है।
 User: Meri naukri kab lagegi?`;
 
 const question = 'Shaadi kab hogi?';

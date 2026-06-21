@@ -17,13 +17,10 @@ export const isFBInstant = () => {
 
 export const initializeFBInstant = async () => {
   if (!isFBInstant()) {
-    console.log('FBInstant SDK not detected. Running in standard web mode.');
     return false;
   }
 
   try {
-    console.log('Initializing FBInstant...');
-    
     // Safety timeout: Never let SDK initialization hang the entire app more than 5 seconds
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('FBInstant Timeout')), 5000)
@@ -36,11 +33,7 @@ export const initializeFBInstant = async () => {
     
     // Set initial loading progress
     window.FBInstant.setLoadingProgress(100);
-    
-    console.log('Starting FBInstant game...');
     await window.FBInstant.startGameAsync();
-    
-    console.log('FBInstant Ready.');
     return true;
   } catch (error) {
     console.warn('FBInstant Initialization failed or timed out:', error);

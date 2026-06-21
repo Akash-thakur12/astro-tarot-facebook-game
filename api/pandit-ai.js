@@ -129,27 +129,27 @@ export default async function handler(req, res) {
 
     if (greetings.includes(questionText)) {
       return res.status(200).json({
-        text: "Namaste! Main Pandit ji hoon. Aaj kis vishay par margdarshan chahiye?"
+        text: "नमस्ते! मैं पंडित जी हूँ। आज किस विषय पर मार्गदर्शन चाहिए?"
       });
     }
     if (thanks.includes(questionText)) {
       return res.status(200).json({
-        text: "Kalyan ho! Aashirwad sada aapke saath hai."
+        text: "कल्याण हो! आशीर्वाद सदा आपके साथ है।"
       });
     }
     if (ok.includes(questionText)) {
       return res.status(200).json({
-        text: "Aashirwad! Grahon ki sthiti par vishwas rakhein. Kuch aur jaanna chahte hain?"
+        text: "आशीर्वाद! ग्रहों की स्थिति पर विश्वास रखें। कुछ और जानना चाहते हैं?"
       });
     }
     if (morning.includes(questionText)) {
       return res.status(200).json({
-        text: "Shubh Prabhat! Suryadev aapko urja aur safalta pradaan karein. Kalyan ho!"
+        text: "शुभ प्रभात! सूर्यदेव आपको ऊर्जा और सफलता प्रदान करें। कल्याण हो!"
       });
     }
     if (night.includes(questionText)) {
       return res.status(200).json({
-        text: "Shubh Ratri! Chandradev aapko shanti pradaan karein. Shubh swapna!"
+        text: "शुभ रात्रि! चंद्रदेव आपको शांति प्रदान करें। शुभ स्वप्न!"
       });
     }
   }
@@ -275,6 +275,16 @@ export default async function handler(req, res) {
     }
   }
 
+  // Reload facts from Firestore to guarantee absolute up-to-date state
+  try {
+    const reloadedFactsDoc = await factsRef.get();
+    if (reloadedFactsDoc && reloadedFactsDoc.exists) {
+      facts = reloadedFactsDoc.data();
+    }
+  } catch (e) {
+    console.error("Error reloading facts from Firestore:", e);
+  }
+
   // === USER PROFILE INJECTION (PHASE 30B) ===
   const profileRef = db.collection('users').doc(uid).collection('profile').doc('main');
   let profileDoc;
@@ -371,13 +381,23 @@ export default async function handler(req, res) {
     ];
 
     // Apply contradiction logic redirections
-    if (userMarried && detectedIntent === 'marriage_when') {
-      console.log("[Contradiction Safety] User is already married - redirecting intent to married_life");
-      detectedIntent = 'married_life';
+    const isMarriedFact =
+      (profile?.maritalStatus === "Married") ||
+      (facts?.married?.currentValue === true) ||
+      (getFactValue(facts?.married) === true);
+
+    if (
+      isMarriedFact &&
+      detectedIntent === "marriage_when"
+    ) {
+      detectedIntent = "married_life";
     }
 
-    if (userHasChildren && detectedIntent === 'child_when') {
-      console.log("[Contradiction Safety] User already has children - redirecting intent to general");
+    const hasChildrenFact = (facts?.hasChildren?.currentValue === true) || 
+                            (facts?.hasChildren?.value === true) || 
+                            (getFactValue(facts?.hasChildren) === true);
+
+    if (hasChildrenFact && detectedIntent === 'child_when') {
       detectedIntent = 'general';
     }
 
@@ -387,13 +407,10 @@ export default async function handler(req, res) {
       const rand = mulberry32(seed);
       const randVal = rand();
       if (randVal < 0.60) {
-        console.log(`[Hybrid Routing] Immediate local response (60% route) for intent "${detectedIntent}" (seed: ${seed}, rand: ${randVal})`);
         const localText = buildResponse(uid, detectedIntent, todayString);
         return res.status(200).json({
           text: localText
         });
-      } else {
-        console.log(`[Hybrid Routing] Bedrock AI (40% route) for intent "${detectedIntent}" (seed: ${seed}, rand: ${randVal})`);
       }
     }
   }
@@ -423,8 +440,6 @@ Current Month: ${monthName}
 Current Day: ${weekdayName}
 Current Quarter: ${quarter}
 Current Season: ${season}`;
-
-  console.log("GENERATED DATE CONTEXT:", dateFormatted, weekdayName, season);
 
   const systemInstruction = `You are a warm, experienced Indian astrology pandit ji (NOT an AI).
 CRITICAL RULES:
@@ -648,7 +663,6 @@ ${userData.question || "Tell me about my destiny"}
   ];
 
   for (const modelName of bedrockModels) {
-    console.log("Trying model:", modelName);
     try {
       const response = await openaiClient.chat.completions.create({
         model: modelName,
@@ -677,7 +691,6 @@ ${userData.question || "Tell me about my destiny"}
         jsonResponse = parsedData;
       }
 
-      console.log("Model success:", modelName);
       success = true;
       break;
     } catch (err) {
@@ -692,10 +705,8 @@ ${userData.question || "Tell me about my destiny"}
   }
 
   // If we reach here, all models failed
-  console.log("All providers failed");
 
   if (mode === 'chat' || mode === 'personal') {
-    console.log("Using offline horoscope fallback");
     try {
       const fallbackText = buildResponse(uid, detectedIntent, todayString);
       return res.status(200).json({
@@ -728,7 +739,6 @@ ${userData.question || "Tell me about my destiny"}
           t.update(userRef, { dailyCompUsed: false });
         }
       });
-      console.log(`Refunded user ${uid} due to AI failure (Quota issue: ${isQuotaError})`);
     }
   } catch (refundError) {
     console.error("CRITICAL: Failed to refund user", uid, refundError);

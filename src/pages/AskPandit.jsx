@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { auth } from '../services/firebase';
-import { savePanditMessage, getPanditHistory } from '../services/userService';
+import { savePanditMessage, getPanditHistory, saveUserProfile, getUserProfile } from '../services/userService';
 import { preloadInterstitial, showInterstitial } from '../services/fbInterstitial';
 import { INTERSTITIAL_PANDIT_ID } from '../config/adConfig';
 import Button from '../components/ui/Button';
@@ -101,7 +101,7 @@ const AskPandit = () => {
 
   // Forms
   const [personalForm, setPersonalForm] = useState({ 
-    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
+    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '', maritalStatus: '', occupation: '' 
   });
 
   useEffect(() => {
@@ -130,6 +130,40 @@ const AskPandit = () => {
         const firestoreHistory = await getPanditHistory(user.uid);
         if (firestoreHistory !== null) {
           setMessages(firestoreHistory);
+        }
+
+        const profile = await getUserProfile(user.uid);
+        if (profile) {
+          setPersonalForm(prev => {
+            const updatedForm = { ...prev };
+            if (profile.name) updatedForm.name = profile.name;
+            if (profile.gender) updatedForm.gender = profile.gender;
+            if (profile.maritalStatus) updatedForm.maritalStatus = profile.maritalStatus;
+            if (profile.occupation) updatedForm.occupation = profile.occupation;
+            if (profile.placeOfBirth) {
+              updatedForm.pob = profile.placeOfBirth;
+            } else if (profile.pob) {
+              updatedForm.pob = profile.pob;
+            }
+
+            if (profile.dob) {
+              const parts = profile.dob.split(/[-/]/);
+              if (parts.length === 3) {
+                updatedForm.dobYear = parts[0];
+                updatedForm.dobMonth = parts[1];
+                updatedForm.dobDay = parts[2];
+              }
+            }
+            if (profile.timeOfBirth) {
+              const match = profile.timeOfBirth.match(/(\d+):(\d+)\s*(AM|PM)/i);
+              if (match) {
+                updatedForm.tobHour = match[1];
+                updatedForm.tobMinute = match[2];
+                updatedForm.tobPeriod = match[3].toUpperCase();
+              }
+            }
+            return updatedForm;
+          });
         }
       } catch (e) {
         console.warn("Firestore error, staying on local data.", e);
@@ -204,7 +238,7 @@ const AskPandit = () => {
     setMessages([]);
     setHasEnteredDetails(false);
     setPersonalForm({ 
-      name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '' 
+      name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '', maritalStatus: '', occupation: '' 
     });
   };
 
@@ -317,11 +351,35 @@ const AskPandit = () => {
     personalForm.tobMinute && 
     personalForm.tobPeriod && 
     personalForm.pob && 
+    personalForm.maritalStatus && 
+    personalForm.occupation && 
     dobError === null;
 
-  const handleStartChat = () => {
+  const handleStartChat = async () => {
     if (isFormValid) {
-      setHasEnteredDetails(true);
+      setLoading(true);
+      try {
+        const dob = `${personalForm.dobYear}-${personalForm.dobMonth}-${personalForm.dobDay}`;
+        const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
+        const placeOfBirth = personalForm.pob;
+
+        const profileData = {
+          name: personalForm.name,
+          gender: personalForm.gender,
+          dob,
+          timeOfBirth,
+          placeOfBirth,
+          maritalStatus: personalForm.maritalStatus,
+          occupation: personalForm.occupation
+        };
+
+        await saveUserProfile(user.uid, profileData);
+        setHasEnteredDetails(true);
+      } catch (err) {
+        console.error("Error saving profile details:", err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -438,6 +496,45 @@ const AskPandit = () => {
               {dobError}
             </div>
           )}
+        </div>
+
+        <div className="space-y-1.5 animate-fade-in">
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">Marital Status</label>
+          <SelectorButton 
+            value={personalForm.maritalStatus} 
+            options={[
+              { name: isHindi ? 'एकल' : 'Single', value: 'Single' },
+              { name: isHindi ? 'विवाहित' : 'Married', value: 'Married' },
+              { name: isHindi ? 'तलाकशुदा' : 'Divorced', value: 'Divorced' },
+              { name: isHindi ? 'अलग' : 'Separated', value: 'Separated' },
+              { name: isHindi ? 'विधवा/विधुर' : 'Widowed', value: 'Widowed' }
+            ]} 
+            placeholder="Select Marital Status" 
+            title="Select Marital Status" 
+            onSelect={(val) => setPersonalForm(p => ({ ...p, maritalStatus: val }))} 
+            setPickerConfig={setPickerConfig} 
+          />
+        </div>
+
+        <div className="space-y-1.5 animate-fade-in">
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">Occupation</label>
+          <SelectorButton 
+            value={personalForm.occupation} 
+            options={[
+              { name: isHindi ? 'छात्र' : 'Student', value: 'Student' },
+              { name: isHindi ? 'प्राइवेट नौकरी' : 'Private Job', value: 'Private Job' },
+              { name: isHindi ? 'सरकारी नौकरी' : 'Government Job', value: 'Government Job' },
+              { name: isHindi ? 'व्यापार मालिक' : 'Business Owner', value: 'Business Owner' },
+              { name: isHindi ? 'स्व-नियोजित' : 'Self Employed', value: 'Self Employed' },
+              { name: isHindi ? 'गृहणी' : 'Homemaker', value: 'Homemaker' },
+              { name: isHindi ? 'सेवानिवृत्त' : 'Retired', value: 'Retired' },
+              { name: isHindi ? 'अन्य' : 'Other', value: 'Other' }
+            ]} 
+            placeholder="Select Occupation" 
+            title="Select Occupation" 
+            onSelect={(val) => setPersonalForm(p => ({ ...p, occupation: val }))} 
+            setPickerConfig={setPickerConfig} 
+          />
         </div>
 
         <div className="space-y-1.5">

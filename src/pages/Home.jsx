@@ -257,29 +257,6 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Complete Profile Banner (Part 4) */}
-        {!user?.profileCompleted && (
-          <div 
-            onClick={() => navigate('/profile')}
-            className="bg-gradient-to-r from-mystic-gold/20 via-mystic-purple/10 to-transparent p-4 rounded-2xl border border-mystic-gold/30 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-[0_0_15px_rgba(251,191,36,0.1)] relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-16 h-16 bg-mystic-gold/10 blur-xl rounded-full pointer-events-none" />
-            <div className="flex items-center gap-3 relative z-10">
-              <span className="text-2xl animate-bounce">⚠️</span>
-              <div className="flex flex-col text-left">
-                <span className="text-mystic-gold font-bold text-xs uppercase tracking-wider">
-                  {isHindi ? 'अपना ज्योतिष प्रोफ़ाइल पूरा करें' : 'Complete Your Astro Profile'}
-                </span>
-                <span className="text-white/60 text-[10px] mt-0.5">
-                  {isHindi ? 'अधिक सटीक भविष्यवाणियां प्राप्त करें' : 'Get more accurate predictions'}
-                </span>
-              </div>
-            </div>
-            <button className="bg-mystic-gold text-[#09090b] text-[10px] font-black uppercase px-3 py-1.5 rounded-xl tracking-widest relative z-10 hover:scale-[1.02] active:scale-95 transition-all">
-              {isHindi ? 'पूरा करें' : 'Complete'}
-            </button>
-          </div>
-        )}
 
         {/* LEVEL & XP PROGRESS */}
         <div className="px-2">

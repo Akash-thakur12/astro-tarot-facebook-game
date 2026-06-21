@@ -28,20 +28,17 @@ export function buildResponse(uid, intent, date) {
 
   const data = getIntentPrediction(intent, seed);
 
+  let rawResponse = "";
   if (data && typeof data === "object") {
-    const structuredResponse = buildStructuredResponse(data, seed);
-    return humanize(structuredResponse, seed);
+    rawResponse = buildStructuredResponse(data, seed);
+  } else if (data) {
+    rawResponse = data;
+  } else {
+    const opening = openings[Math.floor(rand() * openings.length)];
+    const pred = getHoroscope(intent, seed);
+    rawResponse = `${opening} ${pred}`;
   }
 
-  // Legacy string prediction fallback from intent datasets (if any)
-  if (data) {
-    return humanize(data, seed);
-  }
-
-  // Fallback to existing horoscopeEngine
-  const opening = openings[Math.floor(rand() * openings.length)];
-  const pred = getHoroscope(intent, seed);
-  const response = `${opening} ${pred}`;
-
-  return humanize(response, seed);
+  const finalResponse = humanize(rawResponse, seed);
+  return finalResponse;
 }

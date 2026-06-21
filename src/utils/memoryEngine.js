@@ -37,7 +37,7 @@ export function normalizeFacts(text) {
       ],
       positive: [
         /\b(?:married|already\s+married|shaadishuda|shadishuda|shaadi-shuda|shadi-shuda)\b/,
-        /(?:shadi|shaadi|marriage|vivah|biyaah|biyah)\s+(?:ho\s+chuki|ho\s+gayi|ho\s+gai|ho\s+gayi\s+hai|ho\s+gai\s+hai|done)/,
+        /(?:shadi|shaadi|marriage|vivah|biyaah|biyah)\s+(?:to\s+)?(?:ho\s+)?(?:chuki|gayi|gai|gyi|done)/,
         /\b(?:wife|husband|patni|pati)\b/,
         /(?:शादीशुदा|विवाहित|पत्नी|पति)/
       ]

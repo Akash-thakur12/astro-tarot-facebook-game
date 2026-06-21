@@ -18,13 +18,9 @@ export const preloadRewardedAd = async (placementId) => {
 
   try {
     isPreloading = true;
-    console.log('FAN: Preloading rewarded video...', placementId);
-    
     rewardedAd = await window.FBInstant.getRewardedVideoAsync(placementId);
     await rewardedAd.loadAsync();
-    
     isReady = true;
-    console.log('FAN: Rewarded video ready.');
   } catch (error) {
     console.error('FAN: Rewarded video load failed:', error);
     isReady = false;

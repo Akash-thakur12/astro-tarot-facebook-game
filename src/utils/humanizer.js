@@ -10,7 +10,43 @@ function pick(seed, arr) {
   return arr[Math.abs(seed) % arr.length];
 }
 
-// New structured response components
+// Word count limiter that trims at a sentence boundary
+function limitToWordCount(text, maxWords = 120) {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  
+  const truncated = words.slice(0, maxWords).join(' ');
+  const lastSentenceEnd = Math.max(
+    truncated.lastIndexOf('.'),
+    truncated.lastIndexOf('?'),
+    truncated.lastIndexOf('।'),
+    truncated.lastIndexOf('|')
+  );
+  
+  if (lastSentenceEnd > 50) {
+    return truncated.substring(0, lastSentenceEnd + 1);
+  }
+  return truncated + '...';
+}
+
+// Limits excessive mentions of planets and houses to maximum 2
+function limitPlanetsAndHouses(text) {
+  const jointRegex = /(बृहस्पति|शुक्र|शनि|राहु|केतु|मंगल|बुध|चंद्रमा|सूर्य|लग्न भाव|कर्म भाव|भाग्य भाव|जाया भाव|पुत्र भाव|धन भाव|व्यापार भाव|स्वास्थ्य भाव|चतुर्थ भाव|सप्तम भाव|दशम भाव|सप्तमेश|दशमेश|लग्नेश|कर्मेश|व्यापारेश|पुत्रेश)/g;
+  let count = 0;
+  return text.replace(jointRegex, (match) => {
+    count++;
+    if (count > 2) {
+      if (match.includes("भाव") || match.includes("ेश")) {
+        return "कुंडली के योग";
+      } else {
+        return "सितारे";
+      }
+    }
+    return match;
+  });
+}
+
+// New structured response components with variable layouts to avoid repeating same structure
 export function buildStructuredResponse(data, seed) {
   const observation = data.observation || "";
   const reasoning = data.reasoning || "";
@@ -26,39 +62,67 @@ export function buildStructuredResponse(data, seed) {
     "ग्रहों के वर्तमान प्रभाव को देखने पर,",
     "नवांश और गोचर दोनों के संकेतों को मिलाकर देखें तो,",
     "आपके ग्रह चक्र की दशाओं की गणना करने पर,",
-    "आपके मुख्य ग्रहों की वर्तमान स्थिति यह दर्शाती है कि,",
+    "आपके मुख्य ग्रहों के वर्तमान संकेत यह दर्शाते हैं कि,",
     "जन्म चक्र और गोचरीय संक्रमण के प्रभाव से,",
-    "आपके लग्न और पंचम भाव की युति के अनुसार,",
+    "आपके लग्न और कुंडली के योगों के अनुसार,",
     "आपकी कुंडली के विभिन्न योगों का विश्लेषण करने पर,",
-    "नक्षत्रों की इस वर्तमान संक्रमण वेला में,",
+    "अभी आपके ग्रहों के प्रभाव को देखें तो,",
     "आपके जन्मांग और भाग्य स्थान का आकलन करने पर,",
     "ग्रहों की गति और गोचर संतुलन को समझने पर,",
     "आपके लग्न चक्र और महादशा के प्रभाव को देखें तो,",
     "दशा चक्र के सूक्ष्म योगों का अध्ययन करने पर,",
-    "आपके राशि स्वामी और लग्नेश की वर्तमान स्थिति के अनुसार,",
+    "आपके राशि स्वामी और लग्नेश के वर्तमान संकेतों के अनुसार,",
     "आपके ग्रहों के वर्तमान गोचरीय प्रभाव को समझने पर,",
-    "जन्मांग के चतुर्थ और सप्तम भाव के विश्लेषण से,",
+    "जन्मांग के पारिवारिक और विवाह स्थान के विश्लेषण से,",
     "कुंडली के योगों का सूक्ष्म अध्ययन करने पर,",
     "आपके कर्म और भाग्य स्थान की स्थिति को देखते हुए,",
     "राशिफल और दशाओं के वर्तमान तालमेल के अनुसार,",
-    "आपके जन्मांग चक्र की ग्रह स्थिति का आकलन करने पर,",
+    "आपके जन्मांग चक्र के ग्रहों का आकलन करने पर,",
     "ग्रहों की इस वर्तमान गोचर व्यवस्था के अनुसार,"
   ];
 
   const opening = pick(seed, openingsList);
   const finalObservation = observation ? (opening + " " + observation) : "";
 
-  return [
-    finalObservation,
-    reasoning,
-    prediction,
-    timeline,
-    remedy,
-    insight,
-    followup
-  ]
-  .filter(Boolean)
-  .join("\n\n");
+  // Deterministically choose a layout structure to avoid repetition
+  const structureMode = Math.abs(seed) % 3;
+  let parts = [];
+
+  if (structureMode === 0) {
+    // Layout 1: Standard layout
+    parts = [
+      finalObservation,
+      reasoning,
+      prediction,
+      timeline,
+      remedy,
+      insight,
+      followup
+    ];
+  } else if (structureMode === 1) {
+    // Layout 2: Conversational flow
+    const combinedObsReason = finalObservation && reasoning ? `${finalObservation} ${reasoning}` : (finalObservation || reasoning);
+    const combinedPredTime = prediction && timeline ? `${prediction} Yeh badlav ${timeline} ke beech dikhega.` : (prediction || timeline);
+    parts = [
+      combinedObsReason,
+      combinedPredTime,
+      remedy,
+      insight,
+      followup
+    ];
+  } else {
+    // Layout 3: Direct prediction first
+    parts = [
+      prediction ? `Aapki kundali ke anusar: ${prediction}` : "",
+      finalObservation,
+      remedy,
+      insight
+    ];
+  }
+
+  return parts
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 // deprecated
@@ -79,7 +143,7 @@ function getIntentComponents(intent, seed, userData) {
   switch (intent) {
     case "marriage_when":
       reasoning = pick(seed + 1, [
-        "आपके सप्तम भाव में शुक्र और बृहस्पति का संयोग दिख रहा है जो स्थायी संबंधों को बढ़ाता है।",
+        "आपके विवाह स्थान में शुक्र और बृहस्पति का संयोग दिख रहा है जो स्थायी संबंधों को बढ़ाता है।",
         "कुंडली में लग्नेश और सप्तमेश की स्थिति शादी के योग बना रही है।",
         "ग्रहों की चाल बता रही है कि अब संबंधों को लेकर गंभीरता आएगी।"
       ]);
@@ -187,7 +251,7 @@ function getIntentComponents(intent, seed, userData) {
       break;
     case "child_when":
       reasoning = pick(seed + 1, [
-        "आपकी कुंडली में पुत्र भाव में बृहस्पति और चंद्रमा की स्थिति संतान सुख के योग दे रही है।",
+        "आपकी कुंडली में पुत्र भाव में गुरु और चंद्रमा की स्थिति संतान सुख के योग दे रही है।",
         "पुत्रेश और लग्नेश की स्थिति से संतान के योग मजबूत बन रहे हैं।",
         "ग्रहों की चाल से पता चलता है कि अब संतान के योग बनने शुरू हो गए हैं।"
       ]);
@@ -255,9 +319,20 @@ export function humanize(text, seed = 1) {
 
   let result = text;
 
+  // BAN THESE PHRASES AND SANITIZE
+  if (/व्यापार|बिज़नेस|दुकान|व्यवसाय|partnership/i.test(result)) {
+    result = result.replace(/सप्तम भाव/gi, "व्यापार भाव");
+  } else {
+    result = result.replace(/सप्तम भाव/gi, "विवाह स्थान");
+  }
+  result = result.replace(/ग्रहों की स्थिति/gi, "ग्रहों के संकेत");
+  result = result.replace(/बृहस्पति की कृपा/gi, "बृहस्पति के शुभ प्रभाव");
+
+  // Keep planets/houses limited to maximum of 2
+  result = limitPlanetsAndHouses(result);
+
   // Preserve all original replacements for backward compatibility
   result = result.replace(/ग्रहों का योग/g, () => pick(seed + 1, [
-    "ग्रहों की स्थिति",
     "ग्रहों के संकेत",
     "ग्रहों का प्रभाव"
   ]));
@@ -268,7 +343,7 @@ export function humanize(text, seed = 1) {
     "ग्रहों का प्रभाव"
   ]));
 
-  result = result.replace(/मिसअंडరस्टैंडिंग/g, "मनमुटाव");
+  result = result.replace(/मिसअंडरस्टैंडिंग/g, "मनमुटाव");
 
   result = result.replace(/फिजिकल एक्टिविटी/g, () => pick(seed + 13, [
     "व्यायाम",
@@ -276,6 +351,7 @@ export function humanize(text, seed = 1) {
     "शारीरिक गतिविधि"
   ]));
 
+  result = result.replace(/ शक्ति शालिनी अंतर्दृष्टि/g, " विशेष समझ");
   result = result.replace(/शक्तिशाली अंतर्दृष्टि/g, () => pick(seed + 21, [
     "गहरी समझ",
     "महत्वपूर्ण संकेत",
@@ -306,6 +382,40 @@ export function humanize(text, seed = 1) {
     "आपके भाग्य के सितारे शुभ संकेत दे रहे हैं।",
     "आपके ग्रहों की स्थिति कुछ खास बता रही है।"
   ]));
+
+  // Warm conversational replacement maps
+  result = result.replace(/जातक/gi, "आप");
+  result = result.replace(/दाम्पत्य सुख/g, "वैवाहिक सुख");
+  result = result.replace(/दाम्पत्य जीवन/g, "वैवाहिक जीवन");
+  result = result.replace(/दाम्पत्य/gi, "वैवाहिक जीवन");
+  result = result.replace(/का गोचर/g, "की ग्रहों की चाल");
+  result = result.replace(/के गोचर/g, "की ग्रहों की चाल");
+  result = result.replace(/की गोचर/g, "की ग्रहों की चाल");
+  result = result.replace(/गोचर स्थिति/g, "ग्रहों की स्थिति");
+  result = result.replace(/गोचर/gi, "ग्रहों की चाल");
+  result = result.replace(/वाणी/gi, "बातचीत");
+  result = result.replace(/संशय/gi, "उलझन");
+  result = result.replace(/शीघ्र/gi, "जल्दी");
+  result = result.replace(/अवधि/gi, "समय");
+  result = result.replace(/आवश्यक/gi, "ज़रूरी");
+  result = result.replace(/विश्वास/gi, "भरोसा");
+
+  // Do NOT always end with a question: strip trailing question 50% of the time based on seed
+  if (result.trim().endsWith('?')) {
+    const shouldRemoveQuestion = (Math.abs(seed) % 2 === 0);
+    if (shouldRemoveQuestion) {
+      const sentences = result.split(/(?<=[.?!।|])\s+/);
+      if (sentences.length > 1) {
+        const lastSentence = sentences[sentences.length - 1];
+        if (lastSentence.trim().endsWith('?')) {
+          result = sentences.slice(0, -1).join(' ');
+        }
+      }
+    }
+  }
+
+  // Word count limit (max 120 words)
+  result = limitToWordCount(result, 120);
 
   return result;
 }

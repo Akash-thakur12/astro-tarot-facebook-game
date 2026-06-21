@@ -37,7 +37,12 @@ describe('normalizeFacts - 50+ Test Cases', () => {
     "husband ke sath rehti hu",
     "wife ke sath rehta hu",
     "shadi done",
-    "meri patni hai"
+    "meri patni hai",
+    "meri shadi ho gayi hai",
+    "meri shaadi ho chuki hai",
+    "meri to shadi ho gyi hai",
+    "main married hu",
+    "meri shaadi ho gayi"
   ];
   marriedPositives.forEach((txt, idx) => {
     it(`married positive case #${idx + 1}: "${txt}"`, () => {

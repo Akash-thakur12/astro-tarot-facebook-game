@@ -71,15 +71,8 @@ export const AuthProvider = ({ children }) => {
             
             if (data.success && data.customToken) {
               await signInWithCustomToken(auth, data.customToken);
-              
               const firebaseUser = auth.currentUser;
-              console.log('Bridge Success', {
-                uid: firebaseUser?.uid,
-                provider: authSource,
-              });
-
               const jwt = await auth.currentUser?.getIdToken();
-              console.log('Firebase JWT acquired:', !!jwt);
             }
           } catch (e) {
             console.error("Bridge Login Failed:", e);

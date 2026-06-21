@@ -22,13 +22,9 @@ export const preloadInterstitial = async (placementId = INTERSTITIAL_TAROT_ID) =
   try {
     isPreloading = true;
     currentPlacementId = placementId;
-    console.log('FAN: Preloading interstitial...', placementId);
-    
     interstitialAd = await window.FBInstant.getInterstitialAdAsync(placementId);
     await interstitialAd.loadAsync();
-    
     isReady = true;
-    console.log('FAN: Interstitial ready.');
   } catch (error) {
     console.error('FAN: Interstitial load failed:', error);
     isReady = false;

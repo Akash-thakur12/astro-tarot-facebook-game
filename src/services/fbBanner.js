@@ -19,13 +19,9 @@ export const preloadBanner = async (placementId) => {
   try {
     isPreloading = true;
     currentPlacementId = placementId;
-    console.log('FAN: Preloading banner...', placementId);
-    
     bannerAd = await window.FBInstant.getBannerAdAsync(placementId);
     await bannerAd.loadAsync();
-    
     isReady = true;
-    console.log('FAN: Banner ready.');
   } catch (error) {
     console.error('FAN: Banner load failed:', error);
     isReady = false;
@@ -45,7 +41,6 @@ export const showBanner = async () => {
 
   try {
     await bannerAd.showAsync();
-    console.log('FAN: Banner shown.');
     return true;
   } catch (error) {
     console.error('FAN: Banner show failed:', error);
@@ -61,7 +56,6 @@ export const hideBanner = async () => {
 
   try {
     await bannerAd.hideAsync();
-    console.log('FAN: Banner hidden.');
     return true;
   } catch (error) {
     console.error('FAN: Banner hide failed:', error);
