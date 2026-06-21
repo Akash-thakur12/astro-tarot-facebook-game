@@ -1,12 +1,14 @@
-import OpenAI from 'openai';
+import { generateAIResponse } from '../services/aiService.js';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { buildResponse } from '../src/utils/responseBuilder.js';
 import { detectIntent } from '../src/utils/intentDetector.js';
-import { xmur3, mulberry32 } from '../src/utils/prng.js';
 import { normalizeFacts } from '../src/utils/memoryEngine.js';
 import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
+import { humanize } from '../src/utils/humanizer.js';
+import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
+
 
 function getFactValue(field) {
   if (!field) return null;
@@ -22,6 +24,53 @@ function getFactReliability(field) {
     return Math.round((field.confidence / 5) * 100);
   }
   return 0;
+}
+
+function isNewDay(lastDate, today = new Date()) {
+  return !lastDate ||
+    lastDate.getDate() !== today.getDate() ||
+    lastDate.getMonth() !== today.getMonth() ||
+    lastDate.getFullYear() !== today.getFullYear();
+}
+
+function parseModelResponse(text) {
+  let cleanedText = text.trim();
+  cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+
+  try {
+    return JSON.parse(cleanedText);
+  } catch (parseError) {
+    const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
+    const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
+    return {
+      score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
+      guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
+      sections: []
+    };
+  }
+}
+
+function sanitizePromptInput(text) {
+  if (!text || typeof text !== 'string') return '';
+  
+  let sanitized = text;
+  
+  // Remove potential instruction injection patterns
+  sanitized = sanitized.replace(/ignore previous instructions/gi, '');
+  sanitized = sanitized.replace(/system:/gi, '');
+  sanitized = sanitized.replace(/assistant:/gi, '');
+  sanitized = sanitized.replace(/developer:/gi, '');
+  sanitized = sanitized.replace(/user:/gi, '');
+  
+  // Collapse repeated spaces
+  sanitized = sanitized.replace(/\s+/g, ' ');
+  
+  // Limit size to 1000 chars
+  if (sanitized.length > 1000) {
+    sanitized = sanitized.substring(0, 1000);
+  }
+  
+  return sanitized.trim();
 }
 
 // Initialize Firebase Admin securely using modern SDK API
@@ -118,6 +167,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing userData in request body' });
   }
 
+  // Request size hardening
+  if (userData.question && userData.question.length > 1000) {
+    return res.status(400).json({ error: 'Question too long (max 1000 characters)' });
+  }
+
+  if (Array.isArray(history)) {
+    if (history.length > 100) {
+      return res.status(400).json({ error: 'History too long (max 100 messages)' });
+    }
+    for (const msg of history) {
+      if (msg && msg.content && msg.content.length > 1000) {
+        return res.status(400).json({ error: 'Message too long (max 1000 characters per message)' });
+      }
+    }
+  }
+
   if (mode === 'chat' || mode === 'personal') {
     const questionText = (userData.question || '').trim().toLowerCase();
     
@@ -156,88 +221,40 @@ export default async function handler(req, res) {
 
   const BEDROCK_API_KEY = process.env.BEDROCK_API_KEY;
   const BEDROCK_BASE_URL = process.env.BEDROCK_BASE_URL;
-  if (!BEDROCK_API_KEY || !BEDROCK_BASE_URL) {
-    return res.status(500).json({ error: 'BEDROCK_API_KEY or BEDROCK_BASE_URL not configured.' });
-  }
 
-  // CRITICAL FIX #4: Move Coin Logic To Backend
-  let deductedCoins = false;
-  let usedFreePersonal = false;
-  let usedFreeComp = false;
   const userRef = db.collection('users').doc(uid);
-
+  let userDoc;
   try {
-    await db.runTransaction(async (t) => {
-      const doc = await t.get(userRef);
-      
-      let userDataDoc;
-      if (!doc.exists) {
-        // AUTO-CREATE
-        userDataDoc = {
-          uid,
-          coins: 0,
-          xp: 0,
-          streak: 1,
-          premium: false,
-          adsWatchedToday: 0,
-          dailyQuestionUsed: false,
-          dailyTarotUsed: false,
-          dailySpinUsed: false,
-          dailyChallengesClaimed: false,
-          joinedAt: FieldValue.serverTimestamp()
-        };
-        t.set(userRef, userDataDoc);
-      } else {
-        userDataDoc = doc.data();
-      }
-
-      if (!userDataDoc) throw new Error("USER_DATA_EMPTY");
-
-      if (!userDataDoc.premium) {
-        const lastQDate = userDataDoc.lastQuestionDate ? userDataDoc.lastQuestionDate.toDate() : null;
-        const lastCDate = userDataDoc.lastCompDate ? userDataDoc.lastCompDate.toDate() : null;
-        const today = new Date();
-        const isNewDay = (lastDate) => !lastDate || 
-          lastDate.getDate() !== today.getDate() || 
-          lastDate.getMonth() !== today.getMonth() || 
-          lastDate.getFullYear() !== today.getFullYear();
-
-        const dailyQUsed = !isNewDay(lastQDate) ? userDataDoc.dailyQuestionUsed : false;
-        const dailyCUsed = !isNewDay(lastCDate) ? userDataDoc.dailyCompUsed : false;
-
-        if (mode === 'chat' || mode === 'personal') {
-          if (!dailyQUsed) {
-            t.update(userRef, { dailyQuestionUsed: true, lastQuestionDate: FieldValue.serverTimestamp() });
-            usedFreePersonal = true;
-          } else {
-            if ((userDataDoc.coins || 0) < AI_QUESTION_COST) throw new Error("INSUFFICIENT_COINS");
-            t.update(userRef, { coins: FieldValue.increment(-AI_QUESTION_COST) });
-            deductedCoins = true;
-          }
-        } else if (mode === 'compatibility') {
-          // Compatibility mode check
-          if (!dailyCUsed) {
-            t.update(userRef, { dailyCompUsed: true, lastCompDate: FieldValue.serverTimestamp() });
-            usedFreeComp = true;
-          } else {
-            if ((userDataDoc.coins || 0) < AI_QUESTION_COST) throw new Error("INSUFFICIENT_COINS");
-            t.update(userRef, { coins: FieldValue.increment(-AI_QUESTION_COST) });
-            deductedCoins = true;
-          }
-        } else {
-           // Default to chat deduction if unknown mode but proceeding
-           if ((userDataDoc.coins || 0) < AI_QUESTION_COST) throw new Error("INSUFFICIENT_COINS");
-           t.update(userRef, { coins: FieldValue.increment(-AI_QUESTION_COST) });
-           deductedCoins = true;
-        }
-      }
-    });
+    userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      // AUTO-CREATE
+      const defaultUser = {
+        uid,
+        coins: 0,
+        xp: 0,
+        streak: 1,
+        premium: false,
+        adsWatchedToday: 0,
+        dailyQuestionUsed: false,
+        dailyTarotUsed: false,
+        dailySpinUsed: false,
+        dailyChallengesClaimed: false,
+        joinedAt: FieldValue.serverTimestamp()
+      };
+      await userRef.set(defaultUser);
+      userDoc = await userRef.get();
+    }
   } catch (e) {
-    if (e.message === "INSUFFICIENT_COINS") return res.status(403).json({ error: 'Not enough coins' });
-    if (e.message === "USER_NOT_FOUND") return res.status(404).json({ error: 'User profile not found' });
-    console.error("Transaction Error:", e);
-    return res.status(500).json({ error: 'Failed to verify account balance' });
+    console.error("User initialization error:", e);
+    return res.status(500).json({ error: 'Failed to initialize user session' });
   }
+
+  const userDataDoc = userDoc.data();
+  if (!userDataDoc) {
+    return res.status(500).json({ error: 'User profile not found' });
+  }
+
+  const isPremium = !!userDataDoc.premium;
 
   // === CONTRADICTION SAFETY LAYER (PHASE 29B) ===
   const factsRef = db.collection('users').doc(uid).collection('facts').doc('current');
@@ -261,7 +278,7 @@ export default async function handler(req, res) {
   }
 
   // Scan current question and history for new facts to update
-  const questionText = (userData.question || '').trim();
+  const questionText = sanitizePromptInput((userData.question || '').trim());
   const newFacts = normalizeFacts(questionText);
 
   const { storedFacts, updated } = updateEvidenceMemory(facts, newFacts, 'user', questionText);
@@ -273,16 +290,6 @@ export default async function handler(req, res) {
     } catch (e) {
       console.error("Error writing updated facts to Firestore:", e);
     }
-  }
-
-  // Reload facts from Firestore to guarantee absolute up-to-date state
-  try {
-    const reloadedFactsDoc = await factsRef.get();
-    if (reloadedFactsDoc && reloadedFactsDoc.exists) {
-      facts = reloadedFactsDoc.data();
-    }
-  } catch (e) {
-    console.error("Error reloading facts from Firestore:", e);
   }
 
   // === USER PROFILE INJECTION (PHASE 30B) ===
@@ -317,17 +324,6 @@ export default async function handler(req, res) {
     }
   }
 
-  const jobTypes = [
-    "Private Job",
-    "Government Job",
-    "Doctor",
-    "Engineer",
-    "Teacher",
-    "Lawyer",
-    "Army",
-    "Police",
-    "Student"
-  ];
   const businessTypes = [
     "Business Owner",
     "Trader",
@@ -336,10 +332,6 @@ export default async function handler(req, res) {
     "Self Employed"
   ];
 
-  const userMarried = (profile?.maritalStatus === 'Married') || (getFactValue(facts.married) === true);
-  const userHasChildren = (getFactValue(facts.hasChildren) === true);
-  const userHasJob = (profile && jobTypes.includes(profile.occupation)) || (getFactValue(facts.hasJob) === true);
-  const userHasBusiness = (profile && businessTypes.includes(profile.occupation)) || (getFactValue(facts.hasBusiness) === true);
   const userIsBusinessOwner = (profile && businessTypes.includes(profile.occupation)) || (getFactValue(facts.hasBusiness) === true);
 
   // Summary memory generation if chat history > 100 messages
@@ -360,67 +352,20 @@ export default async function handler(req, res) {
       }
     });
     const topics = recentIntents.map(i => i.replace('_', ' ')).join(', ') || "relationship and life path matters";
-    summaryText = `User ${marriedStr}, ${jobStr}, ${childrenStr} and recently discussed ${topics}.`;
+    summaryText = sanitizePromptInput(`User ${marriedStr}, ${jobStr}, ${childrenStr} and recently discussed ${topics}.`);
   }
 
-  // Hybrid Routing Logic (Deterministic Local Fallback)
+  // Intent detection and contradiction routing
   if (mode === 'chat' || mode === 'personal') {
     detectedIntent = detectIntent(questionText);
-
-    const datasetIntents = [
-      'marriage_when',
-      'government_job',
-      'ex_back',
-      'breakup',
-      'business',
-      'visa',
-      'health',
-      'mental_stress',
-      'child_when',
-      'married_life'
-    ];
-
-    // Apply contradiction logic redirections
-    const isMarriedFact =
-      (profile?.maritalStatus === "Married") ||
-      (facts?.married?.currentValue === true) ||
-      (getFactValue(facts?.married) === true);
-
-    if (
-      isMarriedFact &&
-      detectedIntent === "marriage_when"
-    ) {
-      detectedIntent = "married_life";
-    }
-
-    const hasChildrenFact = (facts?.hasChildren?.currentValue === true) || 
-                            (facts?.hasChildren?.value === true) || 
-                            (getFactValue(facts?.hasChildren) === true);
-
-    if (hasChildrenFact && detectedIntent === 'child_when') {
-      detectedIntent = 'general';
-    }
-
-    if (datasetIntents.includes(detectedIntent)) {
-      const seedFn = xmur3(uid + detectedIntent + todayString);
-      const seed = seedFn();
-      const rand = mulberry32(seed);
-      const randVal = rand();
-      if (randVal < 0.60) {
-        const localText = buildResponse(uid, detectedIntent, todayString);
-        return res.status(200).json({
-          text: localText
-        });
-      }
-    }
+    detectedIntent = resolveIntentContradiction(
+      detectedIntent,
+      profile,
+      facts,
+      questionText
+    );
   }
-
-  // Initialize Bedrock OpenAI Client
-  const openaiClient = new OpenAI({
-    apiKey: BEDROCK_API_KEY,
-    baseURL: BEDROCK_BASE_URL,
-  });
-
+  // Client is initialized lazily inside generateAIResponse in services/aiService.js
   // Generate dynamic date context
   const dateFormatted = `${dayStr}-${monthStr}-${year}`;
   const monthName = now.toLocaleString('en-US', { month: 'long' });
@@ -441,100 +386,33 @@ Current Day: ${weekdayName}
 Current Quarter: ${quarter}
 Current Season: ${season}`;
 
-  const systemInstruction = `You are a warm, experienced Indian astrology pandit ji (NOT an AI).
+  const systemInstruction = `You are a wise, warm, and elderly family Pandit Ji (an Indian astrologer) talking to a relative. Respond in Hindi.
 CRITICAL RULES:
-1. If the user gives new information, accept it as absolute truth immediately.
-2. NEVER contradict the KNOWN FACTS section - prioritize latest user facts above everything else.
-3. NEVER repeat old predictions - only talk about current facts.
-4. Talk naturally like a family pandit talking to a relative.
-5. Understand jokes, humor, and emotions.
-6. Avoid fake astrology terms and unnecessary planet/house names.
-7. Plain text only. No headings, sections, markdown, emojis.
-8. Maximum 150 words.
-9. Never say "As an AI", "I'm an AI", or mention being artificial.
-10. Use simple Hindi + Hinglish.
-11. Be confident, positive, and natural.
-12. RESPONSE STRUCTURE:
-   - Opening observation about kundali
-   - Logical reasoning
-   - Prediction
-   - Timeline
-   - Remedy
-   - Curiosity follow-up
-13. NEVER start every answer with "Shiv ji ki kripa" - vary your openings.
-14. Add natural, human-like conversation only.`;
+1. Tone & Style: Sound like a kind, experienced family elder. Use simple, everyday Hindi. Avoid excessive astrology jargon, dramatic language, or mystical statements.
+2. Structure: Provide a short reasoning, a realistic prediction, one simple practical remedy, and end with exactly one natural follow-up question.
+3. Word Variety: Avoid repetitive wording naturally. Vary your opening greetings and sentence structures across responses.
+4. Length: STRICTLY maximum 80 words. Be very concise.
+5. Formatting: Plain text only. No headings, no sections, no lists, no bullet points, and no markdown (do not use bold **, italics, etc.).
+6. No Emojis: Do not use any emojis at all.
+7. No AI: Never mention AI, chatbot, models, assistant, or prompts. Act as a real person.
+8. Respect Facts: Align with and respect the user's marital status, occupation, and children facts. Never contradict stored facts.`;
 
-  let contents = [];
   let ageDisplay = "Unknown";
-  let profileContext = "";
 
   if (mode === 'chat' || mode === 'personal') {
-    const { name, gender, dobDay, dobMonth, dobYear, tobHour, tobMinute, tobPeriod, pob } = userData;
-    
-    // Calculate current age server-side
-    try {
-      if (dobDay && dobMonth && dobYear) {
-        const today = new Date();
-        const birthDate = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        ageDisplay = age;
-      }
-    } catch (e) {
-      console.error("Age calculation error:", e);
-    }
+    const { dobDay, dobMonth, dobYear } = userData;
 
-    profileContext = `ACT AS PANDIT AI. USE THIS USER PROFILE:
-Name: ${name || 'Unknown'}
-Gender: ${gender || 'Unknown'}
-Birth Date: ${dobDay || '?'}-${dobMonth || '?'}-${dobYear || '?'}
-Birth Time: ${tobHour || '?'}:${tobMinute || '?'} ${tobPeriod || ''}
-Birth Place: ${pob || 'Unknown'}
-CURRENT AGE: ${ageDisplay}
-
-Respond directly to the query. DO NOT ask for birth details again.`;
-
-    contents = [{ role: 'user', parts: [{ text: profileContext }] }];
-    const activeHistory = Array.isArray(history) ? history.slice(-20) : [];
-    if (activeHistory.length > 0) {
-      activeHistory.forEach(msg => {
-        if (msg && msg.role && msg.content) {
-          contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
-        }
-      });
+    if (dobDay && dobMonth && dobYear) {
+      const dobStr = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
+      ageDisplay = calculateAge(dobStr);
     }
   } else {
-    // Compatibility mode
     const { p1, p2 } = userData;
     if (!p1 || !p2) {
       return res.status(400).json({ error: 'Compatibility mode requires p1 and p2 in userData' });
     }
-    const compPrompt = `Person 1: ${p1.name} (${p1.gender}), DOB: ${p1.dobDay}-${p1.dobMonth}-${p1.dobYear}, Time: ${p1.tobHour}:${p1.tobMinute} ${p1.tobPeriod}, Place: ${p1.pob}
-Person 2: ${p2.name} (${p2.gender}), DOB: ${p2.dobDay}-${p2.dobMonth}-${p2.dobYear}, Time: ${p2.tobHour}:${p2.tobMinute} ${p2.tobPeriod}, Place: ${p2.pob}
-
-Instructions:
-Generate a relationship compatibility analysis returning STRICTLY a JSON object matching this schema:
-{
-  "type": "compatibility",
-  "score": 85,
-  "guna": 28,
-  "sections": [
-    { "icon": "🧠", "title": "Communication Compatibility", "content": "..." },
-    { "icon": "❤️", "title": "Emotional Compatibility", "content": "..." },
-    { "icon": "💍", "title": "Marriage Potential", "content": "..." },
-    { "icon": "⚖️", "title": "Strengths", "content": "..." },
-    { "icon": "⚠️", "title": "Challenges", "content": "..." },
-    { "icon": "🔮", "title": "Long-Term Outlook", "content": "..." }
-  ],
-  "guidance": "Guidance from Pandit AI in user's language"
-}`;
-    contents.push({ role: 'user', parts: [{ text: compPrompt }] });
   }
 
-  // Construct prompt for API providers
   // Construct prompt for API providers
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
@@ -584,7 +462,7 @@ Location: Unknown`;
       activeHistory.forEach(msg => {
         if (msg && msg.role && msg.content) {
           const roleLabel = msg.role === "user" ? "USER" : "PANDIT";
-          conversationHistory += `${roleLabel}: ${msg.content}\n`;
+          conversationHistory += `${roleLabel}: ${sanitizePromptInput(msg.content)}\n`;
         }
       });
     }
@@ -620,8 +498,9 @@ ${activeSystemInstruction}
 
 ${promptSections.join('\n\n')}
 
-Question:
-${userData.question || "Tell me about my destiny"}
+<user_query>
+${sanitizePromptInput(userData.question || "Tell me about my destiny")}
+</user_query>
 `;
   } else {
     // Compatibility mode fallback
@@ -633,88 +512,104 @@ ${userData.question || "Tell me about my destiny"}
   let success = false;
   let lastError = null;
 
-  // Helper parser function (for compatibility mode only)
-  function parseModelResponse(text, currentMode) {
-    let cleanedText = text.trim();
-    cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-    
-    let parsedData = null;
+  const useOfflineFallback = !BEDROCK_API_KEY || !BEDROCK_BASE_URL;
+
+  if (!useOfflineFallback) {
     try {
-      parsedData = JSON.parse(cleanedText);
-    } catch (parseError) {
-      const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
-      const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
-      parsedData = {
-        score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
-        guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
-        sections: []
-      };
-    }
-    return parsedData;
-  }
+      const aiText = await generateAIResponse(fullPrompt);
 
-  // Try Bedrock Fallback Chain
-  const bedrockModels = [
-    "deepseek.v3.2",
-    "google.gemma-3-4b-it",
-    "mistral.voxtral-mini-3b-2507",
-    "mistral.ministral-3-3b-instruct",
-    "qwen.qwen3-32b-v1:0"
-  ];
-
-  for (const modelName of bedrockModels) {
-    try {
-      const response = await openaiClient.chat.completions.create({
-        model: modelName,
-        messages: [
-          { role: 'user', content: fullPrompt }
-        ],
-        temperature: 0.7
-      }, {
-        timeout: 30000 // 30 seconds timeout
-      });
-
-      const aiText = response.choices?.[0]?.message?.content;
       if (!aiText || !aiText.trim()) {
-        throw new Error("Empty output");
+        throw new Error("Empty AI output");
       }
 
       if (mode === 'chat' || mode === 'personal') {
         jsonResponse = {
-          text: aiText.trim()
+          text: humanize(aiText)
         };
       } else {
-        const parsedData = parseModelResponse(aiText, mode);
+        const parsedData = parseModelResponse(aiText);
         if (!parsedData || typeof parsedData !== "object" || typeof parsedData.score !== "number") {
           throw new Error("Invalid response");
         }
         jsonResponse = parsedData;
       }
-
       success = true;
-      break;
     } catch (err) {
-      console.error("Model failed:", modelName);
-      console.error(err);
+      console.error("AI Generation failed:", err.message || err);
       lastError = err;
     }
   }
 
-  if (success && jsonResponse) {
-    return res.status(200).json(jsonResponse);
+  if (!success) {
+    if (mode === 'chat' || mode === 'personal') {
+      try {
+        const fallbackText = buildResponse(uid, detectedIntent, todayString, questionText);
+        jsonResponse = {
+          text: fallbackText
+        };
+        success = true;
+      } catch (fallbackError) {
+        console.error("Offline fallback failed:", fallbackError);
+        lastError = fallbackError;
+      }
+    }
   }
 
-  // If we reach here, all models failed
-
-  if (mode === 'chat' || mode === 'personal') {
+  if (success && jsonResponse) {
     try {
-      const fallbackText = buildResponse(uid, detectedIntent, todayString);
-      return res.status(200).json({
-        text: fallbackText
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        const latestUserData = snap.data();
+        if (!latestUserData) {
+          throw new Error("User data empty");
+        }
+
+        const isPremiumLatest = !!latestUserData.premium;
+
+        if (!isPremiumLatest) {
+          const lastQDate = latestUserData.lastQuestionDate ? latestUserData.lastQuestionDate.toDate() : null;
+          const lastCDate = latestUserData.lastCompDate ? latestUserData.lastCompDate.toDate() : null;
+          const today = new Date();
+
+          const dailyQUsedLatest = !isNewDay(lastQDate, today) ? latestUserData.dailyQuestionUsed : false;
+          const dailyCUsedLatest = !isNewDay(lastCDate, today) ? latestUserData.dailyCompUsed : false;
+
+          if (mode === 'chat' || mode === 'personal') {
+            if (!dailyQUsedLatest) {
+              tx.update(userRef, { dailyQuestionUsed: true, lastQuestionDate: FieldValue.serverTimestamp() });
+            } else {
+              const coins = snap.data()?.coins || 0;
+              if (coins < AI_QUESTION_COST) {
+                throw new Error("Insufficient coins");
+              }
+              tx.update(userRef, { coins: coins - AI_QUESTION_COST });
+            }
+          } else if (mode === 'compatibility') {
+            if (!dailyCUsedLatest) {
+              tx.update(userRef, { dailyCompUsed: true, lastCompDate: FieldValue.serverTimestamp() });
+            } else {
+              const coins = snap.data()?.coins || 0;
+              if (coins < AI_QUESTION_COST) {
+                throw new Error("Insufficient coins");
+              }
+              tx.update(userRef, { coins: coins - AI_QUESTION_COST });
+            }
+          } else {
+            const coins = snap.data()?.coins || 0;
+            if (coins < AI_QUESTION_COST) {
+              throw new Error("Insufficient coins");
+            }
+            tx.update(userRef, { coins: coins - AI_QUESTION_COST });
+          }
+        }
       });
-    } catch (fallbackError) {
-      console.error("Offline fallback failed:", fallbackError);
+    } catch (txError) {
+      console.error("Deduction Transaction failed:", txError);
+      if (txError.message === "Insufficient coins") {
+        return res.status(403).json({ error: 'Not enough coins' });
+      }
     }
+    return res.status(200).json(jsonResponse);
   }
 
   console.error("ALL MODELS FAILED. Final error state recorded.");
@@ -725,26 +620,6 @@ ${userData.question || "Tell me about my destiny"}
     ? "Pandit AI is temporarily busy. Please try again later."
     : "I apologize, but I am experiencing cosmic interference. Please try again later.";
 
-  // CRITICAL FIX #5: Refund On Gemini Failure
-  try {
-    if (deductedCoins || usedFreePersonal || usedFreeComp) {
-      await db.runTransaction(async (t) => {
-        if (deductedCoins) {
-          t.update(userRef, { coins: FieldValue.increment(AI_QUESTION_COST) });
-        }
-        if (usedFreePersonal) {
-          t.update(userRef, { dailyQuestionUsed: false });
-        }
-        if (usedFreeComp) {
-          t.update(userRef, { dailyCompUsed: false });
-        }
-      });
-    }
-  } catch (refundError) {
-    console.error("CRITICAL: Failed to refund user", uid, refundError);
-  }
-
-  // Provide a graceful fallback response if requested via chat mode
   if (mode === 'chat' || mode === 'personal') {
     return res.status(200).json({ 
       text: fallbackMessage

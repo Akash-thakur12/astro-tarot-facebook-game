@@ -7,10 +7,10 @@ import wellnessFinal from '../data/final_hindi/wellness_final.json' with { type:
  * Returns a deterministic horoscope from the appropriate dataset based on intent and seed.
  * 
  * Mapping:
- * - love / love_marriage -> love_final.json
- * - career / job / money / business -> career_final.json
- * - health -> wellness_final.json
- * - default -> general_final.json
+ * - LOVE: marriage_when, breakup, ex_back, partner_loyal, married_life, love, love_marriage -> loveFinal
+ * - CAREER: business, government_job, promotion, salary, job_change, career_field, startup, investment, debt, property, career, job, money -> careerFinal
+ * - HEALTH: health, mental_stress, family_health -> wellnessFinal
+ * - default -> generalFinal
  * 
  * @param {string} intent - The user's detected intent.
  * @param {number} seed - The deterministic hash seed.
@@ -21,16 +21,15 @@ export function getHoroscope(intent, seed) {
 
   const normalizedIntent = (intent || '').toLowerCase().trim();
 
-  if (normalizedIntent === 'love' || normalizedIntent === 'love_marriage') {
+  const loveIntents = ['love', 'love_marriage', 'marriage_when', 'breakup', 'ex_back', 'partner_loyal', 'married_life'];
+  const careerIntents = ['career', 'job', 'money', 'business', 'government_job', 'promotion', 'salary', 'job_change', 'career_field', 'startup', 'investment', 'debt', 'property'];
+  const healthIntents = ['health', 'mental_stress', 'family_health'];
+
+  if (loveIntents.includes(normalizedIntent)) {
     dataset = loveFinal;
-  } else if (
-    normalizedIntent === 'career' ||
-    normalizedIntent === 'job' ||
-    normalizedIntent === 'money' ||
-    normalizedIntent === 'business'
-  ) {
+  } else if (careerIntents.includes(normalizedIntent)) {
     dataset = careerFinal;
-  } else if (normalizedIntent === 'health') {
+  } else if (healthIntents.includes(normalizedIntent)) {
     dataset = wellnessFinal;
   }
 

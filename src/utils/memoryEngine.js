@@ -3,6 +3,23 @@ export function matchesAny(str, regexList) {
   return regexList.some(rx => rx.test(str));
 }
 
+const ASPIRATION_PATTERNS = [
+  /चाहता\s*हू[ँं]?/,
+  /चाहती\s*हू[ँं]?/,
+  /सोच\s*रह[ाी]/,
+  /\bplanning\b/,
+  /\bplan\b/,
+  /\bprepare\b/,
+  /\bpreparing\b/,
+  /तैयारी/,
+  /\bstart\b/,
+  /शुरू/
+];
+
+export function isAspiration(str) {
+  return matchesAny(str, ASPIRATION_PATTERNS);
+}
+
 export function classifyDimension(str, config) {
   if (matchesAny(str, config.future)) {
     return null;
@@ -11,6 +28,9 @@ export function classifyDimension(str, config) {
     return false;
   }
   if (matchesAny(str, config.positive)) {
+    if (isAspiration(str)) {
+      return null;
+    }
     return true;
   }
   return null;

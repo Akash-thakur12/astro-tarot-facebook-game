@@ -28,7 +28,7 @@ const datasets = {
  * 
  * @param {string} intent - The detected intent.
  * @param {number} seed - The deterministic seed value.
- * @returns {object|string|null} The dataset entry (structured JSON object or raw string), or null if not found.
+ * @returns {object|null} The dataset entry with only reasoning, prediction, remedy, and followup, or null.
  */
 export function getIntentPrediction(intent, seed) {
   const dataset = datasets[intent];
@@ -36,5 +36,16 @@ export function getIntentPrediction(intent, seed) {
     return null;
   }
   const index = Math.abs(seed) % dataset.length;
-  return dataset[index];
+  const item = dataset[index];
+
+  if (!item) {
+    return null;
+  }
+
+  return {
+    reasoning: item.reasoning || "",
+    prediction: item.prediction || "",
+    remedy: item.remedy || "",
+    followup: item.followup || ""
+  };
 }
