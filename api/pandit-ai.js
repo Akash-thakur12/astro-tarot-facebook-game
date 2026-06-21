@@ -73,6 +73,67 @@ function sanitizePromptInput(text) {
   return sanitized.trim();
 }
 
+function getJaccardSimilarity(str1, str2) {
+  if (!str1 || !str2) return 0;
+  const words1 = str1.toLowerCase().split(/\s+/).filter(w => w.trim().length > 0);
+  const words2 = str2.toLowerCase().split(/\s+/).filter(w => w.trim().length > 0);
+  const set1 = new Set(words1);
+  const set2 = new Set(words2);
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  if (union.size === 0) return 0;
+  return intersection.size / union.size;
+}
+
+function getCleanTopicName(intent) {
+  if (!intent || intent === 'general') return null;
+  if (intent.includes('marriage') || intent === 'breakup' || intent === 'ex_back' || intent === 'partner_loyal') return 'marriage';
+  if (intent.includes('job') || intent === 'promotion' || intent === 'salary' || intent === 'career_field' || intent === 'unemployment' || intent === 'career') return 'career';
+  if (intent === 'child_when') return 'children';
+  if (intent === 'startup' || intent === 'investment' || intent === 'debt' || intent === 'property' || intent === 'house_purchase' || intent === 'business' || intent === 'money') return 'finance';
+  if (intent.includes('foreign') || intent === 'visa') return 'travel';
+  if (intent.includes('health') || intent === 'mental_stress') return 'health';
+  if (intent === 'education') return 'education';
+  if (intent === 'family') return 'family';
+  return intent.split('_')[0]; // fallback to first word
+}
+
+function removeDuplicateSentences(text) {
+  if (!text || typeof text !== 'string') return text;
+  
+  const sentences = text.match(/[^.!?।|]+(?:[.!?।|]+|\s*$)/g) || [text];
+  
+  const uniqueSentences = [];
+  const seenRecords = [];
+  
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    if (!trimmed) continue;
+    
+    const normalized = trimmed.toLowerCase().replace(/[^a-z0-9\u0900-\u097F]/gi, '');
+    
+    let isDuplicate = false;
+    for (const record of seenRecords) {
+      if (normalized === record.normalized) {
+        isDuplicate = true;
+        break;
+      }
+      const sim = getJaccardSimilarity(trimmed, record.original);
+      if (sim > 0.70) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    
+    if (!isDuplicate) {
+      uniqueSentences.push(trimmed);
+      seenRecords.push({ original: trimmed, normalized: normalized });
+    }
+  }
+  
+  return uniqueSentences.join(' ');
+}
+
 // Initialize Firebase Admin securely using modern SDK API
 const apps = getApps();
 if (!apps || apps.length === 0) {
@@ -334,16 +395,16 @@ export default async function handler(req, res) {
 
   const userIsBusinessOwner = (profile && businessTypes.includes(profile.occupation)) || (getFactValue(facts.hasBusiness) === true);
 
-  // Summary memory generation if chat history > 100 messages
+  // Summary memory generation if chat history > 20 messages
   let summaryText = "";
-  if (Array.isArray(history) && history.length > 100) {
+  if (Array.isArray(history) && history.length > 20) {
     const marriedStr = getFactValue(facts.married) === true ? "is married" : (getFactValue(facts.married) === false ? "is single" : "relationship status is unknown");
     const jobStr = getFactValue(facts.hasBusiness) === true ? "runs a business" : (getFactValue(facts.hasJob) === true ? "has a job" : "career status is unknown");
     const childrenStr = getFactValue(facts.hasChildren) === true ? "has children" : "does not have children";
     
     const recentIntents = [];
-    const recentMsgs = history.slice(-10);
-    recentMsgs.forEach(m => {
+    const olderMsgs = history.slice(0, -6);
+    olderMsgs.forEach(m => {
       if (m.role === 'user' && m.content) {
         const dIntent = detectIntent(m.content);
         if (dIntent !== 'general' && !recentIntents.includes(dIntent)) {
@@ -352,7 +413,75 @@ export default async function handler(req, res) {
       }
     });
     const topics = recentIntents.map(i => i.replace('_', ' ')).join(', ') || "relationship and life path matters";
-    summaryText = sanitizePromptInput(`User ${marriedStr}, ${jobStr}, ${childrenStr} and recently discussed ${topics}.`);
+    summaryText = sanitizePromptInput(`User ${marriedStr}, ${jobStr}, ${childrenStr} and previously discussed ${topics}.`);
+  }
+
+  // Detect short follow-up questions
+  let isFollowUp = false;
+  let followUpInstruction = "";
+  if (mode === 'chat' || mode === 'personal') {
+    const allHistoryMsgs = Array.isArray(history) ? history : [];
+    
+    // Ensure we exclude the current question if it is the last message
+    let pastHistory = [];
+    if (allHistoryMsgs.length > 0) {
+      const lastMsg = allHistoryMsgs[allHistoryMsgs.length - 1];
+      if (lastMsg.role === 'user' && lastMsg.content === userData.question) {
+        pastHistory = allHistoryMsgs.slice(0, -1);
+      } else {
+        pastHistory = allHistoryMsgs;
+      }
+    }
+    const pastAssistantMsgs = pastHistory.filter(m => m.role === 'model' || m.role === 'assistant');
+    
+    const currentQuestionText = (userData.question || '').trim();
+    const cleaned = currentQuestionText.toLowerCase().replace(/[?।.]/g, '').trim();
+    const followUpPhrases = [
+      'kyu', 'kyun', 'kaise', 'kab', 'phir', 'fir', 'fir kya', 'phir kya', 'uske baad', 'acha', 'achha', 'aisa kyu', 'aisa kyun', 'phir kya hoga', 'fir kya hoga',
+      'क्यों', 'कैसे', 'कब', 'फिर', 'फिर क्या', 'उसके बाद', 'अच्छा', 'ऐसा क्यों', 'फिर क्या होगा'
+    ];
+    isFollowUp = followUpPhrases.includes(cleaned);
+    
+    if (isFollowUp) {
+      const lastAssistantMsg = pastAssistantMsgs[pastAssistantMsgs.length - 1];
+      if (lastAssistantMsg) {
+        const content = sanitizePromptInput(lastAssistantMsg.content);
+        const words = content.split(/\s+/);
+        const truncated = words.length > 80 ? words.slice(0, 80).join(' ') + '...' : content;
+        followUpInstruction = `\nCRITICAL CONTEXT: The user's query "${currentQuestionText}" is a follow-up question. Use the previous assistant answer for continuity and to answer naturally: "${truncated}".`;
+      }
+    } else {
+      followUpInstruction = `\nCRITICAL CONTEXT: Ignore details from your previous assistant answers when the topic changes.`;
+    }
+  }
+
+  // Extract recent topics from last 10 user messages
+  let recentTopicsBlock = "";
+  if (mode === 'chat' || mode === 'personal') {
+    const allHistoryMsgs = Array.isArray(history) ? history : [];
+    // Ensure we exclude the current question if it is the last message
+    let pastHistory = [];
+    if (allHistoryMsgs.length > 0) {
+      const lastMsg = allHistoryMsgs[allHistoryMsgs.length - 1];
+      if (lastMsg.role === 'user' && lastMsg.content === userData.question) {
+        pastHistory = allHistoryMsgs.slice(0, -1);
+      } else {
+        pastHistory = allHistoryMsgs;
+      }
+    }
+    const allUserMsgs = pastHistory.filter(m => m.role === 'user');
+    const last10UserMsgs = allUserMsgs.slice(-10);
+    const topicsSet = new Set();
+    last10UserMsgs.forEach(m => {
+      const topic = detectIntent(m.content);
+      const cleanTopic = getCleanTopicName(topic);
+      if (cleanTopic && cleanTopic !== 'general') {
+        topicsSet.add(cleanTopic);
+      }
+    });
+    const recentTopicsList = Array.from(topicsSet).slice(0, 5);
+    const recentTopicsString = recentTopicsList.join(', ');
+    recentTopicsBlock = `[PRIORITY 5 ⭐] TOPIC MEMORY\nRECENT TOPICS:\n${recentTopicsString || 'None'}\nNote: This is memory only. Never let topics override the current question.`;
   }
 
   // Intent detection and contradiction routing
@@ -386,16 +515,26 @@ Current Day: ${weekdayName}
 Current Quarter: ${quarter}
 Current Season: ${season}`;
 
-  const systemInstruction = `You are a wise, warm, and elderly family Pandit Ji (an Indian astrologer) talking to a relative. Respond in Hindi.
+  const systemInstruction = `Speak like an experienced Indian family Pandit. Respond in natural Hindi (conversational, everyday Hindi).
 CRITICAL RULES:
-1. Tone & Style: Sound like a kind, experienced family elder. Use simple, everyday Hindi. Avoid excessive astrology jargon, dramatic language, or mystical statements.
-2. Structure: Provide a short reasoning, a realistic prediction, one simple practical remedy, and end with exactly one natural follow-up question.
-3. Word Variety: Avoid repetitive wording naturally. Vary your opening greetings and sentence structures across responses.
-4. Length: STRICTLY maximum 80 words. Be very concise.
-5. Formatting: Plain text only. No headings, no sections, no lists, no bullet points, and no markdown (do not use bold **, italics, etc.).
-6. No Emojis: Do not use any emojis at all.
-7. No AI: Never mention AI, chatbot, models, assistant, or prompts. Act as a real person.
-8. Respect Facts: Align with and respect the user's marital status, occupation, and children facts. Never contradict stored facts.`;
+1. Tone & Style: Behave like a wise, warm family elder. Speak like an experienced Indian family Pandit. Use natural Hindi. No robotic templates. No excessive planets. No unnecessary remedies. Only give remedies when useful. Avoid repeating the user's name every answer. Avoid mentioning dates like "Today June 21 2026..." unless relevant.
+2. Target Length: 80–130 words.
+3. Formatting: Plain text only, no markdown (no bold **, no italics), no emojis.
+4. Repetition & Continuity: Focus strictly on the latest question. Do not repeat your previous answers or previous wording.
+5. Topic Drift / Question Priority: The current user question is the most important thing. Never force previous topics into the answer. Ignore old conversation when the topic changes.
+
+=========================================
+MEMORY HIERARCHY & PRIORITY RULES
+=========================================
+You must strictly follow this priority when answering:
+1. [PRIORITY 1 ⭐⭐⭐⭐⭐] LATEST USER QUESTION: This is the absolute highest priority. Always obey and answer the latest user question. If old conversation conflicts with the current question, always obey the latest question.
+2. [PRIORITY 2 ⭐⭐⭐⭐] USER PROFILE: Name, gender, DOB, marital status, occupation, place.
+3. [PRIORITY 3 ⭐⭐⭐] FACT MEMORY: Married, children, business owner, etc.
+4. [PRIORITY 4 ⭐⭐] RECENT CONVERSATION: Recent exchange.
+5. [PRIORITY 5 ⭐] TOPIC MEMORY / SUMMARY: Summary of older conversation.
+
+CRITICAL INSTRUCTION: If old conversation conflicts with the current question, always obey the latest question. Previous topics must never override a new topic.
+`;
 
   let ageDisplay = "Unknown";
 
@@ -418,31 +557,29 @@ CRITICAL RULES:
   if (mode === 'chat' || mode === 'personal') {
     let promptSections = [];
 
-    // 1. USER PROFILE SECTION (Part 6)
-    let userProfileBlock = "USER PROFILE\n";
+    // [PRIORITY 2 ⭐⭐⭐⭐] USER PROFILE
+    let userProfileBlock = "[PRIORITY 2 ⭐⭐⭐⭐] USER PROFILE\n";
     if (profile) {
       const age = calculateAge(profile.dob);
       const location = [profile.district, profile.state, profile.country].filter(Boolean).join(', ') || 'Unknown';
       userProfileBlock += `Name: ${profile.name || 'Unknown'}
 Gender: ${profile.gender || 'Unknown'}
-Age: ${age}
+DOB: ${profile.dob || 'Unknown'}
 Marital Status: ${profile.maritalStatus || 'Unknown'}
 Occupation: ${profile.occupation || 'Unknown'}
-Education: ${profile.education || 'Unknown'}
-Location: ${location}`;
+Place of Birth: ${profile.placeOfBirth || location}`;
     } else {
       userProfileBlock += `Name: ${userData.name || 'Unknown'}
 Gender: ${userData.gender || 'Unknown'}
-Age: ${ageDisplay || 'Unknown'}
+DOB: ${userData.dobYear ? `${userData.dobYear}-${String(userData.dobMonth).padStart(2, '0')}-${String(userData.dobDay).padStart(2, '0')}` : 'Unknown'}
 Marital Status: Unknown
 Occupation: Unknown
-Education: Unknown
-Location: Unknown`;
+Place of Birth: Unknown`;
     }
     promptSections.push(userProfileBlock);
 
-    // 2. FACT MEMORY SECTION
-    let factMemoryBlock = "FACT MEMORY\n";
+    // [PRIORITY 3 ⭐⭐⭐] FACT MEMORY
+    let factMemoryBlock = "[PRIORITY 3 ⭐⭐⭐] FACT MEMORY\n";
     if (getFactValue(facts.married) !== null) factMemoryBlock += `User is ${getFactValue(facts.married) ? "married" : "single"}.\n`;
     if (getFactValue(facts.hasChildren) !== null) factMemoryBlock += `User ${getFactValue(facts.hasChildren) ? "has children" : "does not have children"}.\n`;
     if (getFactValue(facts.hasJob) !== null) factMemoryBlock += `User ${getFactValue(facts.hasJob) ? "has a job" : "does not have a job"}.\n`;
@@ -450,23 +587,47 @@ Location: Unknown`;
     if (getFactValue(facts.gender) !== null) factMemoryBlock += `User gender is ${getFactValue(facts.gender)}.\n`;
     promptSections.push(factMemoryBlock.trim());
 
-    // 3. SUMMARY MEMORY SECTION
-    if (summaryText) {
-      promptSections.push(`SUMMARY MEMORY\n${summaryText}`);
+    // [PRIORITY 5 ⭐] TOPIC MEMORY
+    if (recentTopicsBlock) {
+      promptSections.push(recentTopicsBlock);
     }
 
-    // 4. CONVERSATION SECTION
-    let conversationHistory = "CONVERSATION:\n";
-    const activeHistory = Array.isArray(history) ? history.slice(-20) : [];
-    if (activeHistory.length > 0) {
-      activeHistory.forEach(msg => {
-        if (msg && msg.role && msg.content) {
-          const roleLabel = msg.role === "user" ? "USER" : "PANDIT";
-          conversationHistory += `${roleLabel}: ${sanitizePromptInput(msg.content)}\n`;
-        }
-      });
+    // [PRIORITY 5 ⭐] OLD SUMMARY
+    if (summaryText) {
+      promptSections.push(`[PRIORITY 5 ⭐] OLD SUMMARY\n${summaryText}`);
     }
-    promptSections.push(conversationHistory.trim());
+
+    // [PRIORITY 4 ⭐⭐] RECENT CONVERSATION
+    const allHistoryMsgs = Array.isArray(history) ? history : [];
+    
+    // Ensure we exclude the current question if it is the last message
+    let pastHistory = [];
+    if (allHistoryMsgs.length > 0) {
+      const lastMsg = allHistoryMsgs[allHistoryMsgs.length - 1];
+      if (lastMsg.role === 'user' && lastMsg.content === userData.question) {
+        pastHistory = allHistoryMsgs.slice(0, -1);
+      } else {
+        pastHistory = allHistoryMsgs;
+      }
+    }
+    const pastUserMsgs = pastHistory.filter(m => m.role === 'user');
+    const pastAssistantMsgs = pastHistory.filter(m => m.role === 'model' || m.role === 'assistant');
+
+    const recentUserQuestions = pastUserMsgs.slice(-3).map(m => `- ${sanitizePromptInput(m.content)}`).join('\n');
+    
+    const recentPanditReplies = pastAssistantMsgs.slice(-3).map((m, idx, arr) => {
+      const content = sanitizePromptInput(m.content);
+      const words = content.split(/\s+/);
+      
+      const isLastAssistantMsg = (idx === arr.length - 1);
+      const budget = (isFollowUp && isLastAssistantMsg) ? 80 : 35;
+      
+      const truncated = words.length > budget ? words.slice(0, budget).join(' ') + '...' : content;
+      return `- ${truncated}`;
+    }).join('\n');
+
+    let recentHistoryBlock = `[PRIORITY 4 ⭐⭐] RECENT CONVERSATION\nRECENT USER QUESTIONS:\n${recentUserQuestions || "None"}\n\nRECENT PANDIT REPLIES:\n${recentPanditReplies || "None"}`;
+    promptSections.push(recentHistoryBlock);
 
     // Adjust system instruction for personalization & contradiction rules (Part 7 & 8)
     let activeSystemInstruction = systemInstruction;
@@ -491,6 +652,8 @@ Location: Unknown`;
       activeSystemInstruction += "\nCRITICAL BUSINESS OWNER RULE: If the user asks about getting a job, unemployment, or searching for work, DO NOT frame your answer around them being unemployed. Instead, describe this transition as career expansion, cashflow improvements, and business growth opportunities.";
     }
 
+    activeSystemInstruction += followUpInstruction;
+
     activeSystemInstruction += `\nUse only this context:\n${dateContext}\n`;
 
     fullPrompt = `
@@ -499,6 +662,7 @@ ${activeSystemInstruction}
 ${promptSections.join('\n\n')}
 
 <user_query>
+[PRIORITY 1 ⭐⭐⭐⭐⭐] LATEST USER QUESTION:
 ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
 </user_query>
 `;
@@ -524,8 +688,24 @@ ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
   if (!useOfflineFallback) {
     try {
       console.log("Calling AI...");
-      const aiText = await generateAIResponse(fullPrompt);
+      let aiText = await generateAIResponse(fullPrompt);
       console.log("AI returned text length:", aiText.length);
+
+      // Repetition detection and retry
+      const lastAssistantMsg = Array.isArray(history) 
+        ? [...history].reverse().find(m => m.role === 'model' || m.role === 'assistant')
+        : null;
+
+      if (lastAssistantMsg && lastAssistantMsg.content) {
+        const similarity = getJaccardSimilarity(aiText, lastAssistantMsg.content);
+        console.log(`Generated response Jaccard similarity to last response: ${similarity.toFixed(2)}`);
+        if (similarity > 0.70) {
+          console.log("Repetition detected! Retrying generation once...");
+          const retryPrompt = `${fullPrompt}\n\n[SYSTEM WARNING: Please generate a new response. Answer differently and avoid repeating previous wording.]`;
+          aiText = await generateAIResponse(retryPrompt);
+          console.log("AI returned text length on retry:", aiText.length);
+        }
+      }
 
       if (!aiText || !aiText.trim()) {
         throw new Error("Empty AI output");
@@ -535,7 +715,7 @@ ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
         const humanizedText = humanize(aiText);
         console.log("Humanized text length:", humanizedText.length);
         jsonResponse = {
-          text: humanizedText
+          text: removeDuplicateSentences(humanizedText)
         };
       } else {
         const parsedData = parseModelResponse(aiText);

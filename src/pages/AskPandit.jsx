@@ -113,61 +113,120 @@ const AskPandit = () => {
         return;
       }
       
+      let finalMsgs = [];
+      let finalForm = personalForm;
+      let hasDetails = false;
+
       // Local storage fallback for immediate UI
       try {
         const savedProfile = localStorage.getItem(`pandit_user_profile_${user.uid}`);
-        if (savedProfile) setPersonalForm(JSON.parse(savedProfile));
+        if (savedProfile) {
+          finalForm = JSON.parse(savedProfile);
+          setPersonalForm(finalForm);
+        }
         
         const savedEntered = localStorage.getItem(`pandit_has_entered_details_${user.uid}`);
-        setHasEnteredDetails(savedEntered === 'true');
+        hasDetails = savedEntered === 'true';
+        setHasEnteredDetails(hasDetails);
         
         const savedMsgs = localStorage.getItem(`pandit_chat_messages_${user.uid}`);
-        if (savedMsgs) setMessages(JSON.parse(savedMsgs));
+        if (savedMsgs) {
+          finalMsgs = JSON.parse(savedMsgs);
+        }
       } catch(e) {}
 
       // Fetch from Firestore
       try {
         const firestoreHistory = await getPanditHistory(user.uid);
         if (firestoreHistory !== null) {
-          setMessages(firestoreHistory);
+          finalMsgs = firestoreHistory;
         }
 
         const profile = await getUserProfile(user.uid);
         if (profile) {
-          setPersonalForm(prev => {
-            const updatedForm = { ...prev };
-            if (profile.name) updatedForm.name = profile.name;
-            if (profile.gender) updatedForm.gender = profile.gender;
-            if (profile.maritalStatus) updatedForm.maritalStatus = profile.maritalStatus;
-            if (profile.occupation) updatedForm.occupation = profile.occupation;
-            if (profile.placeOfBirth) {
-              updatedForm.pob = profile.placeOfBirth;
-            } else if (profile.pob) {
-              updatedForm.pob = profile.pob;
-            }
+          hasDetails = true;
+          setHasEnteredDetails(true);
+          
+          const updatedForm = { ...finalForm };
+          if (profile.name) updatedForm.name = profile.name;
+          if (profile.gender) updatedForm.gender = profile.gender;
+          if (profile.maritalStatus) updatedForm.maritalStatus = profile.maritalStatus;
+          if (profile.occupation) updatedForm.occupation = profile.occupation;
+          if (profile.placeOfBirth) {
+            updatedForm.pob = profile.placeOfBirth;
+          } else if (profile.pob) {
+            updatedForm.pob = profile.pob;
+          }
 
-            if (profile.dob) {
-              const parts = profile.dob.split(/[-/]/);
-              if (parts.length === 3) {
-                updatedForm.dobYear = parts[0];
-                updatedForm.dobMonth = parts[1];
-                updatedForm.dobDay = parts[2];
-              }
+          if (profile.dob) {
+            const parts = profile.dob.split(/[-/]/);
+            if (parts.length === 3) {
+              updatedForm.dobYear = parts[0];
+              updatedForm.dobMonth = parts[1];
+              updatedForm.dobDay = parts[2];
             }
-            if (profile.timeOfBirth) {
-              const match = profile.timeOfBirth.match(/(\d+):(\d+)\s*(AM|PM)/i);
-              if (match) {
-                updatedForm.tobHour = match[1];
-                updatedForm.tobMinute = match[2];
-                updatedForm.tobPeriod = match[3].toUpperCase();
-              }
+          }
+          if (profile.timeOfBirth) {
+            const match = profile.timeOfBirth.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (match) {
+              updatedForm.tobHour = match[1];
+              updatedForm.tobMinute = match[2];
+              updatedForm.tobPeriod = match[3].toUpperCase();
             }
-            return updatedForm;
-          });
+          }
+          finalForm = updatedForm;
+          setPersonalForm(finalForm);
         }
       } catch (e) {
         console.warn("Firestore error, staying on local data.", e);
       }
+
+      // Check if history is empty and profile exists, then insert profile card
+      const isProfileValid = finalForm.name && finalForm.gender && finalForm.dobDay && finalForm.dobMonth && finalForm.dobYear && finalForm.pob;
+      if (hasDetails || isProfileValid) {
+        const genderIcon = finalForm.gender === 'Male' ? '♂️' : finalForm.gender === 'Female' ? '♀️' : '👤';
+        const genderText = isHindi 
+          ? (finalForm.gender === 'Male' ? 'पुरुष' : finalForm.gender === 'Female' ? 'महिला' : 'अन्य') 
+          : finalForm.gender;
+        
+        const dobFormatted = `${finalForm.dobDay}-${finalForm.dobMonth}-${finalForm.dobYear}`;
+        
+        const maritalText = isHindi
+          ? (finalForm.maritalStatus === 'Single' ? 'एकल' : finalForm.maritalStatus === 'Married' ? 'विवाहित' : finalForm.maritalStatus === 'Divorced' ? 'तलाकशुदा' : finalForm.maritalStatus === 'Separated' ? 'अलग' : finalForm.maritalStatus === 'Widowed' ? 'विधवा/विधुर' : finalForm.maritalStatus)
+          : finalForm.maritalStatus;
+
+        const occupationText = isHindi
+          ? (finalForm.occupation === 'Student' ? 'छात्र' : finalForm.occupation === 'Private Job' ? 'प्राइवेट नौकरी' : finalForm.occupation === 'Government Job' ? 'सरकारी नौकरी' : finalForm.occupation === 'Business Owner' ? 'व्यापार मालिक' : finalForm.occupation === 'Self Employed' ? 'स्व-नियोजित' : finalForm.occupation === 'Homemaker' ? 'गृहणी' : finalForm.occupation === 'Retired' ? 'सेवानिवृत्त' : finalForm.occupation === 'Other' ? 'अन्य' : finalForm.occupation)
+          : finalForm.occupation;
+
+        const timeOfBirth = `${finalForm.tobHour}:${finalForm.tobMinute} ${finalForm.tobPeriod}`;
+
+        const introMessage = `🧾 Birth Details Submitted
+
+👤 ${finalForm.name}
+${genderIcon} ${genderText}
+🎂 ${dobFormatted}
+💍 ${maritalText}
+💼 ${occupationText}
+🕐 ${timeOfBirth}
+📍 ${finalForm.pob}
+
+Kripya meri janm jankari ke anusar margdarshan dein.`;
+
+        const profileBubble = {
+          role: "user",
+          type: "profile",
+          persist: false,
+          content: introMessage
+        };
+
+        const hasProfileBubble = finalMsgs.some(m => m.type === "profile");
+        if (!hasProfileBubble) {
+          finalMsgs = [profileBubble, ...finalMsgs];
+        }
+      }
+
+      setMessages(finalMsgs);
       setIsLoaded(true);
     };
     loadData();
@@ -177,7 +236,8 @@ const AskPandit = () => {
   useEffect(() => {
     if (!isLoaded || !user?.uid) return;
     try {
-      localStorage.setItem(`pandit_chat_messages_${user.uid}`, JSON.stringify(messages));
+      const messagesToSave = messages.filter(m => m.persist !== false);
+      localStorage.setItem(`pandit_chat_messages_${user.uid}`, JSON.stringify(messagesToSave));
       localStorage.setItem(`pandit_user_profile_${user.uid}`, JSON.stringify(personalForm));
       localStorage.setItem(`pandit_has_entered_details_${user.uid}`, hasEnteredDetails ? 'true' : 'false');
     } catch (e) {
@@ -232,14 +292,51 @@ const AskPandit = () => {
   const handleNewChat = () => {
     if (user?.uid) {
       localStorage.removeItem(`pandit_chat_messages_${user.uid}`);
-      localStorage.removeItem(`pandit_user_profile_${user.uid}`);
-      localStorage.removeItem(`pandit_has_entered_details_${user.uid}`);
     }
-    setMessages([]);
-    setHasEnteredDetails(false);
-    setPersonalForm({ 
-      name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '', maritalStatus: '', occupation: '' 
-    });
+    
+    const dob = `${personalForm.dobYear}-${personalForm.dobMonth}-${personalForm.dobDay}`;
+    const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
+    
+    const genderIcon = personalForm.gender === 'Male' ? '♂️' : personalForm.gender === 'Female' ? '♀️' : '👤';
+    const genderText = isHindi 
+      ? (personalForm.gender === 'Male' ? 'पुरुष' : personalForm.gender === 'Female' ? 'महिला' : 'अन्य') 
+      : personalForm.gender;
+    
+    const dobFormatted = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
+    
+    const maritalText = isHindi
+      ? (personalForm.maritalStatus === 'Single' ? 'एकल' : personalForm.maritalStatus === 'Married' ? 'विवाहित' : personalForm.maritalStatus === 'Divorced' ? 'तलाकशुदा' : personalForm.maritalStatus === 'Separated' ? 'अलग' : personalForm.maritalStatus === 'Widowed' ? 'विधवा/विधुर' : personalForm.maritalStatus)
+      : personalForm.maritalStatus;
+
+    const occupationText = isHindi
+      ? (personalForm.occupation === 'Student' ? 'छात्र' : personalForm.occupation === 'Private Job' ? 'प्राइवेट नौकरी' : personalForm.occupation === 'Government Job' ? 'सरकारी नौकरी' : personalForm.occupation === 'Business Owner' ? 'व्यापार मालिक' : personalForm.occupation === 'Self Employed' ? 'स्व-नियोजित' : personalForm.occupation === 'Homemaker' ? 'गृहणी' : personalForm.occupation === 'Retired' ? 'सेवानिवृत्त' : personalForm.occupation === 'Other' ? 'अन्य' : personalForm.occupation)
+      : personalForm.occupation;
+
+    const introMessage = `🧾 Birth Details Submitted
+
+👤 ${personalForm.name}
+${genderIcon} ${genderText}
+🎂 ${dobFormatted}
+💍 ${maritalText}
+💼 ${occupationText}
+🕐 ${timeOfBirth}
+📍 ${personalForm.pob}
+
+Kripya meri janm jankari ke anusar margdarshan dein.`;
+
+    const profileBubble = {
+      role: "user",
+      type: "profile",
+      persist: false,
+      content: introMessage
+    };
+
+    if (messages.some(m => m.type === "profile")) {
+      const existingProfile = messages.find(m => m.type === "profile");
+      setMessages([existingProfile]);
+    } else {
+      setMessages([profileBubble]);
+    }
   };
 
   // DYNAMIC LANGUAGE DETECTION
@@ -355,66 +452,30 @@ const AskPandit = () => {
     personalForm.occupation && 
     dobError === null;
 
-  const handleStartChat = async () => {
-    if (isFormValid) {
-      setLoading(true);
-      try {
-        const dob = `${personalForm.dobYear}-${personalForm.dobMonth}-${personalForm.dobDay}`;
-        const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
-        const placeOfBirth = personalForm.pob;
-
-        const profileData = {
-          name: personalForm.name,
-          gender: personalForm.gender,
-          dob,
-          timeOfBirth,
-          placeOfBirth,
-          maritalStatus: personalForm.maritalStatus,
-          occupation: personalForm.occupation
-        };
-
-        await saveUserProfile(user.uid, profileData);
-        setHasEnteredDetails(true);
-      } catch (err) {
-        console.error("Error saving profile details:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleSend = async (e) => {
-    if (e) e.preventDefault();
-    if (!inputText.trim() || loading || !user) return;
-
-    const question = inputText.trim();
-    setInputText('');
+  const executeSendMessage = async (question, currentMessages) => {
     setErrorMsg('');
-
-    const isFree = !user?.premium && !user?.dailyQuestionUsed;
-    const hasEnoughCoins = (user?.coins || 0) >= 30;
-
-    if (!user?.premium && !isFree && !hasEnoughCoins) {
-      setShowLowCoinsModal(true);
-      return;
-    }
 
     // CRITICAL FIX #2: Eliminate race condition by using updatedMessages immediately
     const newUserMessage = { role: 'user', content: question };
-    const updatedMessages = [...messages, newUserMessage];
+    const updatedMessages = [...currentMessages, newUserMessage];
     setMessages(updatedMessages); // Update state for UI
     
-    // FIRESTORE: Save user message
-    if (user?.uid) {
+    // FIRESTORE: Save user message (if not a profile card)
+    if (user?.uid && newUserMessage.type !== "profile") {
       savePanditMessage(user.uid, 'user', question);
     }
 
     setLoading(true);
 
     try {
+      // Filter out profile bubbles before sending to backend
+      const aiHistory = updatedMessages.filter(
+        m => m.type !== "profile"
+      );
+
       // CRITICAL FIX #7: Chat History Hard Limit
       const MAX_HISTORY = 30; // Max 15 user + 15 AI turns
-      const trimmedHistory = updatedMessages.slice(-MAX_HISTORY);
+      const trimmedHistory = aiHistory.slice(-MAX_HISTORY);
 
       const tone = detectTone(question);
       
@@ -440,10 +501,11 @@ const AskPandit = () => {
       if (!response.ok) throw new Error(data.error || 'API Request Failed');
 
       const aiResponseText = data.text;
-      setMessages(prev => [...prev, { role: 'model', content: aiResponseText }]);
+      const modelMessage = { role: 'model', content: aiResponseText };
+      setMessages(prev => [...prev, modelMessage]);
       
-      // FIRESTORE: Save model message
-      if (user?.uid) {
+      // FIRESTORE: Save model message (if not a profile card)
+      if (user?.uid && modelMessage.type !== "profile") {
         savePanditMessage(user.uid, 'model', aiResponseText);
       }
       
@@ -457,6 +519,87 @@ const AskPandit = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartChat = async () => {
+    if (isFormValid) {
+      setLoading(true);
+      try {
+        const dob = `${personalForm.dobYear}-${personalForm.dobMonth}-${personalForm.dobDay}`;
+        const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
+        const placeOfBirth = personalForm.pob;
+
+        const profileData = {
+          name: personalForm.name,
+          gender: personalForm.gender,
+          dob,
+          timeOfBirth,
+          placeOfBirth,
+          maritalStatus: personalForm.maritalStatus,
+          occupation: personalForm.occupation
+        };
+
+        await saveUserProfile(user.uid, profileData);
+        setHasEnteredDetails(true);
+
+        const genderIcon = personalForm.gender === 'Male' ? '♂️' : personalForm.gender === 'Female' ? '♀️' : '👤';
+        const genderText = isHindi 
+          ? (personalForm.gender === 'Male' ? 'पुरुष' : personalForm.gender === 'Female' ? 'महिला' : 'अन्य') 
+          : personalForm.gender;
+        
+        const dobFormatted = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
+        
+        const maritalText = isHindi
+          ? (personalForm.maritalStatus === 'Single' ? 'एकल' : personalForm.maritalStatus === 'Married' ? 'विवाहित' : personalForm.maritalStatus === 'Divorced' ? 'तलाकशुदा' : personalForm.maritalStatus === 'Separated' ? 'अलग' : personalForm.maritalStatus === 'Widowed' ? 'विधवा/विधुर' : personalForm.maritalStatus)
+          : personalForm.maritalStatus;
+
+        const occupationText = isHindi
+          ? (personalForm.occupation === 'Student' ? 'छात्र' : personalForm.occupation === 'Private Job' ? 'प्राइवेट नौकरी' : personalForm.occupation === 'Government Job' ? 'सरकारी नौकरी' : personalForm.occupation === 'Business Owner' ? 'व्यापार मालिक' : personalForm.occupation === 'Self Employed' ? 'स्व-नियोजित' : personalForm.occupation === 'Homemaker' ? 'गृहणी' : personalForm.occupation === 'Retired' ? 'सेवानिवृत्त' : personalForm.occupation === 'Other' ? 'अन्य' : personalForm.occupation)
+          : personalForm.occupation;
+
+        const introMessage = `🧾 Birth Details Submitted
+
+👤 ${personalForm.name}
+${genderIcon} ${genderText}
+🎂 ${dobFormatted}
+💍 ${maritalText}
+💼 ${occupationText}
+🕐 ${timeOfBirth}
+📍 ${placeOfBirth}
+
+Kripya meri janm jankari ke anusar margdarshan dein.`;
+
+        setMessages([
+          {
+            role: "user",
+            type: "profile",
+            content: introMessage
+          }
+        ]);
+      } catch (err) {
+        console.error("Error saving profile details:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleSend = async (e) => {
+    if (e) e.preventDefault();
+    if (!inputText.trim() || loading || !user) return;
+
+    const question = inputText.trim();
+    setInputText('');
+
+    const isFree = !user?.premium && !user?.dailyQuestionUsed;
+    const hasEnoughCoins = (user?.coins || 0) >= 30;
+
+    if (!user?.premium && !isFree && !hasEnoughCoins) {
+      setShowLowCoinsModal(true);
+      return;
+    }
+
+    await executeSendMessage(question, messages);
   };
 
   const renderBirthDetailsForm = () => (
