@@ -514,17 +514,28 @@ ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
 
   const useOfflineFallback = !BEDROCK_API_KEY || !BEDROCK_BASE_URL;
 
+  let responseSource = "AI";
+
+  console.log("=== AI REQUEST START ===");
+  console.log("mode:", mode);
+  console.log("question:", userData?.question);
+  console.log("intent:", detectedIntent);
+
   if (!useOfflineFallback) {
     try {
+      console.log("Calling AI...");
       const aiText = await generateAIResponse(fullPrompt);
+      console.log("AI returned text length:", aiText.length);
 
       if (!aiText || !aiText.trim()) {
         throw new Error("Empty AI output");
       }
 
       if (mode === 'chat' || mode === 'personal') {
+        const humanizedText = humanize(aiText);
+        console.log("Humanized text length:", humanizedText.length);
         jsonResponse = {
-          text: humanize(aiText)
+          text: humanizedText
         };
       } else {
         const parsedData = parseModelResponse(aiText);
@@ -533,16 +544,21 @@ ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
         }
         jsonResponse = parsedData;
       }
+      console.log("AI SUCCESS");
       success = true;
     } catch (err) {
+      console.log("AI FAILED:", err.message);
       console.error("AI Generation failed:", err.message || err);
       lastError = err;
     }
   }
 
   if (!success) {
+    console.log("OFFLINE FALLBACK TRIGGERED");
+    responseSource = "OFFLINE";
     if (mode === 'chat' || mode === 'personal') {
       try {
+        console.log("Using horoscopeEngine / dataset fallback");
         const fallbackText = buildResponse(uid, detectedIntent, todayString, questionText);
         jsonResponse = {
           text: fallbackText
@@ -609,6 +625,7 @@ ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
         return res.status(403).json({ error: 'Not enough coins' });
       }
     }
+    console.log("RESPONSE SOURCE =", responseSource);
     return res.status(200).json(jsonResponse);
   }
 
@@ -621,11 +638,13 @@ ${sanitizePromptInput(userData.question || "Tell me about my destiny")}
     : "I apologize, but I am experiencing cosmic interference. Please try again later.";
 
   if (mode === 'chat' || mode === 'personal') {
+    console.log("RESPONSE SOURCE = OFFLINE");
     return res.status(200).json({ 
       text: fallbackMessage
     });
   }
 
+  console.log("RESPONSE SOURCE = OFFLINE");
   return res.status(finalStatusCode === 429 ? 429 : 500).json({ 
     error: isQuotaError ? "Quota exceeded" : (lastError?.message || "Internal Server Error"),
   });

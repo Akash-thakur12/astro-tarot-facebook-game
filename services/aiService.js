@@ -43,6 +43,7 @@ export async function generateAIResponse(prompt) {
 
   for (const model of models) {
     try {
+      console.log("Trying model:", model);
       const response = await clientInstance.chat.completions.create(
         {
           model,
@@ -56,6 +57,7 @@ export async function generateAIResponse(prompt) {
 
       const content = response.choices?.[0]?.message?.content;
       if (content && content.trim()) {
+        console.log("Model succeeded:", model);
         return content.trim();
       }
       throw new Error('Model returned an empty content body');
