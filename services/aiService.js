@@ -34,9 +34,9 @@ export async function generateAIResponse(prompt) {
   }
 
   const models = [
-    'qwen/qwen3-8b',
-    'google/gemma-3-4b-it',
-    'deepseek.v3.2'
+    'google.gemma-3-4b-it',
+    'deepseek.v3.1',
+    'qwen.qwen3-32b-v1:0'
   ];
 
   let lastError = null;
