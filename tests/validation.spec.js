@@ -41,7 +41,7 @@ test.describe('Application Validation', () => {
 
   test('Guest Login and Initial State Verification', async ({ page }) => {
     // Go to the local dev server
-    await page.goto('http://localhost:5173/#/login');
+    await page.goto('/#/login');
     
     // Wait for the page to load
     await page.waitForLoadState('networkidle');

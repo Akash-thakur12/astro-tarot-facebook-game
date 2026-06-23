@@ -493,7 +493,8 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
           mode: 'chat', 
           currentTone: tone, 
           userData: { ...personalForm, question },
-          history: trimmedHistory
+          history: trimmedHistory,
+          language: currentLanguage
         })
       });
 
