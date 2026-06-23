@@ -37,16 +37,14 @@ function limitPlanetsAndHouses(text) {
 // New structured response components with variable layouts to avoid repeating same structure
 export function buildStructuredResponse(data, seed) {
   const reasoning = data.reasoning || "";
-  const prediction = data.prediction || "";
+  const prediction = data.prediction || "स्थिति धीरे-धीरे सामान्य हो जाएगी।";
   const remedy = data.remedy || "";
-  const followup = data.followup || "";
 
   return [
-    reasoning,
-    prediction,
-    remedy,
-    followup
-  ].filter(Boolean).join(" ");
+    `🔮 Prediction:\n${prediction}`,
+    reasoning ? `📿 Reasoning:\n${reasoning}` : "",
+    remedy ? `🪔 Guidance:\n${remedy}` : ""
+  ].filter(Boolean).join("\n\n");
 }
 
 export function humanize(text, seed = 1) {
@@ -60,17 +58,30 @@ export function humanize(text, seed = 1) {
   result = result.replace(/#+\s+/g, "");  // Headers
   result = result.replace(/^\s*[-*+]\s+/gm, ""); // Bullet points
 
+  // Save allowed emojis from being removed
+  result = result.replace(/🔮/g, "___PREDICTION_EMOJI___");
+  result = result.replace(/📿/g, "___REASONING_EMOJI___");
+  result = result.replace(/🪔/g, "___GUIDANCE_EMOJI___");
+
   // 2. Remove emojis
-  result = result.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/gu, "");
+  result = result.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}\u{1FA70}-\u{1FAFF}]/gu, "");
+
+  // Restore allowed emojis
+  result = result.replace(/___PREDICTION_EMOJI___/g, "🔮");
+  result = result.replace(/___REASONING_EMOJI___/g, "📿");
+  result = result.replace(/___GUIDANCE_EMOJI___/g, "🪔");
 
   // 3. Keep planets/houses limited to maximum of 2 and replace with neutral simple words, not astrology terms
   result = limitPlanetsAndHouses(result);
 
-  // 4. 80-word cap
-  result = limitToWordCount(result, 80);
+  // 4. Word count cap
+  result = limitToWordCount(result, 130);
 
   // 5. Whitespace cleanup
-  result = result.replace(/\s+/g, " ").trim();
+  result = result.replace(/[ \t]+/g, " ");
+  result = result.replace(/\r\n/g, "\n");
+  result = result.replace(/\n\s*\n/g, "\n\n");
+  result = result.trim();
 
   return result;
 }
