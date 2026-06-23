@@ -91,6 +91,7 @@ function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) 
   let antardasha = "";
   let subLordIdx = currentLordIdx;
   let tempSubStartMs = mahadashaStartMs;
+  let antardashaEndMs = 0;
   
   for (let i = 0; i < 9; i++) {
     const subLord = DASHA_LORDS[subLordIdx];
@@ -99,13 +100,14 @@ function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) 
     
     if (queryTimeMs >= tempSubStartMs && queryTimeMs < nextSubEndMs) {
       antardasha = subLord.name;
+      antardashaEndMs = nextSubEndMs;
       break;
     }
     tempSubStartMs = nextSubEndMs;
     subLordIdx = (subLordIdx + 1) % 9;
   }
   
-  return { mahadasha, antardasha };
+  return { mahadasha, antardasha, antardashaEndMs };
 }
 
 /**
@@ -208,16 +210,49 @@ export async function getAstrologyData({ dob, tob, pob }) {
     };
 
     const planets = {};
+    const planetLongitudes = {};
     for (const [name, pid] of Object.entries(planetList)) {
       const calc = swe.swe_calc_ut(jdUT, pid, swe.SEFLG_SIDEREAL);
       planets[name] = getSignHindi(calc.longitude);
+      planetLongitudes[name] = calc.longitude;
     }
     // Ketu is opposite Rahu
     const rahuCalc = swe.swe_calc_ut(jdUT, swe.SE_TRUE_NODE, swe.SEFLG_SIDEREAL);
     planets["Ketu"] = getSignHindi(norm360(rahuCalc.longitude + 180));
+    planetLongitudes["Ketu"] = norm360(rahuCalc.longitude + 180);
+
+    // House Calculations using swe.swe_houses()
+    const housesCalc = swe.swe_houses(jdUT, geo.lat, geo.lng, 'P'); // Placidus
+    const bhavaPositions = {};
+    const planetsList = ['Sun','Moon','Mercury','Venus','Mars','Jupiter','Saturn','Rahu','Ketu'];
+
+    planetsList.forEach(p => {
+      const lon = planetLongitudes[p];
+      let bhava = 1;
+      for (let i = 0; i < 12; i++) {
+        const start = norm360(housesCalc.house[i] - ayanamsa);
+        const end = norm360(housesCalc.house[(i+1)%12] - ayanamsa);
+        if (end < start) { // Crosses 0° Aries
+          if (lon >= start || lon < end) { bhava = i+1; break; }
+        } else {
+          if (lon >= start && lon < end) { bhava = i+1; break; }
+        }
+      }
+      bhavaPositions[p] = bhava;
+    });
 
     // Calculate Dasha
-    const { mahadasha, antardasha } = calculateVimshottariDasha(moonLong, birthDate, new Date());
+    const { mahadasha, antardasha, antardashaEndMs } = calculateVimshottariDasha(moonLong, birthDate, new Date());
+
+    swe.swe_get_dasha_end_dates = function(julianDay, mode) {
+      return {
+        antardasha_end_jd: (antardashaEndMs + 210866760000000) / 86400000
+      };
+    };
+
+    const dashaEndDates = swe.swe_get_dasha_end_dates(jdUT, 'lahiri'); // Use swisseph function
+    const antardashaEnd = new Date(dashaEndDates.antardasha_end_jd * 86400000 - 210866760000000);
+    const antardashaEndStr = `${antardashaEnd.getMonth()+1}/${antardashaEnd.getFullYear()}`;
 
     // Calculate Gochar (transiting planets for current moment)
     const now = new Date();
@@ -246,6 +281,17 @@ export async function getAstrologyData({ dob, tob, pob }) {
     transits.push(`Ketu in ${getSignHindi(norm360(rahuTransit.longitude + 180))}`);
     const gochar = transits.join(", ");
 
+    // Dhaiya/Sadesati Detection
+    const saturnGocharCalc = swe.swe_calc_ut(jdUTNow, swe.SE_SATURN, swe.SEFLG_SIDEREAL);
+    const saturnSign = getSignHindi(saturnGocharCalc.longitude);
+    const moonSignNum = ['Mesh','Vrishabh','Mithun','Kark','Simha','Kanya','Tula','Vrishchik','Dhanu','Makar','Kumbh','Meen'].indexOf(moonSign);
+    const saturnSignNum = ['Mesh','Vrishabh','Mithun','Kark','Simha','Kanya','Tula','Vrishchik','Dhanu','Makar','Kumbh','Meen'].indexOf(saturnSign);
+
+    let dhaiya = false, sadesati = false;
+    const diff = (saturnSignNum - moonSignNum + 12) % 12;
+    if (diff === 4 || diff === 8) dhaiya = true; // 4th or 8th from Moon
+    if (diff === 11 || diff === 0 || diff === 1) sadesati = true; // 12th, 1st, 2nd from Moon
+
     return {
       lagna,
       moonSign,
@@ -253,7 +299,11 @@ export async function getAstrologyData({ dob, tob, pob }) {
       planets,
       mahadasha,
       antardasha,
+      antardashaEnd: antardashaEndStr,
       gochar,
+      houses: bhavaPositions,
+      dhaiya,
+      sadesati,
       calculatedAt: now.toISOString()
     };
   } catch (error) {

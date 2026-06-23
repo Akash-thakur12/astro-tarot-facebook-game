@@ -1,0 +1,185 @@
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import fs from 'fs';
+
+// Mock firebase-admin completely
+vi.mock('firebase-admin/app', () => ({
+  initializeApp: vi.fn(),
+  cert: vi.fn(),
+  getApps: vi.fn(() => [{ name: 'mock' }])
+}));
+
+vi.mock('firebase-admin/auth', () => ({
+  getAuth: vi.fn(() => ({
+    verifyIdToken: vi.fn(async (token) => {
+      if (token === 'invalid_token') throw new Error("Invalid");
+      return { uid: 'test_user_progress' };
+    })
+  }))
+}));
+
+vi.mock('firebase-admin/firestore', () => {
+  const mockGet = vi.fn(async () => ({
+    exists: true,
+    data: vi.fn(() => ({ coins: 1000, premium: true, name: 'Test User', dob: '1999-08-31' }))
+  }));
+  const mockSet = vi.fn(async () => {});
+  const mockUpdate = vi.fn(async () => {});
+  
+  return {
+    getFirestore: vi.fn(() => ({
+      collection: vi.fn(() => ({
+        doc: vi.fn(() => ({
+          get: mockGet,
+          set: mockSet,
+          update: mockUpdate,
+          collection: vi.fn(() => ({
+            doc: vi.fn(() => ({
+              get: vi.fn(async () => ({ exists: false })),
+              set: vi.fn(async () => {})
+            }))
+          }))
+        }))
+      })),
+      runTransaction: vi.fn(async (cb) => {
+        return cb({
+          get: mockGet,
+          update: mockUpdate
+        });
+      })
+    })),
+    FieldValue: {
+      serverTimestamp: vi.fn(() => 'mock-timestamp')
+    }
+  };
+});
+
+// Mock services/aiService.js so we don't hit external model APIs
+vi.mock('../services/aiService.js', () => ({
+  generateAIResponse: vi.fn(async (prompt) => {
+    if (prompt.includes("Mera lucky number")) {
+      return `🔮 Prediction: Mai jyotish se sambandhit prashna ka hi uttar de sakta hun.
+📿 Reasoning: Aapka prashna Mera lucky number kya hai? kundali par aadharit nahi hai. Jyotish me bhav aur grah dekha jata hai.
+🪔 Guidance: Agar aap kundali alternative jaanna chahte hain to puch sakte hain.`;
+    }
+    return `🔮 Prediction: Aapka career safal hoga.
+📿 Reasoning: Lagna Vrishchik hai aur Dasha achhi hai.
+🪔 Guidance: Mangal grah ke mantra ka jaap karein.`;
+  })
+}));
+
+// Now import target modules
+import handler from '../api/pandit-ai.js';
+import { getUserProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
+
+describe('Pandit AI - Addiction & Progress Engine', () => {
+  const DB = './user_progress.json';
+
+  beforeEach(() => {
+    if (fs.existsSync(DB)) {
+      fs.unlinkSync(DB);
+    }
+  });
+
+  it('should correctly initialize and update progress stats', () => {
+    const uid = 'test_progress_user';
+    const progress = getUserProgress(uid);
+    expect(progress.score).toBe(0);
+    expect(progress.streak).toBe(0);
+
+    const updated = updateProgress(uid, 'checkin');
+    expect(updated.score).toBe(5);
+    expect(updated.streak).toBe(1);
+  });
+
+  it('should return 200 with 5-section response (Prediction, Reasoning, Guidance, Secret, Score) for astrology question', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer valid_mock_token'
+      },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_progress_user',
+          dobDay: 31,
+          dobMonth: 8,
+          dobYear: 1999,
+          tobHour: 12,
+          tobMinute: 50,
+          tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'Job kab lagegi'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    process.env.BEDROCK_API_KEY = "mock-key";
+    process.env.BEDROCK_BASE_URL = "mock-url";
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData.text).toContain('🔮 Prediction:');
+    expect(res.jsonData.text).toContain('📿 Reasoning:');
+    expect(res.jsonData.text).toContain('🪔 Guidance:');
+    expect(res.jsonData.text).toContain('🎲 Aaj Ka Secret:');
+    expect(res.jsonData.text).toContain('📊 Karma Score:');
+  });
+
+  it('should return 4-section fallback format for non-astrological question', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer valid_mock_token'
+      },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_progress_user',
+          dobDay: 31,
+          dobMonth: 8,
+          dobYear: 1999,
+          tobHour: 12,
+          tobMinute: 50,
+          tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'Mera lucky number kya hai?'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    process.env.BEDROCK_API_KEY = "mock-key";
+    process.env.BEDROCK_BASE_URL = "mock-url";
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData.text).toContain('Mai jyotish se sambandhit prashna ka hi uttar de sakta hun.');
+    expect(res.jsonData.text).toContain('🎲 Aaj Ka Secret:');
+    expect(res.jsonData.text).toContain('📊 Karma Score:');
+  });
+});

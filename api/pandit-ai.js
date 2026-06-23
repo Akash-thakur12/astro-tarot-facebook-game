@@ -1,5 +1,6 @@
 import { generateAIResponse } from '../services/aiService.js';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getUserProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { buildResponse } from '../src/utils/responseBuilder.js';
@@ -25,9 +26,12 @@ Lagna: ${astroData.lagna || "DATA UNAVAILABLE"}
 Moon Sign: ${astroData.moonSign || "DATA UNAVAILABLE"}
 Nakshatra: ${astroData.nakshatra || "DATA UNAVAILABLE"}
 Mahadasha: ${astroData.mahadasha || "DATA UNAVAILABLE"}
-Antardasha: ${astroData.antardasha || "DATA UNAVAILABLE"}
+Antardasha: ${astroData.antardasha || "DATA UNAVAILABLE"} (ends ${astroData.antardashaEnd || "N/A"})
 Planet Positions: ${planetPos}
-Gochar: ${astroData.gochar || "DATA UNAVAILABLE"}`;
+Gochar: ${astroData.gochar || "DATA UNAVAILABLE"}
+Dhaiya: ${astroData.dhaiya ? "Yes" : "No"}
+Sadesati: ${astroData.sadesati ? "Yes" : "No"}
+Houses: ${Object.entries(astroData.houses || {}).map(([p, h]) => `${p}: ${h}th`).join(', ')}`;
 }
 
 const NAKSHATRAS = [
@@ -51,80 +55,115 @@ const DASHA_LORDS = [
 ];
 
 function validateAstroResponse(text, astroData) {
-  if (!text) return true;
+  if (!text) return false;
+
+  const validPlanets = ['sun','moon','mars','mercury','jupiter','venus','saturn','rahu','ketu','surya','chandra','mangal','budh','guru','shukra','shani'];
+  const rashiMentions = text.matchAll(/(\w+)\s+(rashi|राशि)\s+me/gi);
+  for (const m of rashiMentions) {
+    if (!validPlanets.includes(m[1].toLowerCase())) return false; // "samay rashi me" = FAIL
+  }
+
   const lower = text.toLowerCase();
+
+  const invalidWords = ['samay','समय','time','shahar','city'];
+  if (invalidWords.some(w => lower.includes(w))) return false;
+
   const hasAstro = !!astroData;
 
-  if (lower.includes("dhaiya")) {
-    if (!astroData || !astroData.gochar || !astroData.gochar.toLowerCase().includes("dhaiya")) {
-      console.log("Validation rejected: hallucinated Shani Dhaiya");
-      return false;
-    }
-  }
-
-  if (lower.includes("kanya lagna") || lower.includes("कन्या लग्न")) {
-    if (!hasAstro || astroData.lagna !== "Kanya") {
-      console.log("Validation rejected: hallucinated Kanya Lagna");
-      return false;
-    }
-  }
-
+  // Check Nakshatra
   if (lower.includes("nakshatra") || lower.includes("नक्षत्र")) {
-    if (!hasAstro || !astroData.nakshatra) {
-      console.log("Validation rejected: Nakshatra mentioned but data unavailable");
-      return false;
-    }
+    if (!hasAstro || !astroData.nakshatra) return false;
     const calcNak = astroData.nakshatra.toLowerCase();
     for (const nak of NAKSHATRAS) {
       const nakLower = nak.toLowerCase();
-      if (nakLower !== calcNak && lower.includes(nakLower)) {
-        console.log(`Validation rejected: hallucinated Nakshatra ${nak}`);
-        return false;
-      }
+      if (nakLower !== calcNak && lower.includes(nakLower)) return false;
     }
   }
 
+  // Check Dasha
   if (lower.includes("mahadasha") || lower.includes("महादशा") || lower.includes("dasha") || lower.includes("दशा")) {
-    if (!hasAstro || !astroData.mahadasha) {
-      console.log("Validation rejected: Dasha mentioned but data unavailable");
-      return false;
-    }
+    if (!hasAstro || !astroData.mahadasha) return false;
     const calcMaha = astroData.mahadasha.toLowerCase();
     const calcAntar = astroData.antardasha ? astroData.antardasha.toLowerCase() : "";
     for (const lord of DASHA_LORDS) {
       const lordLower = lord.name.toLowerCase();
-      if (lordLower !== calcMaha && lordLower !== calcAntar && lower.includes(lordLower + " dasha")) {
-        console.log(`Validation rejected: hallucinated Dasha of ${lord.name}`);
-        return false;
-      }
+      if (lordLower !== calcMaha && lordLower !== calcAntar && lower.includes(lordLower + " dasha")) return false;
     }
   }
 
-  if (lower.includes("gochar") || lower.includes("गोचर")) {
-    if (!hasAstro || !astroData.gochar) {
-      console.log("Validation rejected: Gochar mentioned but data unavailable");
-      return false;
+  // Check ALL 12 Lagnas, not just Kanya
+  const lagnas = ['mesh','vrishabh','mithun','kark','simha','kanya','tula','vrishchik','dhanu','makar','kumbh','meen'];
+  for (const lagna of lagnas) {
+    if (lower.includes(lagna + ' lagna') || lower.includes(lagna + ' लग्न')) {
+      if (!hasAstro || !astroData.lagna || !astroData.lagna.toLowerCase().includes(lagna)) return false;
     }
   }
+
+  // Check Planet Positions - if AI mentions Mars in X, verify against calc
+  const planetSigns = hasAstro ? (astroData.planets || {}) : {};
+  for (const [planet, sign] of Object.entries(planetSigns)) {
+    const regex = new RegExp(`${planet}\\s+(in|me)\\s+\\w+`, 'i');
+    const match = text.match(regex);
+    if (match && !match[0].toLowerCase().includes(sign.toLowerCase())) return false;
+  }
+
+  // Check Dhaiya - only allow if calculated
+  if (lower.includes('dhaiya') && (!hasAstro || !astroData.dhaiya)) return false;
+
+  // Check Sadesati - only allow if calculated
+  if (lower.includes('sadesati') && (!hasAstro || !astroData.sadesati)) return false;
+
+  // Check Houses - if AI mentions "4th house", verify against calc
+  const houseRegex = /(\w+)\s+(\d+)(?:st|nd|rd|th)\s+(house|bhav)/gi;
+  let match;
+  while ((match = houseRegex.exec(text)) !== null) {
+    const planet = match[1];
+    const houseNum = parseInt(match[2]);
+    if (hasAstro && astroData.houses?.[planet] && astroData.houses[planet] !== houseNum) return false;
+  }
+
+  // New sections must exist - don't validate content, just presence
+  if (!text.includes('🎲 Aaj Ka Secret:')) return false;
+  if (!text.includes('📊 Karma Score:')) return false;
 
   return true;
 }
 
 function containsForbiddenPhrases(text) {
   if (!text) return false;
+  const blacklist = ['beta','😂','😁','😆','samay','समय','time','shahar','city','period'];
+  if (blacklist.some(w => text.toLowerCase().includes(w))) return true;
+
+  const planetNames = ['surya','chandra','mangal','budh','guru','shukra','shani','rahu','ketu','sun','moon','mars','mercury','jupiter','venus','saturn'];
+  const rashiPattern = /(\w+)\s+(rashi|राशि)\s+me/i;
+  const match = text.match(rashiPattern);
+  if (match && !planetNames.includes(match[1].toLowerCase())) return true;
+
   const lower = text.toLowerCase();
   
-  if (lower.includes("bhagwan ki kripa")) return true;
-  if (lower.includes("sab theek ho jayega")) return true;
-  if (lower.includes("taare dekho")) return true;
+  const forbidden = [
+    "beta",
+    "बेटा",
+    "bhai",
+    "mere bhai",
+    "😆",
+    "😂",
+    "🤣",
+    "hahaha",
+    "bhagwan ki kripa",
+    "sab theek ho jayega",
+    "taare dekho",
+    "atkal"
+  ];
   
-  const betaRegex = /\b(?:beta|atkal)\b/i;
-  if (betaRegex.test(lower)) return true;
-
-  // Devanagari equivalents:
-  if (lower.includes("भगवान की कृपा") || lower.includes("सब ठीक हो") || lower.includes("तारे देखो") || /\b(?:बेटा|अटकल)\b/.test(lower)) {
-    return true;
+  for (const term of forbidden) {
+    if (lower.includes(term.toLowerCase())) {
+      return true;
+    }
   }
+
+  const brokenHindiRegex = /\b(aabki|fayda daru|shahar ke antardasha|shuru ho sakta hai)\b/i;
+  if (brokenHindiRegex.test(lower)) return true;
 
   return false;
 }
@@ -290,6 +329,37 @@ const AI_QUESTION_COST = 30; // Increased from 25
 // Rate limiting map (in-memory, per Vercel instance)
 const rateLimits = new Map();
 
+function getLevel(score) {
+  if (score < 100) return 'Seeker';
+  if (score < 300) return 'Explorer';
+  if (score < 600) return 'Believer';
+  return 'Master';
+}
+
+function injectSecretAndScore(text, uid, userData) {
+  if (!text) return text;
+
+  const progressUid = userData?.uid || uid || 'guest';
+  const progress = getUserProgress(progressUid);
+  const today = new Date().toISOString().split('T')[0];
+  const dobKey = (userData?.dobDay || '') + '' + (userData?.dobMonth || '') + '' + (userData?.dobYear || '');
+  const secret = getDailySecret(dobKey, today);
+  const nextLevel = Math.ceil((progress.score + 1) / 100) * 100;
+
+  let cleaned = text;
+
+  // Replace/remove existing secret and score sections if AI generated them
+  cleaned = cleaned.replace(/🎲\s*Aaj\s*Ka\s*Secret:[\s\S]*?(?=📊|$)/gi, "");
+  cleaned = cleaned.replace(/📊\s*Karma\s*Score:[\s\S]*?$/gi, "");
+  cleaned = cleaned.trim();
+
+  // Append clean/correct sections from code
+  cleaned += `\n\n🎲 Aaj Ka Secret:\n${secret}`;
+  cleaned += `\n\n📊 Karma Score: ${progress.score}/${nextLevel} | Level: ${getLevel(progress.score)} | Streak: ${progress.streak}🔥`;
+
+  return cleaned;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -343,10 +413,20 @@ export default async function handler(req, res) {
   const { mode, userData, history } = req.body;
   let detectedIntent = 'general';
   let marriedGuardInstruction = "";
+  let aiText = "";
 
   if (!userData) {
     return res.status(400).json({ error: 'Missing userData in request body' });
   }
+
+  // ADDICTION LAYER: Get user progress
+  const progressUid = userData.uid || uid || 'guest';
+  const progress = getUserProgress(progressUid);
+  updateProgress(progressUid, 'checkin'); // Auto streak
+  const today = new Date().toISOString().split('T')[0];
+  const dobKey = (userData.dobDay || '') + '' + (userData.dobMonth || '') + '' + (userData.dobYear || '');
+  const secret = getDailySecret(dobKey, today);
+  const nextLevel = Math.ceil((progress.score + 1) / 100) * 100;
 
   // Request size hardening
   if (userData.question && userData.question.length > 1000) {
@@ -541,18 +621,70 @@ Current Season: ${season}`;
   const systemInstruction = `Speak as an AstroTarot AI Predictor. Respond in natural, conversational Hindi. Remove any baba or generic GPT behavior.
 
 CRITICAL RULES:
+
 1. You must always structure your response exactly in this format:
+
 🔮 Prediction:
-[Direct answer first, addressing the query]
+[Direct answer first]
 
 📿 Reasoning:
-[Astrological reason. You MUST ONLY use the supplied astrology calculations from the "User Astrology Profile" and "PROVIDED ASTROLOGY DATA" section. Do NOT invent, assume, or hallucinate any Lagna, Mahadasha, Antardasha, Nakshatra, Gochar, planet positions, Shani Dhaiya, house positions, or timelines. If the astrology data is unavailable, you must explicitly say: "Kundali data uplabdh nahi hai."]
+[Use ONLY PROVIDED ASTROLOGY DATA below.
+Never invent Lagna, Mahadasha, Antardasha, Nakshatra, Gochar,
+planet positions, Shani Dhaiya, or timelines.
+
+If data missing say:
+"Kundali data uplabdh nahi hai."]
 
 🪔 Guidance:
-[Specific practical remedy]
+[Specific practical remedy based on provided data only]
 
-2. Do not include any motivational speeches, generic motivation, or long lectures. No "bhagwan ki kripa", "sab theek ho jayega", "beta", "taare dekho", or "atkal".
-3. Word count must be between 80 to 130 words in total.`;
+🎲 Aaj Ka Secret:
+[Use this exact value: ${secret}. Never invent. Never skip.]
+
+📊 Karma Score: ${progress.score}/${nextLevel} | Level: ${getLevel(progress.score)} | Streak: ${progress.streak}🔥
+
+4. For job/career/marriage timing questions, YOU MUST mention antardashaEnd year from PROVIDED ASTROLOGY DATA. If antardashaEnd missing, say 'Kundali data me timeline uplabdh nahi hai'. Never say 'agle 2 saal' or vague terms.
+
+2. LANGUAGE RULES - STRICT
+
+* Use simple educated Hindi.
+
+* No Google Translate Hindi.
+
+* Never use:
+  beta
+  bhai
+  mere bhai
+  bhagwan ki kripa
+  sab theek ho jayega
+  taare dekho
+  atkal
+
+* Never use emojis except:
+  🔮
+  📿
+  🪔
+
+* Never use:
+  aabki
+  fayda daru
+  shahar ke antardasha
+
+* Antardasha = time period.
+
+* Moon sign ≠ city.
+
+* Write like a professional astrologer.
+
+3. Word count:
+   80-130 words.
+
+FOR NON-ASTROLOGY QUESTIONS:
+You must still use the 4-section format. Never refuse blank.
+🔮 Prediction: Mai jyotish se sambandhit prashna ka hi uttar de sakta hun.
+📿 Reasoning: Aapka prashna [user question] kundali par aadharit nahi hai. Jyotish me [related topic] dekha jata hai.
+🪔 Guidance: Agar aap [astro alternative] jaanna chahte hain to puch sakte hain.
+Then add 🎲 Secret and 📊 Score normally.`;
 
   let ageDisplay = "Unknown";
 
@@ -722,52 +854,85 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   if (!useOfflineFallback) {
     try {
       console.log("Calling AI...");
-      let aiText = await generateAIResponse(fullPrompt);
+      aiText = await generateAIResponse(fullPrompt);
+      if ((mode === 'chat' || mode === 'personal') && (!astroData || !astroData.lagna)) {
+        aiText = "🔮 Prediction:\nKundali data uplabdh nahi hai.\n\n📿 Reasoning:\nJanm details sahi nahi mili.\n\n🪔 Guidance:\nDOB, time, city check karke dobara puchiye.";
+      }
       console.log("AI returned text length:", aiText.length);
+
+      // Pre-humanize the initial text to align validation with the final output format
+      if (mode === 'chat' || mode === 'personal') {
+        aiText = humanize(aiText);
+      }
 
       let needsRetry = false;
       let retryReason = "";
 
-      // Check forbidden phrases (Step 4)
-      if (containsForbiddenPhrases(aiText)) {
-        needsRetry = true;
-        retryReason = "blacklist";
-      }
+      const isAstroDataMissing = (mode === 'chat' || mode === 'personal') && (!astroData || !astroData.lagna);
 
-      // Check astrology hallucinations (Step 11)
-      if (!needsRetry && !validateAstroResponse(aiText, astroData)) {
-        needsRetry = true;
-        retryReason = "hallucination";
-      }
-
-      // Check repetition (if no retry triggered yet)
-      const lastAssistantMsg = Array.isArray(history) 
-        ? [...history].reverse().find(m => m.role === 'model' || m.role === 'assistant')
-        : null;
-
-      if (!needsRetry && lastAssistantMsg && lastAssistantMsg.content) {
-        const similarity = getJaccardSimilarity(aiText, lastAssistantMsg.content);
-        console.log(`Generated response Jaccard similarity to last response: ${similarity.toFixed(2)}`);
-        if (similarity > 0.70) {
+      if (!isAstroDataMissing) {
+        // Check forbidden phrases (Step 4)
+        if (containsForbiddenPhrases(aiText)) {
           needsRetry = true;
-          retryReason = "repetition";
+          retryReason = "blacklist";
+        }
+
+        // Check astrology hallucinations (Step 11)
+        const validatedText = injectSecretAndScore(aiText, uid, userData);
+        if (!needsRetry && !validateAstroResponse(validatedText, astroData)) {
+          needsRetry = true;
+          retryReason = "hallucination";
+        }
+
+        // Check repetition (if no retry triggered yet)
+        const lastAssistantMsg = Array.isArray(history) 
+          ? [...history].reverse().find(m => m.role === 'model' || m.role === 'assistant')
+          : null;
+
+        if (!needsRetry && lastAssistantMsg && lastAssistantMsg.content) {
+          const similarity = getJaccardSimilarity(aiText, lastAssistantMsg.content);
+          console.log(`Generated response Jaccard similarity to last response: ${similarity.toFixed(2)}`);
+          if (similarity > 0.70) {
+            needsRetry = true;
+            retryReason = "repetition";
+          }
         }
       }
 
-      if (needsRetry) {
+      let retryCount = 0;
+      while (needsRetry && retryCount < 2) {
         let retryPrompt = fullPrompt;
         if (retryReason === "blacklist") {
-          console.log("Forbidden phrase detected! Retrying generation once...");
-          retryPrompt += `\n\n[SYSTEM WARNING: Your previous response contained forbidden terms (like 'bhagwan ki kripa', 'sab theek ho jayega', 'beta', 'taare dekho', or 'atkal'). Please generate a new, different response completely free of these words. Ensure you use the required format with 🔮 Prediction:, 📿 Reasoning:, and 🪔 Guidance: headers.]`;
+          retryPrompt += `\n\nUse simple Hindi.\nNo beta.\nNo emojis.\nNo broken words.\nWrite like educated person.`;
         } else if (retryReason === "hallucination") {
-          console.log("Astrology hallucination detected! Retrying generation once...");
-          retryPrompt += `\n\n[SYSTEM WARNING: Your previous response contained hallucinated astrological parameters (such as a wrong Lagna, Mahadasha, Nakshatra, Gochar, or Shani Dhaiya) that did not exist in the provided calculations. Please calculate and write your response using ONLY the provided astrology data. Never invent any astrological parameters.]`;
+          retryPrompt += `\n\nAntardasha is a time period not city.\nMoon sign is not shahar.\nUse ONLY PROVIDED ASTROLOGY DATA.`;
         } else {
-          console.log("Repetition detected! Retrying generation once...");
           retryPrompt += `\n\n[SYSTEM WARNING: Please generate a new response. Answer differently and avoid repeating previous wording.]`;
         }
+
         aiText = await generateAIResponse(retryPrompt);
-        console.log(`AI returned text length on retry (${retryReason}):`, aiText.length);
+        aiText = humanize(aiText);
+
+        const validatedRetryText = injectSecretAndScore(aiText, uid, userData);
+        needsRetry =
+          containsForbiddenPhrases(aiText)
+          ||
+          !validateAstroResponse(validatedRetryText, astroData);
+
+        if (needsRetry) {
+          if (containsForbiddenPhrases(aiText)) {
+            retryReason = "blacklist";
+          } else {
+            retryReason = "hallucination";
+          }
+        }
+        retryCount++;
+      }
+
+      if (needsRetry && retryCount >= 2) {
+        console.error("VALIDATION_FAILED_3X");
+        const failText = `🔮 Prediction:\nTakneeki karan se vistar se nahi bata pa raha.\n\n📿 Reasoning:\nKundali data verify nahi ho paya.\n\n🪔 Guidance:\nKuch der baad dobara try karein.`;
+        return res.status(200).json({ text: injectSecretAndScore(humanize(failText), uid, userData) });
       }
 
       if (!aiText || !aiText.trim()) {
@@ -775,10 +940,9 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       }
 
       if (mode === 'chat' || mode === 'personal') {
-        const humanizedText = humanize(aiText);
-        console.log("Humanized text length:", humanizedText.length);
+        const deduplicatedText = removeDuplicateSentences(aiText);
         jsonResponse = {
-          text: removeDuplicateSentences(humanizedText)
+          text: injectSecretAndScore(deduplicatedText, uid, userData)
         };
       } else {
         const parsedData = parseModelResponse(aiText);
@@ -802,9 +966,10 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
     if (mode === 'chat' || mode === 'personal') {
       try {
         console.log("Using horoscopeEngine / dataset fallback");
-        const fallbackText = buildResponse(uid, detectedIntent, todayString, questionText);
+        const fallbackText = buildResponse(progressUid, detectedIntent, todayString, questionText);
+        aiText = fallbackText;
         jsonResponse = {
-          text: fallbackText
+          text: injectSecretAndScore(fallbackText, uid, userData)
         };
         success = true;
       } catch (fallbackError) {
@@ -869,6 +1034,13 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       }
     }
     console.log("RESPONSE SOURCE =", responseSource);
+    if (mode === 'chat' || mode === 'personal') {
+      let finalText = humanize(aiText);
+      finalText = injectSecretAndScore(finalText, uid, userData);
+      if (!finalText.includes('🎲 Aaj Ka Secret:')) finalText += `\n\n🎲 Aaj Ka Secret: ${secret}`;
+      if (!finalText.includes('📊 Karma Score:')) finalText += `\n📊 Karma Score: ${progress.score}/${nextLevel} | Level: ${getLevel(progress.score)} | Streak: ${progress.streak}🔥`;
+      return res.status(200).json({ text: finalText });
+    }
     return res.status(200).json(jsonResponse);
   }
 
