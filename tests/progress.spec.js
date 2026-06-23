@@ -1,5 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import fs from 'fs';
+import { vi, describe, it, expect } from 'vitest';
 
 // Mock firebase-admin completely
 vi.mock('firebase-admin/app', () => ({
@@ -69,24 +68,17 @@ vi.mock('../services/aiService.js', () => ({
 
 // Now import target modules
 import handler from '../api/pandit-ai.js';
-import { getUserProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
+import { getProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
 
 describe('Pandit AI - Addiction & Progress Engine', () => {
-  const DB = './user_progress.json';
 
-  beforeEach(() => {
-    if (fs.existsSync(DB)) {
-      fs.unlinkSync(DB);
-    }
-  });
-
-  it('should correctly initialize and update progress stats', () => {
+  it('should correctly initialize and update progress stats', async () => {
     const uid = 'test_progress_user';
-    const progress = getUserProgress(uid);
+    const progress = await getProgress(uid);
     expect(progress.score).toBe(0);
     expect(progress.streak).toBe(0);
 
-    const updated = updateProgress(uid, 'checkin');
+    const updated = await updateProgress(uid, 'checkin');
     expect(updated.score).toBe(5);
     expect(updated.streak).toBe(1);
   });

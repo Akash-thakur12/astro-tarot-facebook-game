@@ -1,6 +1,6 @@
 import { generateAIResponse } from '../services/aiService.js';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getUserProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
+import { getProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { buildResponse } from '../src/utils/responseBuilder.js';
@@ -336,11 +336,16 @@ function getLevel(score) {
   return 'Master';
 }
 
-function injectSecretAndScore(text, uid, userData) {
+async function injectSecretAndScore(text, uid, userData) {
   if (!text) return text;
 
   const progressUid = userData?.uid || uid || 'guest';
-  const progress = getUserProgress(progressUid);
+  let progress = { score: 0, streak: 0, lastLogin: '', secrets: {} };
+  try {
+    progress = await getProgress(progressUid);
+  } catch (err) {
+    console.error("injectSecretAndScore getProgress failed", err);
+  }
   const today = new Date().toISOString().split('T')[0];
   const dobKey = (userData?.dobDay || '') + '' + (userData?.dobMonth || '') + '' + (userData?.dobYear || '');
   const secret = getDailySecret(dobKey, today);
@@ -421,8 +426,19 @@ export default async function handler(req, res) {
 
   // ADDICTION LAYER: Get user progress
   const progressUid = userData.uid || uid || 'guest';
-  const progress = getUserProgress(progressUid);
-  updateProgress(progressUid, 'checkin'); // Auto streak
+  let progress = { score: 0, streak: 0, lastLogin: '', secrets: {} };
+  try {
+    progress = await getProgress(progressUid);
+  } catch (err) {
+    console.error("getProgress failed at start", err);
+  }
+
+  try {
+    await updateProgress(progressUid, 'checkin'); // Auto streak
+  } catch (err) {
+    console.error("updateProgress failed at start", err);
+  }
+
   const today = new Date().toISOString().split('T')[0];
   const dobKey = (userData.dobDay || '') + '' + (userData.dobMonth || '') + '' + (userData.dobYear || '');
   const secret = getDailySecret(dobKey, today);
@@ -878,7 +894,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         }
 
         // Check astrology hallucinations (Step 11)
-        const validatedText = injectSecretAndScore(aiText, uid, userData);
+        const validatedText = await injectSecretAndScore(aiText, uid, userData);
         if (!needsRetry && !validateAstroResponse(validatedText, astroData)) {
           needsRetry = true;
           retryReason = "hallucination";
@@ -913,7 +929,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         aiText = await generateAIResponse(retryPrompt);
         aiText = humanize(aiText);
 
-        const validatedRetryText = injectSecretAndScore(aiText, uid, userData);
+        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData);
         needsRetry =
           containsForbiddenPhrases(aiText)
           ||
@@ -932,7 +948,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       if (needsRetry && retryCount >= 2) {
         console.error("VALIDATION_FAILED_3X");
         const failText = `🔮 Prediction:\nTakneeki karan se vistar se nahi bata pa raha.\n\n📿 Reasoning:\nKundali data verify nahi ho paya.\n\n🪔 Guidance:\nKuch der baad dobara try karein.`;
-        return res.status(200).json({ text: injectSecretAndScore(humanize(failText), uid, userData) });
+        return res.status(200).json({ text: await injectSecretAndScore(humanize(failText), uid, userData) });
       }
 
       if (!aiText || !aiText.trim()) {
@@ -942,7 +958,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       if (mode === 'chat' || mode === 'personal') {
         const deduplicatedText = removeDuplicateSentences(aiText);
         jsonResponse = {
-          text: injectSecretAndScore(deduplicatedText, uid, userData)
+          text: await injectSecretAndScore(deduplicatedText, uid, userData)
         };
       } else {
         const parsedData = parseModelResponse(aiText);
@@ -969,7 +985,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         const fallbackText = buildResponse(progressUid, detectedIntent, todayString, questionText);
         aiText = fallbackText;
         jsonResponse = {
-          text: injectSecretAndScore(fallbackText, uid, userData)
+          text: await injectSecretAndScore(fallbackText, uid, userData)
         };
         success = true;
       } catch (fallbackError) {
@@ -1036,7 +1052,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
     console.log("RESPONSE SOURCE =", responseSource);
     if (mode === 'chat' || mode === 'personal') {
       let finalText = humanize(aiText);
-      finalText = injectSecretAndScore(finalText, uid, userData);
+      finalText = await injectSecretAndScore(finalText, uid, userData);
       if (!finalText.includes('🎲 Aaj Ka Secret:')) finalText += `\n\n🎲 Aaj Ka Secret: ${secret}`;
       if (!finalText.includes('📊 Karma Score:')) finalText += `\n📊 Karma Score: ${progress.score}/${nextLevel} | Level: ${getLevel(progress.score)} | Streak: ${progress.streak}🔥`;
       return res.status(200).json({ text: finalText });

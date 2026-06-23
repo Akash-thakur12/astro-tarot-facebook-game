@@ -1,28 +1,49 @@
-import fs from 'fs';
-const DB = './user_progress.json';
+import { getFirestore } from 'firebase-admin/firestore';
 
-export function getUserProgress(uid) {
-  const db = fs.existsSync(DB) ? JSON.parse(fs.readFileSync(DB)) : {};
-  if (!db[uid]) db[uid] = { score: 0, streak: 0, lastLogin: '', secrets: {} };
-  return db[uid];
+function getDb() {
+  return getFirestore();
 }
 
-export function updateProgress(uid, action) {
-  const db = fs.existsSync(DB) ? JSON.parse(fs.readFileSync(DB)) : {};
-  const u = db[uid] || { score: 0, streak: 0, lastLogin: '', secrets: {} };
-  const today = new Date().toISOString().split('T')[0];
-
-  if (action === 'checkin') {
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    u.streak = u.lastLogin === yesterday ? u.streak + 1 : 1;
-    u.lastLogin = today;
-    u.score += 5;
+export async function getProgress(uid) {
+  try {
+    const db = getDb();
+    const doc = await db.collection("userProgress").doc(uid).get();
+    if (!doc.exists) {
+      return { score: 0, streak: 0, lastLogin: '', secrets: {} };
+    }
+    const data = doc.data();
+    return {
+      score: data.score !== undefined ? data.score : 0,
+      streak: data.streak !== undefined ? data.streak : 0,
+      lastLogin: data.lastLogin || '',
+      secrets: data.secrets || {}
+    };
+  } catch (err) {
+    console.error("getProgress failed", err);
+    return { score: 0, streak: 0, lastLogin: '', secrets: {} };
   }
-  if (action === 'remedy_done') u.score += 20;
+}
 
-  db[uid] = u;
-  fs.writeFileSync(DB, JSON.stringify(db));
-  return u;
+export async function updateProgress(uid, action) {
+  try {
+    const u = await getProgress(uid);
+    const today = new Date().toISOString().split('T')[0];
+
+    if (action === 'checkin') {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      u.streak = u.lastLogin === yesterday ? u.streak + 1 : 1;
+      u.lastLogin = today;
+      u.score += 5;
+    }
+    if (action === 'remedy_done') u.score += 20;
+
+    const db = getDb();
+    await db.collection("userProgress").doc(uid).set(u, { merge: true });
+    return u;
+  } catch (err) {
+    console.error("updateProgress failed", err);
+    return { score: 0, streak: 0, lastLogin: '', secrets: {} };
+  }
 }
 
 export function getDailySecret(dob, today) {
