@@ -634,6 +634,16 @@ export default async function handler(req, res) {
                                questionTextNormalized.includes("shaadi ho chuki") ||
                                questionTextNormalized.includes("shadi ho chuki");
 
+    const asksAboutSpouse = questionTextNormalized.includes("wife") ||
+                           questionTextNormalized.includes("patni") ||
+                           questionTextNormalized.includes("husband") ||
+                           questionTextNormalized.includes("pati");
+
+    if (currentMarital === 'Single' && asksAboutSpouse) {
+      const safeText = "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye patni sambandhit prashn laagu nahi hota.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.";
+      return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData) });
+    }
+
     if (currentMarital === 'Single' && asksMarriageStatus) {
       return res.status(200).json({
         text: "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi sambandh ya bhavishya ke vivaah ke baare me poochna hai to uske baare me pooch sakte hain."
@@ -785,9 +795,19 @@ Then add 🎲 Secret and 📊 Score normally.`;
     maritalStatus = resolvedMarital;
 
     // DOB
-    const dobDay = userData?.dobDay || profile?.dobDay;
-    const dobMonth = userData?.dobMonth || profile?.dobMonth;
-    const dobYear = userData?.dobYear || profile?.dobYear;
+    let dobDay = userData?.dobDay || profile?.dobDay;
+    let dobMonth = userData?.dobMonth || profile?.dobMonth;
+    let dobYear = userData?.dobYear || profile?.dobYear;
+
+    // FALLBACK: Parse DD-MM-YYYY string if dobDay undefined
+    if (!dobDay && userData?.dob) {
+      const parts = userData.dob.split('-');
+      if (parts.length === 3) {
+        dobDay = parseInt(parts[0]);
+        dobMonth = parseInt(parts[1]);
+        dobYear = parseInt(parts[2]);
+      }
+    }
     if (dobDay && dobMonth && dobYear) {
       dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
     } else if (profile?.dob) {
@@ -1106,8 +1126,6 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
     if (mode === 'chat' || mode === 'personal') {
       let finalText = humanize(aiText);
       finalText = await injectSecretAndScore(finalText, uid, userData);
-      if (!finalText.includes('🎲 Aaj Ka Secret:')) finalText += `\n\n🎲 Aaj Ka Secret: ${secret}`;
-      if (!finalText.includes('📊 Karma Score:')) finalText += `\n📊 Karma Score: ${progress.score}/${nextLevel} | Level: ${getLevel(progress.score)} | Streak: ${progress.streak}🔥`;
       return res.status(200).json({ text: finalText });
     }
     return res.status(200).json(jsonResponse);

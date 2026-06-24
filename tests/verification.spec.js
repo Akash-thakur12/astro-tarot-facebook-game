@@ -217,4 +217,66 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(res.jsonData.text).toContain('📿 Reasoning:\nCurrent profile me marital status Single hai.');
     expect(res.jsonData.text).toContain('🪔 Guidance:\nYadi sambandh ya bhavishya ke vivaah ke baare me poochna hai to uske baare me pooch sakte hain.');
   });
+
+  it('6. FIX DOB Parsing Fallback - Parse DD-MM-YYYY if dobDay undefined', async () => {
+    mockProfileData = null;
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user',
+          dob: '31-08-1999',
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'Job kab milegi'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    mockAIResponse = "🔮 Prediction: Safalta milegi.\n📿 Reasoning: Kundali achhi hai.\n🪔 Guidance: Dhyan karein.";
+
+    await handler(req, res);
+
+    // Should NOT say "Kundali data uplabdh nahi hai." but succeed and contain the AI response
+    expect(res.jsonData.text).not.toContain('Kundali data uplabdh nahi hai.');
+    expect(res.jsonData.text).toContain('Safalta milegi');
+  });
+
+  it('7. FIX Single + Spouse Guard', async () => {
+    mockProfileData = { maritalStatus: 'Single' };
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user',
+          question: 'meri wife kaisi hogi',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    await handler(req, res);
+
+    expect(res.jsonData.text).toContain('🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye patni sambandhit prashn laagu nahi hota.');
+    expect(res.jsonData.text).toContain('📿 Reasoning:\nCurrent profile me marital status Single hai.');
+    expect(res.jsonData.text).toContain('🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.');
+  });
 });

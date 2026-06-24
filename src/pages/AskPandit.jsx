@@ -161,9 +161,17 @@ const AskPandit = () => {
           if (profile.dob) {
             const parts = profile.dob.split(/[-/]/);
             if (parts.length === 3) {
-              updatedForm.dobYear = parts[0];
-              updatedForm.dobMonth = parts[1];
-              updatedForm.dobDay = parts[2];
+              if (parts[0].length === 4) {
+                // YYYY-MM-DD
+                updatedForm.dobYear = parts[0];
+                updatedForm.dobMonth = parts[1];
+                updatedForm.dobDay = parts[2];
+              } else {
+                // DD-MM-YYYY
+                updatedForm.dobDay = parts[0];
+                updatedForm.dobMonth = parts[1];
+                updatedForm.dobYear = parts[2];
+              }
             }
           }
           if (profile.timeOfBirth) {
@@ -294,7 +302,7 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
       localStorage.removeItem(`pandit_chat_messages_${user.uid}`);
     }
     
-    const dob = `${personalForm.dobYear}-${personalForm.dobMonth}-${personalForm.dobDay}`;
+    const dob = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
     const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
     
     const genderIcon = personalForm.gender === 'Male' ? '♂️' : personalForm.gender === 'Female' ? '♀️' : '👤';
@@ -526,7 +534,7 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
     if (isFormValid) {
       setLoading(true);
       try {
-        const dob = `${personalForm.dobYear}-${personalForm.dobMonth}-${personalForm.dobDay}`;
+        const dob = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
         const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
         const placeOfBirth = personalForm.pob;
 
