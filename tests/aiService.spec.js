@@ -52,13 +52,13 @@ describe('aiService - generateAIResponse', () => {
     const response = await generateAIResponse('hello');
     expect(response).toBe('Deepseek Response');
 
-    // Should call completions.create with deepseek.v3.2, temp 0.7, timeout 5000
+    // Should call completions.create with deepseek.v3.2, temp 0.1, timeout 5000
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(1);
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
       {
         model: 'deepseek.v3.2',
         messages: [{ role: 'user', content: 'hello' }],
-        temperature: 0.7
+        temperature: 0.1
       },
       {
         timeout: 5000

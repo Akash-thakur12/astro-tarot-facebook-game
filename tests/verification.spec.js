@@ -121,8 +121,7 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     }
   });
 
-  it('2. ADD "samay" to forbidden list / validation', async () => {
-    // We can indirectly verify containsForbiddenPhrases triggers retry/failure or returns correctly
+  it('should allow samay word after validator bugfix', async () => {
     const req = {
       method: 'POST',
       headers: { authorization: 'Bearer mock_token' },
@@ -133,7 +132,7 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
           dobDay: 31, dobMonth: 8, dobYear: 1999,
           tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
           pob: 'Hamirpur Himachal Pradesh',
-          question: 'Job kab milegi'
+          question: 'Is samay meri job ke yog kaise hain?'
         },
         history: []
       }
@@ -145,16 +144,16 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
       json(data) { this.jsonData = data; return this; }
     };
 
-    // Setting mock response with forbidden word
+    // Setting mock response with "samay" word
     mockAIResponse = "🔮 Prediction: Samay badlega.\n📿 Reasoning: Kundali me samay achha hai.\n🪔 Guidance: Mantra jaap.";
     
     process.env.BEDROCK_API_KEY = "mock-key";
     process.env.BEDROCK_BASE_URL = "mock-url";
 
     await handler(req, res);
-    
-    // Should trigger validation retry and eventually return the 3x validation fail text
-    expect(res.jsonData.text).toContain('Takneeki karan se vistar se nahi bata pa raha');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData.text).not.toContain('Takneeki karan');
   });
 
   it('4. ADD HARD CHECK - If astroData=null or no lagna, OVERWRITE AI RESPONSE', async () => {

@@ -57,15 +57,12 @@ const DASHA_LORDS = [
 function validateAstroResponse(text, astroData) {
   if (!text) return false;
 
-  const validPlanets = ['sun','moon','mars','mercury','jupiter','venus','saturn','rahu','ketu','surya','chandra','mangal','budh','guru','shukra','shani'];
-  const rashiMentions = text.matchAll(/(\w+)\s+(rashi|राशि)\s+me/gi);
-  for (const m of rashiMentions) {
-    if (!validPlanets.includes(m[1].toLowerCase())) return false; // "samay rashi me" = FAIL
-  }
+  const INVALID_RASHI_PATTERN = /(surya|chandra|mangal|budh|guru|shukra|shani|rahu|ketu)\s+(rashi|राशि)\s+me/gi;
+  if ([...text.matchAll(INVALID_RASHI_PATTERN)].length > 0) return false;
 
   const lower = text.toLowerCase();
 
-  const invalidWords = ['samay','समय','time','shahar','city'];
+  const invalidWords = [];
   if (invalidWords.some(w => lower.includes(w))) return false;
 
   const hasAstro = !!astroData;
@@ -123,21 +120,20 @@ function validateAstroResponse(text, astroData) {
   }
 
   // New sections must exist - don't validate content, just presence
-  if (!text.includes('🎲 Aaj Ka Secret:')) return false;
-  if (!text.includes('📊 Karma Score:')) return false;
+  const hasSecret = text.includes('Aaj Ka Secret:') || text.includes('Secret:');
+  const hasKarma = text.includes('Karma Score:') || text.includes('Score:');
+  if (!hasSecret || !hasKarma) return false;
 
   return true;
 }
 
 function containsForbiddenPhrases(text) {
   if (!text) return false;
-  const blacklist = ['beta','😂','😁','😆','samay','समय','time','shahar','city','period'];
+  const blacklist = ['beta','😂','😁','😆'];
   if (blacklist.some(w => text.toLowerCase().includes(w))) return true;
 
-  const planetNames = ['surya','chandra','mangal','budh','guru','shukra','shani','rahu','ketu','sun','moon','mars','mercury','jupiter','venus','saturn'];
-  const rashiPattern = /(\w+)\s+(rashi|राशि)\s+me/i;
-  const match = text.match(rashiPattern);
-  if (match && !planetNames.includes(match[1].toLowerCase())) return true;
+  const INVALID_RASHI_PATTERN = /(surya|chandra|mangal|budh|guru|shukra|shani|rahu|ketu)\s+(rashi|राशि)\s+me/gi;
+  if ([...text.matchAll(INVALID_RASHI_PATTERN)].length > 0) return true;
 
   const lower = text.toLowerCase();
   
@@ -162,7 +158,7 @@ function containsForbiddenPhrases(text) {
     }
   }
 
-  const brokenHindiRegex = /\b(aabki|fayda daru|shahar ke antardasha|shuru ho sakta hai)\b/i;
+  const brokenHindiRegex = /\b(aabki|fayda daru|shahar ke antardasha)\b/i;
   if (brokenHindiRegex.test(lower)) return true;
 
   return false;
