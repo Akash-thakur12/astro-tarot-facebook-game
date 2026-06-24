@@ -54,6 +54,46 @@ const DASHA_LORDS = [
   { name: "Mercury", years: 17 }
 ];
 
+const OCCUPATION_RULES = {
+  Student: 'Focus on studies, exams and higher education.',
+  'Government Job': 'Focus on SSC, UPSC, State PSC, Banking and government service opportunities. Mention exam windows. Avoid generic job advice.',
+  'Private Job': 'Focus on promotions, interviews and salary growth.',
+  Business: 'Focus on profits, partnerships and expansion. Never give exam advice.',
+  'Self Employed': 'Focus on clients, reputation and scaling.',
+  Housewife: 'Focus on family and finances.',
+  Other: 'Neutral guidance.'
+};
+
+const MARITAL_RULES = {
+  Single: 'Marriage timing questions are valid.',
+  Married: 'Never predict first marriage. Focus on spouse, children and family harmony.',
+  Divorced: 'Focus on healing and second marriage.',
+  Widowed: 'Focus on emotional recovery and stability.'
+};
+
+function buildCompactContext(userData, astroData) {
+  const occ = userData?.occupation || 'Other';
+  const mar = userData?.maritalStatus || 'Single';
+
+  return `
+USER PROFILE
+Occupation=${occ}
+Marital=${mar}
+Dasha=${astroData?.mahadasha || 'Unknown'}/${astroData?.antardasha || 'Unknown'}
+
+RULES:
+${OCCUPATION_RULES[occ] || OCCUPATION_RULES.Other}
+${MARITAL_RULES[mar]}
+
+CRITICAL:
+Match advice to occupation.
+Married users = no first-marriage prediction.
+Business users = no exam advice.
+Government Job users = mention SSC/UPSC/Banking when relevant.
+Never mention 5th/7th/10th house if astroData.houses is empty or unavailable. Use general phrases like 'Career sambandhit yog dikhte hain' instead of '10th house strong hai'.
+`;
+}
+
 function validateAstroResponse(text, astroData) {
   if (!text) return false;
 
@@ -683,6 +723,17 @@ Current Season: ${season}`;
 
 CRITICAL RULES:
 
+* Understand occupation semantically.
+* Adapt advice according to occupation category.
+* Understand marital status semantically.
+* Married users should not receive first-marriage predictions.
+* Business users should not receive exam advice.
+* Students should receive education-oriented predictions.
+* Government Job users should mention SSC, UPSC, State PSC, Banking or government service when relevant.
+* Private Job users should discuss promotions and company opportunities.
+* Housewife users should focus on family and finances.
+* Never mention 5th house, 7th house, or 10th house unless astrology data contains actual computed house information under Houses block. If house data is unavailable, say "Career sambandhit yog dikhte hain" or "Kundali data me timeline uplabdh nahi hai" instead of claiming a specific house is strong.
+
 1. You must always structure your response exactly in this format:
 
 🔮 Prediction:
@@ -897,6 +948,8 @@ Marital Status: ${maritalStatus}`;
 
     promptSections.push(astrologyProfileBlock);
 
+    promptSections.push(buildCompactContext(userData, astroData));
+
     // Inject calculated astroData (Step 8)
     promptSections.push(buildAstrologyBlock(astroData));
 
@@ -972,6 +1025,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 
   if (!useOfflineFallback) {
     try {
+      console.log("Prompt chars:", fullPrompt.length);
       console.log("Calling AI...");
       aiText = await generateAIResponse(fullPrompt);
       console.log("AI returned text length:", aiText.length);

@@ -278,4 +278,47 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(res.jsonData.text).toContain('📿 Reasoning:\nCurrent profile me marital status Single hai.');
     expect(res.jsonData.text).toContain('🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.');
   });
+
+  it('8. Verify Occupation and Marital Status Context prompt injection', async () => {
+    const { generateAIResponse } = await import('../services/aiService.js');
+    generateAIResponse.mockClear();
+
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'Job kab lagegi',
+          occupation: 'Government Job',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    mockAIResponse = "🔮 Prediction: Government service yog banega.\n📿 Reasoning: 10th house strong hai.\n🪔 Guidance: Surya ko jal dein.";
+
+    await handler(req, res);
+
+    expect(generateAIResponse).toHaveBeenCalled();
+    const lastPrompt = generateAIResponse.mock.calls[0][0];
+
+    expect(lastPrompt).toContain('Occupation=Government Job');
+    expect(lastPrompt).toContain('Marital=Single');
+    expect(lastPrompt).toContain('Focus on SSC, UPSC, State PSC, Banking and government service opportunities.');
+    expect(lastPrompt).toContain('Marriage timing questions are valid.');
+    expect(lastPrompt).toContain('Understand occupation semantically.');
+    expect(lastPrompt).toContain('Understand marital status semantically.');
+  });
 });
