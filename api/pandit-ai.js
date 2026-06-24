@@ -637,10 +637,16 @@ export default async function handler(req, res) {
     const asksAboutSpouse = questionTextNormalized.includes("wife") ||
                            questionTextNormalized.includes("patni") ||
                            questionTextNormalized.includes("husband") ||
-                           questionTextNormalized.includes("pati");
+                           questionTextNormalized.includes("pati") ||
+                           questionTextNormalized.includes("biwi") ||
+                           questionTextNormalized.includes("shaadi") ||
+                           questionTextNormalized.includes("bacha") ||
+                           questionTextNormalized.includes("bcha") ||
+                           questionTextNormalized.includes("baby") ||
+                           questionTextNormalized.includes("child");
 
     if (currentMarital === 'Single' && asksAboutSpouse) {
-      const safeText = "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye patni sambandhit prashn laagu nahi hota.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.";
+      const safeText = "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye vivah/santan sambandhit prashn laagu nahi hota.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.";
       return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData) });
     }
 
@@ -799,22 +805,50 @@ Then add 🎲 Secret and 📊 Score normally.`;
     let dobMonth = userData?.dobMonth || profile?.dobMonth;
     let dobYear = userData?.dobYear || profile?.dobYear;
 
-    // FALLBACK: Parse DD-MM-YYYY string if dobDay undefined
+    // FALLBACK: Parse YYYY-MM-DD or DD-MM-YYYY string if dobDay undefined
     if (!dobDay && userData?.dob) {
       const parts = userData.dob.split('-');
       if (parts.length === 3) {
-        dobDay = parseInt(parts[0]);
-        dobMonth = parseInt(parts[1]);
-        dobYear = parseInt(parts[2]);
+        // Check if YYYY-MM-DD or DD-MM-YYYY
+        if (parts[0].length === 4) {
+          // YYYY-MM-DD from frontend
+          dobYear = parseInt(parts[0]);
+          dobMonth = parseInt(parts[1]);
+          dobDay = parseInt(parts[2]);
+        } else {
+          // DD-MM-YYYY fallback
+          dobDay = parseInt(parts[0]);
+          dobMonth = parseInt(parts[1]);
+          dobYear = parseInt(parts[2]);
+        }
       }
     }
-    if (dobDay && dobMonth && dobYear) {
-      dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
-    } else if (profile?.dob) {
-      dob = profile.dob;
-    } else if (profile?.dateOfBirth) {
-      dob = profile.dateOfBirth;
+
+    // Parse profile fallback if dobDay is still undefined
+    if (!dobDay) {
+      const profileDob = profile?.dob || profile?.dateOfBirth;
+      if (profileDob) {
+        const parts = profileDob.split(/[-/]/);
+        if (parts.length === 3) {
+          if (parts[0].length === 4) {
+            dobYear = parseInt(parts[0]);
+            dobMonth = parseInt(parts[1]);
+            dobDay = parseInt(parts[2]);
+          } else {
+            dobDay = parseInt(parts[0]);
+            dobMonth = parseInt(parts[1]);
+            dobYear = parseInt(parts[2]);
+          }
+        }
+      }
     }
+
+    if (!dobDay || !dobMonth || !dobYear) {
+      const errText = `🔮 Prediction:\n${userData.name || ''} ji, janm tarikh sahi format me nahi mili.\n\n📿 Reasoning:\nKripya DOB DD-MM-YYYY format me daalein.\n\n🪔 Guidance:\nDetails dobara submit karke prashna puchiye.`;
+      return res.status(200).json({ text: await injectSecretAndScore(errText, uid, userData) });
+    }
+
+    dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
 
     // Time (TOB)
     const tobHour = userData?.tobHour || profile?.tobHour;
@@ -944,9 +978,6 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
     try {
       console.log("Calling AI...");
       aiText = await generateAIResponse(fullPrompt);
-      if ((mode === 'chat' || mode === 'personal') && (!astroData || !astroData.lagna)) {
-        aiText = "🔮 Prediction:\nKundali data uplabdh nahi hai.\n\n📿 Reasoning:\nJanm details sahi nahi mili.\n\n🪔 Guidance:\nDOB, time, city check karke dobara puchiye.";
-      }
       console.log("AI returned text length:", aiText.length);
 
       // Pre-humanize the initial text to align validation with the final output format

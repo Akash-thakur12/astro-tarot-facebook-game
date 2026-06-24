@@ -182,9 +182,9 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     
     await handler(req, res);
     
-    expect(res.jsonData.text).toContain('Kundali data uplabdh nahi hai.');
-    expect(res.jsonData.text).toContain('Janm details sahi nahi mili.');
-    expect(res.jsonData.text).toContain('DOB, time, city check karke dobara puchiye.');
+    expect(res.jsonData.text).toContain('janm tarikh sahi format me nahi mili.');
+    expect(res.jsonData.text).toContain('Kripya DOB DD-MM-YYYY format me daalein.');
+    expect(res.jsonData.text).toContain('Details dobara submit karke prashna puchiye.');
   });
 
   it('5. FIX Marital Status Priority / Old Memory contradiction', async () => {
@@ -275,7 +275,7 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
 
     await handler(req, res);
 
-    expect(res.jsonData.text).toContain('🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye patni sambandhit prashn laagu nahi hota.');
+    expect(res.jsonData.text).toContain('🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye vivah/santan sambandhit prashn laagu nahi hota.');
     expect(res.jsonData.text).toContain('📿 Reasoning:\nCurrent profile me marital status Single hai.');
     expect(res.jsonData.text).toContain('🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.');
   });

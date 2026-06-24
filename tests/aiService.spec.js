@@ -46,17 +46,17 @@ describe('aiService - generateAIResponse', () => {
     // Mock completion create to succeed on first attempt
     const mockOpenAI = new OpenAI();
     mockOpenAI.chat.completions.create.mockResolvedValueOnce({
-      choices: [{ message: { content: 'Gemma Response' } }]
+      choices: [{ message: { content: 'Deepseek Response' } }]
     });
 
     const response = await generateAIResponse('hello');
-    expect(response).toBe('Gemma Response');
+    expect(response).toBe('Deepseek Response');
 
-    // Should call completions.create with google.gemma-3-4b-it, temp 0.7, timeout 5000
+    // Should call completions.create with deepseek.v3.2, temp 0.7, timeout 5000
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(1);
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
       {
-        model: 'google.gemma-3-4b-it',
+        model: 'deepseek.v3.2',
         messages: [{ role: 'user', content: 'hello' }],
         temperature: 0.7
       },
@@ -71,20 +71,20 @@ describe('aiService - generateAIResponse', () => {
     process.env.BEDROCK_BASE_URL = 'https://test.api';
 
     const mockOpenAI = new OpenAI();
-    // 1st model (gemma): 1 failure
-    mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('Gemma attempt 1 failed'));
-    // 2nd model (deepseek): 1 success
+    // 1st model (deepseek): 1 failure
+    mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('Deepseek attempt 1 failed'));
+    // 2nd model (gemma): 1 success
     mockOpenAI.chat.completions.create.mockResolvedValueOnce({
-      choices: [{ message: { content: 'Deepseek Response' } }]
+      choices: [{ message: { content: 'Gemma Response' } }]
     });
 
     const response = await generateAIResponse('hello');
-    expect(response).toBe('Deepseek Response');
+    expect(response).toBe('Gemma Response');
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(2);
 
     const calls = mockOpenAI.chat.completions.create.mock.calls;
-    expect(calls[0][0].model).toBe('google.gemma-3-4b-it');
-    expect(calls[1][0].model).toBe('deepseek.v3.1');
+    expect(calls[0][0].model).toBe('deepseek.v3.2');
+    expect(calls[1][0].model).toBe('google.gemma-3-4b-it');
   });
 
   it('should throw an error if all models in the chain fail', async () => {
@@ -101,8 +101,8 @@ describe('aiService - generateAIResponse', () => {
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(3);
 
     const calls = mockOpenAI.chat.completions.create.mock.calls;
-    expect(calls[0][0].model).toBe('google.gemma-3-4b-it');
-    expect(calls[1][0].model).toBe('deepseek.v3.1');
+    expect(calls[0][0].model).toBe('deepseek.v3.2');
+    expect(calls[1][0].model).toBe('google.gemma-3-4b-it');
     expect(calls[2][0].model).toBe('qwen.qwen3-32b-v1:0');
   });
 });
