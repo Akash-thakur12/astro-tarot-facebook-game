@@ -462,6 +462,17 @@ export default async function handler(req, res) {
 
   if (mode === 'chat' || mode === 'personal') {
     const questionTextNormalized = (userData.question || '').trim().toLowerCase();
+
+    // Greeting Routing Hotfix (length <= 5 and contains hi, hello, hlo, namaste, ram ram)
+    const cleanInput = questionTextNormalized.replace(/[^a-z0-9\s]/g, '').trim();
+    const isGreeting = (cleanInput.length <= 5 && ['hlo', 'hello', 'hi'].some(g => cleanInput.includes(g))) || 
+                       (cleanInput.length <= 8 && ['namaste', 'ram ram'].some(g => cleanInput.includes(g)));
+
+    if (isGreeting) {
+      return res.status(200).json({
+        text: "Namaste! Kaise hain aap? Main aapki kundali aur tarot prashno ke uttar de sakta hoon. Kripya apna prashna likhein."
+      });
+    }
     
     // Check for AI identity questions: "tuje kisne banaya" (Step 3)
     if (questionTextNormalized.includes("tuje kisne banaya") || 
@@ -591,23 +602,45 @@ export default async function handler(req, res) {
 
   // Intent detection and contradiction routing
   if (mode === 'chat' || mode === 'personal') {
+    let currentMarital = 'Unknown';
+    if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
+      currentMarital = userData.maritalStatus;
+    } else if (profile?.maritalStatus && profile.maritalStatus !== 'Unknown') {
+      currentMarital = profile.maritalStatus;
+    } else if (getFactValue(facts.married) === true) {
+      currentMarital = 'Married';
+    } else if (getFactValue(facts.married) === false) {
+      currentMarital = 'Single';
+    }
+
     const originalIntent = detectIntent(questionText);
     detectedIntent = resolveIntentContradiction(
       originalIntent,
-      profile,
+      { ...profile, maritalStatus: currentMarital },
       facts,
       questionText
     );
 
-    // Structured married-user guard (Step 5)
+    // Structured married/single user guard
     const questionTextNormalized = (userData.question || '').trim().toLowerCase();
-    const isMarried = (profile?.maritalStatus === "Married") || (getFactValue(facts.married) === true);
-    const asksMarriageWhen = (originalIntent === 'marriage_when') || 
-                             questionTextNormalized.includes("shadi kab") || 
-                             questionTextNormalized.includes("shaadi kab") ||
-                             questionTextNormalized.includes("marriage when");
 
-    if (isMarried && asksMarriageWhen) {
+    const asksMarriageStatus = (originalIntent === 'marriage_when') || 
+                               questionTextNormalized.includes("shadi kab") || 
+                               questionTextNormalized.includes("shaadi kab") ||
+                               questionTextNormalized.includes("marriage when") ||
+                               questionTextNormalized.includes("shadi ho gyi") || 
+                               questionTextNormalized.includes("shadi ho gayi") ||
+                               questionTextNormalized.includes("shaadi ho gayi") ||
+                               questionTextNormalized.includes("shaadi ho chuki") ||
+                               questionTextNormalized.includes("shadi ho chuki");
+
+    if (currentMarital === 'Single' && asksMarriageStatus) {
+      return res.status(200).json({
+        text: "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi sambandh ya bhavishya ke vivaah ke baare me poochna hai to uske baare me pooch sakte hain."
+      });
+    }
+
+    if (currentMarital === 'Married' && asksMarriageStatus) {
       return res.status(200).json({
         text: "🔮 Prediction:\nAap pehle se vivahit hain.\n\n📿 Reasoning:\nProfile me marital status Married hai.\n\n🪔 Guidance:\nYadi vivaahik jeevan ya punarvivah sambandhit prashn hai to uske baare me pooch sakte hain."
       });
@@ -728,8 +761,28 @@ Then add 🎲 Secret and 📊 Score normally.`;
 
   if (mode === 'chat' || mode === 'personal') {
     name = profile?.name || userData?.name || 'Unknown';
-    gender = profile?.gender || getFactValue(facts.gender) || userData?.gender || 'Unknown';
-    maritalStatus = profile?.maritalStatus || (getFactValue(facts.married) === true ? 'Married' : getFactValue(facts.married) === false ? 'Unmarried' : 'Unknown');
+    
+    let resolvedGender = 'Unknown';
+    if (userData?.gender && userData.gender !== 'Unknown') {
+      resolvedGender = userData.gender;
+    } else if (profile?.gender && profile.gender !== 'Unknown') {
+      resolvedGender = profile.gender;
+    } else if (getFactValue(facts.gender)) {
+      resolvedGender = getFactValue(facts.gender);
+    }
+    gender = resolvedGender;
+
+    let resolvedMarital = 'Unknown';
+    if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
+      resolvedMarital = userData.maritalStatus;
+    } else if (profile?.maritalStatus && profile.maritalStatus !== 'Unknown') {
+      resolvedMarital = profile.maritalStatus;
+    } else if (getFactValue(facts.married) === true) {
+      resolvedMarital = 'Married';
+    } else if (getFactValue(facts.married) === false) {
+      resolvedMarital = 'Single';
+    }
+    maritalStatus = resolvedMarital;
 
     // DOB
     const dobDay = userData?.dobDay || profile?.dobDay;
@@ -771,7 +824,7 @@ Then add 🎲 Secret and 📊 Score normally.`;
     // Fact Memory (Married, Gender, Occupation) & Language Preference
     let factMemoryBlock = "Fact Memory:\n";
     
-    const isMarried = (profile?.maritalStatus === "Married") || (getFactValue(facts.married) === true);
+    const isMarried = (maritalStatus === 'Married');
     factMemoryBlock += `Married: ${isMarried ? "Yes" : "No"}\n`;
     factMemoryBlock += `Gender: ${gender}\n`;
     

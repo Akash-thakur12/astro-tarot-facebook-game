@@ -17,6 +17,9 @@ vi.mock('firebase-admin/auth', () => ({
   }))
 }));
 
+let mockProfileData = null;
+let mockFactsData = null;
+
 vi.mock('firebase-admin/firestore', () => {
   const mockGet = vi.fn(async () => ({
     exists: true,
@@ -27,14 +30,22 @@ vi.mock('firebase-admin/firestore', () => {
   
   return {
     getFirestore: vi.fn(() => ({
-      collection: vi.fn(() => ({
-        doc: vi.fn(() => ({
+      collection: vi.fn((col) => ({
+        doc: vi.fn((docId) => ({
           get: mockGet,
           set: mockSet,
           update: mockUpdate,
-          collection: vi.fn(() => ({
-            doc: vi.fn(() => ({
-              get: vi.fn(async () => ({ exists: false })),
+          collection: vi.fn((sub) => ({
+            doc: vi.fn((subDocId) => ({
+              get: vi.fn(async () => {
+                if (sub === 'profile' && subDocId === 'main' && mockProfileData) {
+                  return { exists: true, data: () => mockProfileData };
+                }
+                if (sub === 'facts' && subDocId === 'current' && mockFactsData) {
+                  return { exists: true, data: () => mockFactsData };
+                }
+                return { exists: false };
+              }),
               set: vi.fn(async () => {})
             }))
           }))
@@ -71,6 +82,43 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(stripped).not.toContain('😂');
     expect(stripped).not.toContain('😁');
     expect(stripped).not.toContain('😆');
+  });
+
+  it('1b. Debug Greeting "Hlo" and other greetings', async () => {
+    const testCases = [
+      { q: 'Hlo', shouldBeGreeting: true },
+      { q: 'Hlo!', shouldBeGreeting: true },
+      { q: 'Hello!', shouldBeGreeting: true },
+      { q: 'Namaste!', shouldBeGreeting: true },
+      { q: 'Ram Ram!', shouldBeGreeting: true },
+      { q: 'hello there', shouldBeGreeting: false }
+    ];
+
+    for (const tc of testCases) {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer mock_token' },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_verify_user',
+            question: tc.q
+          },
+          history: []
+        }
+      };
+
+      const res = {
+        statusCode: 200,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.jsonData = data; return this; }
+      };
+
+      await handler(req, res);
+      const isGreetingResponse = res.jsonData?.text?.includes("Namaste! Kaise hain aap?");
+      console.log(`Input: "${tc.q}" -> Is Greeting: ${isGreetingResponse} (Expected: ${tc.shouldBeGreeting})`);
+      expect(isGreetingResponse).toBe(tc.shouldBeGreeting);
+    }
   });
 
   it('2. ADD "samay" to forbidden list / validation', async () => {
@@ -137,5 +185,36 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(res.jsonData.text).toContain('Kundali data uplabdh nahi hai.');
     expect(res.jsonData.text).toContain('Janm details sahi nahi mili.');
     expect(res.jsonData.text).toContain('DOB, time, city check karke dobara puchiye.');
+  });
+
+  it('5. FIX Marital Status Priority / Old Memory contradiction', async () => {
+    mockProfileData = { maritalStatus: 'Single' };
+    mockFactsData = { married: { value: true, currentValue: true } };
+
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user',
+          question: 'meri shadi ho gyi hai ya ni',
+          maritalStatus: 'Unknown'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    await handler(req, res);
+
+    expect(res.jsonData.text).toContain('🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain.');
+    expect(res.jsonData.text).toContain('📿 Reasoning:\nCurrent profile me marital status Single hai.');
+    expect(res.jsonData.text).toContain('🪔 Guidance:\nYadi sambandh ya bhavishya ke vivaah ke baare me poochna hai to uske baare me pooch sakte hain.');
   });
 });

@@ -15,9 +15,12 @@ function getFactValue(field) {
  * @returns {string} The resolved intent.
  */
 export function resolveIntentContradiction(intent, profile, facts, question) {
-  const isMarried =
-    profile?.maritalStatus === 'Married' ||
-    getFactValue(facts?.married) === true;
+  let isMarried = false;
+  if (profile?.maritalStatus && profile.maritalStatus !== 'Unknown') {
+    isMarried = profile.maritalStatus === 'Married';
+  } else {
+    isMarried = getFactValue(facts?.married) === true;
+  }
 
   if (isMarried && intent === 'marriage_when') {
     return 'married_life';
