@@ -1224,4 +1224,80 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(res.jsonData.text).toContain('Pehle SSC taiyari ka ullekh kiya gaya tha.');
     expect(res.jsonData.text).toContain('Kya focus ab bhi SSC par hai ya UPSC ki taraf badal gaya hai?');
   });
+
+  it('33. Verify Greeting "Hello Pandit ji" returns all 5 headers', async () => {
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_greetings',
+          question: 'Hello Pandit ji'
+        },
+        history: []
+      }
+    };
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req, res);
+    expect(res.jsonData.text).toContain('🔮 Prediction:');
+    expect(res.jsonData.text).toContain('📿 Astrological Reasoning:');
+    expect(res.jsonData.text).toContain('🪔 Guidance:');
+    expect(res.jsonData.text).toContain('Aaj Ka Secret:');
+    expect(res.jsonData.text).toContain('Karma Score:');
+  });
+
+  it('34. Verify "meri shadi kb hogi" with Married status inside birthDetails redirects to married life/punarvivah', async () => {
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_married_shadi',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'meri shadi kb hogi',
+          birthDetails: {
+            maritalStatus: 'Married'
+          }
+        },
+        history: []
+      }
+    };
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req, res);
+    expect(res.jsonData.text).toContain('punarvivah');
+  });
+
+  it('35. Verify vague message "meri bat suno" returns "Haan Beta, sun raha hun" reply', async () => {
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_vague',
+          question: 'meri bat suno'
+        },
+        history: []
+      }
+    };
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req, res);
+    expect(res.jsonData.text).toContain('Haan Beta, sun raha hun');
+  });
 });

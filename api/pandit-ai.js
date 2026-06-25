@@ -180,7 +180,7 @@ function detectSmartContradiction(
   const q = (question || '').toLowerCase();
   const wifeAlive = getFact(factMemory, 'relationship.wifeAlive');
   const spouseStatus = getFact(factMemory, 'relationship.spouseStatus');
-  const maritalStatus = getFact(factMemory, 'relationship.relationshipStatus') || userData?.maritalStatus;
+  const maritalStatus = getFact(factMemory, 'relationship.relationshipStatus') || userData?.birthDetails?.maritalStatus || userData?.maritalStatus;
 
   // Rule 1: wifeAlive=false + wife communication question
   if (
@@ -208,11 +208,13 @@ Kya aap purani yaadon, punarvivah ya kisi anya sambandh ke baare me pooch rahe h
     };
   }
 
-  // Married + shaadi kab
+  // Married + shaadi/shadi/vivaah/vivah/marriage + kab/kb/when
+  const hasMarriageKeyword = q.includes('shaadi') || q.includes('shadi') || q.includes('vivaah') || q.includes('vivah') || q.includes('marriage');
+  const hasTimingKeyword = q.includes('kab') || q.includes('kb') || q.includes('when');
   if (
     (maritalStatus === 'Married') &&
-    q.includes('shaadi') &&
-    q.includes('kab')
+    hasMarriageKeyword &&
+    hasTimingKeyword
   ) {
     return {
       type: 'second_marriage',
@@ -231,9 +233,9 @@ Kya aap punarvivah ya vaivahik jeevan ke baare me pooch rahe hain?`
   }
 
   // Age >32 govt job + UPSC
-  const age = getFact(factMemory, 'career.age') || userData?.age;
+  const age = getFact(factMemory, 'career.age') || userData?.birthDetails?.age || userData?.age;
   const parsedAge = parseInt(age);
-  const occupation = getFact(factMemory, 'career.occupation') || userData?.occupation;
+  const occupation = getFact(factMemory, 'career.occupation') || userData?.birthDetails?.occupation || userData?.occupation;
   if (
     occupation === 'Government Job' &&
     !isNaN(parsedAge) &&
@@ -814,49 +816,52 @@ function isVagueMessage(text) {
   const vague = [
     'mujhe ek sawal puchna hai', 'ek baat puchni hai', 'help', 'kya', 'batao',
     'suno', 'bolo', 'ek baat', 'ek sawal', 'question', 'help me', 'madad',
-    'मुझे एक सवाल पूछना है', 'एक बात पूछनी है', 'मदद', 'क्या', 'बताओ', 'सुनो', 'बोलो', 'सवाल पूछना है'
+    'meri bat suno', 'meri baat suno',
+    'मुझे एक सवाल पूछना है', 'एक बात पूछनी है', 'मदद', 'क्या', 'बताओ', 'सुनो', 'बोलो', 'सवाल पूछना है', 'मेरी बात सुनो'
   ];
   return vague.includes(q);
 }
 
-function getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari) {
+function getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari, maritalStatus) {
+  const isMarried = maritalStatus === 'Married';
   if (resolvedLanguage === 'English') {
     return `🔮 Prediction:
 The current alignment of your planets suggests a period of transition and learning.
 
 📿 Astrological Reasoning:
-Although specific chart alignments are currently shifting, general Vedic principles show that cosmic energies are encouraging you to stay patient and positive.
+Cosmic energies are encouraging you to focus on ${isMarried ? 'spouse harmony and domestic stability' : 'future career and personal growth'}.
 
 🪔 Guidance:
-I recommend offering water to the Sun in the morning (Surya Arghya) and practicing daily meditation. This will clear the path for success and harmony. How can I assist you further?`;
+Offer water to the Sun (Surya Arghya) and practice daily meditation. This will clear the path for success and harmony. How can I assist you further?`;
   } else if (isDevanagari) {
     return `🔮 Prediction:
 ग्रहों की वर्तमान स्थिति आपके जीवन में सकारात्मक बदलाव और नई सीख की ओर संकेत कर रही है।
 
 📿 Astrological Reasoning:
-यद्यपि आपके चार्ट के कुछ सूक्ष्म तत्व अभी स्पष्ट हो रहे हैं, सामान्य वैदिक सिद्धांत बताते हैं कि धैर्य और विश्वास रखने से मानसिक शांति और सफलता प्राप्त होगी।
+ब्रह्मांडीय ऊर्जा आपको अपने ${isMarried ? 'दांपत्य जीवन और पारिवारिक सामंजस्य' : 'भविष्य के करियर और व्यक्तिगत विकास'} पर ध्यान देने के लिए प्रेरित कर रही है।
 
 🪔 Guidance:
-नियमित रूप से सूर्य देव को जल अर्पित करें और प्रतिदिन कुछ मिनट ध्यान लगाएं। यह उपाय आपके जीवन में सकारात्मकता लाएगा। क्या आप अपने करियर या विवाह के बारे में कुछ और पूछना चाहेंगे?`;
+नियमित रूप से सूर्य देव को जल अर्पित करें और प्रतिदिन कुछ मिनट ध्यान लगाएं। क्या आप अपने ${isMarried ? 'पारिवारिक जीवन' : 'करियर या विवाह'} के बारे में कुछ और पूछना चाहेंगे?`;
   } else {
     return `🔮 Prediction:
 Grahon ki vartaman sthiti aapke jeevan me sakaratmak badlav aur nayi seekh ki taraf ishara kar rahi hai.
 
 📿 Astrological Reasoning:
-Yadyapi aapke chart ke kuch sookshma tatva abhi spasht ho rahe hain, samanya Vedic jyotish ke anusaar dhairya aur vishwas rakhne se mansik shanti aur safalta prapt hogi.
+Brahmandiya energy aapko apne ${isMarried ? 'dampatya jeevan aur parivarik harmony' : 'future career aur personal growth'} par dhyan dene ke liye prerit kar rahi hai.
 
 🪔 Guidance:
-Niyamit roop se surya dev ko jal arpit karein aur roz thoda dhyan lagayein. Yeh upay aapke jeevan me positive energy layega. Kya aap apne career ya vivaah ke baare me aur janna chahte hain?`;
+Niyamit roop se surya dev ko jal arpit karein aur roz thoda dhyan lagayein. Kya aap apne ${isMarried ? 'family life' : 'career ya vivaah'} ke baare me aur janna chahte hain?`;
   }
 }
 
-function getBackendErrorFallback(resolvedLanguage, isDevanagari) {
+function getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus) {
+  const isMarried = maritalStatus === 'Married';
   if (resolvedLanguage === 'English') {
     return `🔮 Prediction:
 I am experiencing difficulty connecting with the cosmic celestial energy at this moment.
 
 📿 Astrological Reasoning:
-The stellar frequencies are temporarily blocked, possibly due to a sudden solar flare or planetary transit.
+The stellar frequencies are temporarily blocked, but general principles suggest focusing on ${isMarried ? 'family harmony' : 'patience'}.
 
 🪔 Guidance:
 Please pray to Lord Ganesha, the remover of all obstacles. Try asking your question again in a short while once the cosmic alignment is restored.`;
@@ -865,7 +870,7 @@ Please pray to Lord Ganesha, the remover of all obstacles. Try asking your quest
 इस समय ब्रह्मांडीय ऊर्जा और नक्षत्रों के साथ संपर्क स्थापित करने में कुछ बाधा आ रही है।
 
 📿 Astrological Reasoning:
-ग्रहों के गोचर और सौर तरंगों में अस्थाई अवरोध के कारण यह व्यवधान उत्पन्न हुआ है।
+ग्रहों के गोचर में अस्थाई अवरोध है, लेकिन सामान्य सिद्धांत ${isMarried ? 'दांपत्य सुख' : 'धैर्य और शांति'} बनाए रखने का सुझाव देते हैं।
 
 🪔 Guidance:
 कृपया विघ्नहर्ता भगवान गणेश का ध्यान करें। कुछ समय पश्चात पुनः प्रयास करें, तब तक ग्रहों की स्थिति अनुकूल हो जाएगी।`;
@@ -874,7 +879,7 @@ Please pray to Lord Ganesha, the remover of all obstacles. Try asking your quest
 Is samay brahmandiya oorja aur nakshatron ke saath sampark sthapit karne me kuch badha aa rahi hai.
 
 📿 Astrological Reasoning:
-Grahon ke gochar aur solar waves me temporary blockage ke karan yeh vyavdhan utpann hua hai.
+Grahon ke gochar me temporary blockage hai, par samanya principles ${isMarried ? 'dampatya sukh' : 'dhairya aur shanti'} banaye rakhne ka sujhaav dete hain.
 
 🪔 Guidance:
 Kripya vighnaharta Bhagwan Ganesh ka dhyan karein. Kuch samay baad dobara prayas karein, tab tak grahon ki sthiti anukool ho jayegi.`;
@@ -1327,19 +1332,71 @@ Current Season: ${season}`;
     if (isGreeting) {
       let greetingText = "";
       if (resolvedLanguage === 'English') {
-        greetingText = "Hello! How are you? Welcome to Pandit AI. Feel free to ask any question regarding career, marriage, health, or finance. How can I guide you today?";
+        greetingText = `🔮 Prediction:
+Welcome to Pandit AI. Feel free to ask any question regarding career, marriage, health, or finance.
+
+📿 Astrological Reasoning:
+Divine celestial energies are aligned to provide guidance.
+
+🪔 Guidance:
+Hello! How are you? How can I guide you today?`;
       } else if (isDevanagari) {
-        greetingText = "प्रणाम! कैसे हैं आप? कल्याण हो। पंडित जी के डिजिटल दरबार में आपका स्वागत है। आप करियर, विवाह, धन, स्वास्थ्य या किसी अन्य विषय पर मार्गदर्शन प्राप्त कर सकते हैं। आज आप किस बारे में पूछना चाहते हैं?";
+        greetingText = `🔮 Prediction:
+पंडित जी के डिजिटल दरबार में आपका स्वागत है। आप करियर, विवाह, धन, स्वास्थ्य या किसी अन्य विषय पर मार्गदर्शन प्राप्त कर सकते हैं।
+
+📿 Astrological Reasoning:
+आपके ग्रहों और नक्षत्रों की चाल जीवन का सही मार्ग प्रशस्त करने में सहायक होगी।
+
+🪔 Guidance:
+प्रणाम! कैसे हैं आप? कल्याण हो। आज आप किस बारे में पूछना चाहते हैं?`;
       } else {
-        greetingText = "Namaste! Kaise hain aap? Pranam. Kalyan ho. Boliye, aaj kis vishay me margdarshan chahte hain? Career, vivaah, dhan, swasthya ya kisi aur baat par main sahayata kar sakta hu.";
+        greetingText = `🔮 Prediction:
+Pandit Ji ke digital darbar me aapka swagat hai. Aap career, vivaah, dhan, swasthya ya kisi aur baat par margdarshan prapt kar sakte hain.
+
+📿 Astrological Reasoning:
+Aapke grahon aur nakshatron ki chaal aapka sahi margdarshan karne me sahayak hogi.
+
+🪔 Guidance:
+Namaste! Kaise hain aap? Pranam. Kalyan ho. Boliye, aaj kis vishay me margdarshan chahte hain?`;
       }
       return res.status(200).json({ text: await injectSecretAndScore(greetingText, uid, userData, progress, getSecretCategory(detectedIntent)) });
     }
 
     if (isVague) {
       let vagueText = "";
-      if (resolvedLanguage === 'English') {
-        vagueText = `🔮 Prediction:
+      const qNorm = questionText.toLowerCase().trim().replace(/[^a-z0-9\s\u0900-\u097F]/g, '');
+      if (qNorm === 'meri bat suno' || qNorm === 'meri baat suno') {
+        if (resolvedLanguage === 'English') {
+          vagueText = `🔮 Prediction:
+Yes child, I am listening. Please speak.
+
+📿 Astrological Reasoning:
+A connection of communication is established under the divine presence.
+
+🪔 Guidance:
+Feel free to ask whatever is in your heart. I am here to guide you.`;
+        } else if (isDevanagari) {
+          vagueText = `🔮 Prediction:
+हाँ बेटा, सुन रहा हूँ। कल्याण हो।
+
+📿 Astrological Reasoning:
+ईश्वरीय कृपा से आपके और मेरे बीच संवाद का योग बना है।
+
+🪔 Guidance:
+आप बिना किसी संकोच के अपने जीवन का कोई भी प्रश्न पूछ सकते हैं। मैं आपका मार्गदर्शन करूँगा।`;
+        } else {
+          vagueText = `🔮 Prediction:
+Haan Beta, sun raha hun. Kalyan ho.
+
+📿 Astrological Reasoning:
+Ishvariya kripa se aapke aur mere beech samvaad ka yog bana hai.
+
+🪔 Guidance:
+Aap bina kisi sankoch ke apne jeevan ka koi bhi prashna pooch sakte hain. Main aapka margdarshan karunga.`;
+        }
+      } else {
+        if (resolvedLanguage === 'English') {
+          vagueText = `🔮 Prediction:
 Please feel free to ask your question.
 
 📿 Astrological Reasoning:
@@ -1347,8 +1404,8 @@ Astrological guidance is based on your birth chart details and planetary positio
 
 🪔 Guidance:
 Please ask your question clearly. I can guide you on career, marriage, love life, finance, health, family, education, and more.`;
-      } else if (isDevanagari) {
-        vagueText = `🔮 Prediction:
+        } else if (isDevanagari) {
+          vagueText = `🔮 Prediction:
 आप बिना किसी संकोच के अपना प्रश्न पूछ सकते हैं।
 
 📿 Astrological Reasoning:
@@ -1356,8 +1413,8 @@ Please ask your question clearly. I can guide you on career, marriage, love life
 
 🪔 Guidance:
 कृपया अपना प्रश्न खुलकर पूछें। मैं आपके करियर, विवाह, प्रेम जीवन, धन, स्वास्थ्य, परिवार या शिक्षा से संबंधित किसी भी विषय पर मार्गदर्शन करने का प्रयास करूंगा।`;
-      } else {
-        vagueText = `🔮 Prediction:
+        } else {
+          vagueText = `🔮 Prediction:
 Aap bina kisi sankoch ke apna prashna pooch sakte hain.
 
 📿 Astrological Reasoning:
@@ -1365,6 +1422,7 @@ Jyotishiya margdarshan aapki janm kundali ke grahon aur nakshatron ke adhar par 
 
 🪔 Guidance:
 Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dhan, swasthya, parivaar ya shiksha se sambandhit kisi bhi vishay par margdarshan dene ka prayas karunga.`;
+        }
       }
       return res.status(200).json({ text: await injectSecretAndScore(vagueText, uid, userData, progress, getSecretCategory(detectedIntent)) });
     }
@@ -1391,11 +1449,12 @@ Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dha
   let hasPob = true;
 
   if (mode === 'chat' || mode === 'personal') {
-    name = profile?.name || userData?.name || 'Unknown';
+    const birthDetails = userData?.birthDetails || userData || {};
+    name = profile?.name || birthDetails.name || 'Unknown';
     
     let resolvedGender = 'Unknown';
-    if (userData?.gender && userData.gender !== 'Unknown') {
-      resolvedGender = userData.gender;
+    if (birthDetails.gender && birthDetails.gender !== 'Unknown') {
+      resolvedGender = birthDetails.gender;
     } else if (profile?.gender && profile.gender !== 'Unknown') {
       resolvedGender = profile.gender;
     } else if (getFactValue(facts.gender)) {
@@ -1404,10 +1463,11 @@ Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dha
     gender = resolvedGender;
 
     let resolvedMarital = 'Unknown';
+    const maritalStatusFromBirthDetails = birthDetails.maritalStatus;
     if (relationshipLoss) {
       resolvedMarital = 'Widowed';
-    } else if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
-      resolvedMarital = userData.maritalStatus;
+    } else if (maritalStatusFromBirthDetails && maritalStatusFromBirthDetails !== 'Unknown') {
+      resolvedMarital = maritalStatusFromBirthDetails;
     } else if (profile?.maritalStatus && profile.maritalStatus !== 'Unknown') {
       resolvedMarital = profile.maritalStatus;
     } else if (getFactValue(facts.married) === true) {
@@ -1418,13 +1478,13 @@ Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dha
     maritalStatus = resolvedMarital;
 
     // DOB
-    let dobDay = userData?.dobDay || profile?.dobDay;
-    let dobMonth = userData?.dobMonth || profile?.dobMonth;
-    let dobYear = userData?.dobYear || profile?.dobYear;
+    let dobDay = birthDetails.dobDay || profile?.dobDay;
+    let dobMonth = birthDetails.dobMonth || profile?.dobMonth;
+    let dobYear = birthDetails.dobYear || profile?.dobYear;
 
     // FALLBACK: Parse YYYY-MM-DD or DD-MM-YYYY string if dobDay undefined
-    if (!dobDay && userData?.dob) {
-      const parts = userData.dob.split('-');
+    if (!dobDay && birthDetails.dob) {
+      const parts = birthDetails.dob.split('-');
       if (parts.length === 3) {
         // Check if YYYY-MM-DD or DD-MM-YYYY
         if (parts[0].length === 4) {
@@ -1474,9 +1534,9 @@ Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dha
       ageDisplay = calculateAge(dob);
 
       // Time (TOB)
-      const tobHour = userData?.tobHour || profile?.tobHour;
-      const tobMinute = userData?.tobMinute || profile?.tobMinute;
-      const tobPeriod = userData?.tobPeriod || profile?.tobPeriod;
+      const tobHour = birthDetails.tobHour || profile?.tobHour;
+      const tobMinute = birthDetails.tobMinute || profile?.tobMinute;
+      const tobPeriod = birthDetails.tobPeriod || profile?.tobPeriod;
       if (tobHour !== undefined && tobMinute !== undefined) {
         tob = `${tobHour}:${String(tobMinute).padStart(2, '0')} ${tobPeriod || ''}`.trim();
       } else if (profile?.tob) {
@@ -1490,7 +1550,7 @@ Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dha
       }
 
       // Place (POB)
-      const pobVal = profile?.pob || profile?.placeOfBirth || userData?.pob;
+      const pobVal = profile?.pob || profile?.placeOfBirth || birthDetails.pob;
       if (pobVal && pobVal !== 'Unknown') {
         pob = pobVal;
       } else {
@@ -1707,6 +1767,10 @@ ZERO REFUSAL POLICY:
 - Never say "This question is not applicable", "Unable to verify", "I cannot answer this question", "Invalid question", "Unsupported request", "Try again later", "Technical issue", or similar phrases.
 - Always attempt to help the user.
 
+MARITAL STATUS LOGIC:
+- If the user's marital status is 'Married', and they ask about marriage (e.g. 'meri shadi kab hogi'), do NOT predict a future/first marriage. Instead, explain that since they are already married, focus the reading on married life, spouse relations, and marital harmony (or check if they are asking about second marriage/divorce details).
+- If the user's marital status is 'Single' or 'Divorced', you may predict future marriage timing.
+
 ASTROLOGY PRINCIPLES:
 - Understand the user's query in the context of Vedic Astrology (Lagna, houses, planets, dasha, gochar).
 - Data Integrity: Do NOT invent, hallucinate, or assume any astrology data (specific planets, houses, dashas, nakshatras, yogas, dates, or years) that is not explicitly provided in the Astro Data block below.
@@ -1855,7 +1919,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 
       if (needsRetry && retryCount >= 2) {
         console.error("VALIDATION_FAILED_3X");
-        const friendlyFallbackText = getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari);
+        const friendlyFallbackText = getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari, maritalStatus);
         return res.status(200).json({ text: await injectSecretAndScore(friendlyFallbackText, uid, userData, progress, getSecretCategory(detectedIntent)) });
       }
 
@@ -1970,7 +2034,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   
   if (mode === 'chat' || mode === 'personal') {
     console.log("RESPONSE SOURCE = OFFLINE");
-    const backendFallback = getBackendErrorFallback(resolvedLanguage, isDevanagari);
+    const backendFallback = getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus);
     const formattedFallback = await injectSecretAndScore(backendFallback, uid, userData, progress, getSecretCategory(detectedIntent));
     return res.status(200).json({ 
       text: formattedFallback
