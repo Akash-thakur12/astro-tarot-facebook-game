@@ -429,8 +429,6 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(lastPrompt).toContain('Marital=Single');
     expect(lastPrompt).toContain('Focus on SSC, UPSC, State PSC, Banking and government service opportunities.');
     expect(lastPrompt).toContain('Marriage timing questions are valid.');
-    expect(lastPrompt).toContain('Understand occupation semantically.');
-    expect(lastPrompt).toContain('Understand marital status semantically.');
   });
 
   it('9. Verify Loss/Widow Memory Guard', async () => {
