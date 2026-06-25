@@ -150,6 +150,24 @@ vi.mock('../services/aiService.js', () => ({
         confidence: 0.95
       });
     }
+
+    if (prompt.includes("[GREETING MODE ACTIVE]")) {
+      return `🔮 Prediction: Welcome to Pandit AI. Feel free to ask any question regarding career, marriage, health, or finance.
+📿 Astrological Reasoning: Divine celestial energies are aligned.
+🪔 Guidance: Namaste! Kaise hain aap? Pranam. Kalyan ho. Boliye, aaj kis vishay me margdarshan chahte hain?`;
+    }
+
+    if (prompt.includes("[VAGUE QUESTION MODE ACTIVE]")) {
+      if (prompt.toLowerCase().includes("meri bat suno") || prompt.toLowerCase().includes("meri baat suno")) {
+        return `🔮 Prediction: Haan Beta, sun raha hun. Kalyan ho.
+📿 Astrological Reasoning: Ishvariya kripa se aapke aur mere beech samvaad ka yog bana hai.
+🪔 Guidance: Aap bina kisi sankoch ke apne jeevan ka koi bhi prashna pooch sakte hain. Main aapka margdarshan karunga.`;
+      }
+      return `🔮 Prediction: Please feel free to ask your question.
+📿 Astrological Reasoning: Astrological guidance is based on your birth chart details.
+🪔 Guidance: Please ask your question clearly. I can guide you on career, marriage, love life, and more.`;
+    }
+
     return mockAIResponse;
   })
 }));
@@ -162,6 +180,8 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     mockFactsData = null;
     mockFactMemoryData = null;
     mockAIResponse = "🔮 Prediction: Safalta milegi.\n📿 Reasoning: Kundali achhi hai.\n🪔 Guidance: Dhyan karein.";
+    process.env.BEDROCK_API_KEY = "mock-key";
+    process.env.BEDROCK_BASE_URL = "mock-url";
   });
 
   it('1. FIX humanize() - Add emoji stripper at TOP of function', () => {

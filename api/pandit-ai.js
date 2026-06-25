@@ -602,13 +602,16 @@ function validateAstroResponse(text, astroData) {
 
 function containsForbiddenPhrases(text, factMemory = {}) {
   if (!text) return false;
+  let checkText = text;
+  checkText = checkText.replace(/Haan\s+Beta,\s+sun\s+raha\s+hun/gi, "");
+  
   const blacklist = ['beta','😂','😁','😆'];
-  if (blacklist.some(w => text.toLowerCase().includes(w))) return true;
+  if (blacklist.some(w => checkText.toLowerCase().includes(w))) return true;
 
   const INVALID_RASHI_PATTERN = /(surya|chandra|mangal|budh|guru|shukra|shani|rahu|ketu)\s+(rashi|राशि)\s+me/gi;
-  if ([...text.matchAll(INVALID_RASHI_PATTERN)].length > 0) return true;
+  if ([...checkText.matchAll(INVALID_RASHI_PATTERN)].length > 0) return true;
 
-  const lower = text.toLowerCase();
+  const lower = checkText.toLowerCase();
   
   const forbidden = [
     "beta",
@@ -1330,105 +1333,7 @@ Current Season: ${season}`;
   const isGreeting = isGreetingMessage(questionText);
   const isVague = isVagueMessage(questionText);
 
-  if (mode === 'chat' || mode === 'personal') {
-    if (isGreeting) {
-      let greetingText = "";
-      if (resolvedLanguage === 'English') {
-        greetingText = `🔮 Prediction:
-Welcome to Pandit AI. Feel free to ask any question regarding career, marriage, health, or finance.
 
-📿 Astrological Reasoning:
-Divine celestial energies are aligned to provide guidance.
-
-🪔 Guidance:
-Hello! How are you? How can I guide you today?`;
-      } else if (isDevanagari) {
-        greetingText = `🔮 Prediction:
-पंडित जी के डिजिटल दरबार में आपका स्वागत है। आप करियर, विवाह, धन, स्वास्थ्य या किसी अन्य विषय पर मार्गदर्शन प्राप्त कर सकते हैं।
-
-📿 Astrological Reasoning:
-आपके ग्रहों और नक्षत्रों की चाल जीवन का सही मार्ग प्रशस्त करने में सहायक होगी।
-
-🪔 Guidance:
-प्रणाम! कैसे हैं आप? कल्याण हो। आज आप किस बारे में पूछना चाहते हैं?`;
-      } else {
-        greetingText = `🔮 Prediction:
-Pandit Ji ke digital darbar me aapka swagat hai. Aap career, vivaah, dhan, swasthya ya kisi aur baat par margdarshan prapt kar sakte hain.
-
-📿 Astrological Reasoning:
-Aapke grahon aur nakshatron ki chaal aapka sahi margdarshan karne me sahayak hogi.
-
-🪔 Guidance:
-Namaste! Kaise hain aap? Pranam. Kalyan ho. Boliye, aaj kis vishay me margdarshan chahte hain?`;
-      }
-      return res.status(200).json({ text: await injectSecretAndScore(greetingText, uid, userData, progress, getSecretCategory(detectedIntent)) });
-    }
-
-    if (isVague) {
-      let vagueText = "";
-      const qNorm = questionText.toLowerCase().trim().replace(/[^a-z0-9\s\u0900-\u097F]/g, '');
-      if (qNorm === 'meri bat suno' || qNorm === 'meri baat suno') {
-        if (resolvedLanguage === 'English') {
-          vagueText = `🔮 Prediction:
-Yes child, I am listening. Please speak.
-
-📿 Astrological Reasoning:
-A connection of communication is established under the divine presence.
-
-🪔 Guidance:
-Feel free to ask whatever is in your heart. I am here to guide you.`;
-        } else if (isDevanagari) {
-          vagueText = `🔮 Prediction:
-हाँ बेटा, सुन रहा हूँ। कल्याण हो।
-
-📿 Astrological Reasoning:
-ईश्वरीय कृपा से आपके और मेरे बीच संवाद का योग बना है।
-
-🪔 Guidance:
-आप बिना किसी संकोच के अपने जीवन का कोई भी प्रश्न पूछ सकते हैं। मैं आपका मार्गदर्शन करूँगा।`;
-        } else {
-          vagueText = `🔮 Prediction:
-Haan Beta, sun raha hun. Kalyan ho.
-
-📿 Astrological Reasoning:
-Ishvariya kripa se aapke aur mere beech samvaad ka yog bana hai.
-
-🪔 Guidance:
-Aap bina kisi sankoch ke apne jeevan ka koi bhi prashna pooch sakte hain. Main aapka margdarshan karunga.`;
-        }
-      } else {
-        if (resolvedLanguage === 'English') {
-          vagueText = `🔮 Prediction:
-Please feel free to ask your question.
-
-📿 Astrological Reasoning:
-Astrological guidance is based on your birth chart details and planetary positions.
-
-🪔 Guidance:
-Please ask your question clearly. I can guide you on career, marriage, love life, finance, health, family, education, and more.`;
-        } else if (isDevanagari) {
-          vagueText = `🔮 Prediction:
-आप बिना किसी संकोच के अपना प्रश्न पूछ सकते हैं।
-
-📿 Astrological Reasoning:
-ज्योतिषीय मार्गदर्शन आपकी जन्म कुंडली के ग्रहों और नक्षत्रों के आधार पर दिया जाता है।
-
-🪔 Guidance:
-कृपया अपना प्रश्न खुलकर पूछें। मैं आपके करियर, विवाह, प्रेम जीवन, धन, स्वास्थ्य, परिवार या शिक्षा से संबंधित किसी भी विषय पर मार्गदर्शन करने का प्रयास करूंगा।`;
-        } else {
-          vagueText = `🔮 Prediction:
-Aap bina kisi sankoch ke apna prashna pooch sakte hain.
-
-📿 Astrological Reasoning:
-Jyotishiya margdarshan aapki janm kundali ke grahon aur nakshatron ke adhar par diya jata hai.
-
-🪔 Guidance:
-Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dhan, swasthya, parivaar ya shiksha se sambandhit kisi bhi vishay par margdarshan dene ka prayas karunga.`;
-        }
-      }
-      return res.status(200).json({ text: await injectSecretAndScore(vagueText, uid, userData, progress, getSecretCategory(detectedIntent)) });
-    }
-  }
 
   let ageDisplay = "Unknown";
 
@@ -1699,23 +1604,12 @@ ${recentPanditReplies || "None"}`;
     if (isGreeting) {
       modeSpecificInstruction = `
 [GREETING MODE ACTIVE]
-The user just greeted you. You MUST respond with a warm, welcoming greeting as an experienced Vedic astrologer (Pandit Ji).
-- Offer a blessing (e.g., 'Kalyan ho', 'Ayushman bhava', 'Pranam').
-- Keep the response short, warm, and inviting.
-- Politely invite them to ask their question.
-- Do NOT provide any predictions or technical details.
-- Mention that they can seek guidance on career, marriage, finance, health, family, etc.
-- End with a warm follow-up question.
-- DO NOT refuse the user's message.
+The user greeted you warmly. Respond naturally as an experienced Vedic astrologer. Welcome them, acknowledge them warmly, and invite them to ask about career, marriage, finance, health or family. Do not invent horoscope details.
 `;
     } else if (isVague) {
       modeSpecificInstruction = `
 [VAGUE QUESTION MODE ACTIVE]
-The user's query is vague or asking for permission to ask a question.
-- Welcomingly encourage them to ask their question without any hesitation.
-- Mention that you can guide them on career (job, exams), marriage, love life, finance, health, family, education, and more.
-- Do NOT reject or refuse their message.
-- Ask them a friendly follow-up question to start the reading.
+The user wishes to begin a conversation but has not yet asked a specific astrology question. Encourage them warmly to continue and offer guidance. Do not fabricate horoscope information.
 `;
     } else if (!hasBirthDetails) {
       modeSpecificInstruction = `
@@ -1995,7 +1889,7 @@ RULES:
 - Keep the response concise, between 80 to 140 words.
 - Follow the active mode instructions below:
 
-\${modeSpecificInstruction}
+${modeSpecificInstruction}
 `;
 
     fullPrompt = `
