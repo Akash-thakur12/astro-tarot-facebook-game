@@ -1,5 +1,6 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { verifyIdToken } from '../_utils/auth.js';
+import { verifyFacebookSignature } from '../_utils/verifyFacebookSignature.js';
 
 const db = getFirestore();
 
@@ -8,7 +9,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // 2. Server-Side Authentication
+  // Server-Side Authentication
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing token' });
@@ -29,6 +30,41 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const { displayName, photoURL, email, provider } = body;
 
+  // Process Meta IAP Active Purchases to auto-restore Premium state
+  const activePurchases = body.activePurchases || [];
+  let hasActiveMetaPremium = false;
+  let metaPurchaseTime = null;
+  const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+
+  if (activePurchases.length > 0 && APP_SECRET) {
+    for (const purchase of activePurchases) {
+      if (purchase.productID === 'premium_seeker_status' && purchase.signedRequest) {
+        let isMock = false;
+        if (
+          (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'development') &&
+          purchase.signedRequest === 'mock.signature_payload'
+        ) {
+          isMock = true;
+        }
+
+        let verifiedPayload = null;
+        if (!isMock) {
+          verifiedPayload = verifyFacebookSignature(purchase.signedRequest, APP_SECRET);
+        }
+
+        if (isMock || (verifiedPayload && String(verifiedPayload.payment_id) === String(purchase.paymentID))) {
+          const purchaseTimeMs = parseInt(purchase.purchaseTime) || Date.now();
+          // Active if within 30 days
+          if (Date.now() - purchaseTimeMs < 30 * 24 * 60 * 60 * 1000) {
+            hasActiveMetaPremium = true;
+            metaPurchaseTime = new Date(purchaseTimeMs);
+            break;
+          }
+        }
+      }
+    }
+  }
+
   try {
     // 3. Unified Daily Reset & Profile Sync Logic
     const result = await db.runTransaction(async (t) => {
@@ -43,10 +79,13 @@ export default async function handler(req, res) {
           photoURL: photoURL || null,
           email: email || null,
           provider: provider || 'anonymous',
-          coins: 40, // High profit economy: Starting coins reduced to 40
+          coins: 40, // Starting coins
           xp: 0,
           streak: 1,
-          premium: false,
+          premium: hasActiveMetaPremium,
+          subscriptionExpiry: hasActiveMetaPremium && metaPurchaseTime 
+            ? new Date(metaPurchaseTime.getTime() + 30 * 24 * 60 * 60 * 1000) 
+            : null,
           adsWatchedToday: 0,
           dailyQuestionUsed: false,
           dailyTarotUsed: false,
@@ -64,6 +103,16 @@ export default async function handler(req, res) {
         lastLoginAt: FieldValue.serverTimestamp()
       };
       let needsUpdate = false;
+
+      // Sync active Meta premium purchase if found
+      if (hasActiveMetaPremium && metaPurchaseTime) {
+        const expiryDate = new Date(metaPurchaseTime.getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (!user.premium || !user.subscriptionExpiry || user.subscriptionExpiry.toDate() < expiryDate) {
+          updates.premium = true;
+          updates.subscriptionExpiry = expiryDate;
+          needsUpdate = true;
+        }
+      }
 
       // Sync profile info if it's missing or if upgraded from anonymous
       if (displayName && !user.displayName) { updates.displayName = displayName; needsUpdate = true; }
@@ -111,9 +160,12 @@ export default async function handler(req, res) {
       if (user.premium && user.subscriptionExpiry) {
         const expiryDate = user.subscriptionExpiry.toDate();
         if (now > expiryDate) {
-          updates.premium = false;
-          updates.subscriptionExpiry = null;
-          needsUpdate = true;
+          const targetExpiry = updates.subscriptionExpiry || expiryDate;
+          if (now > targetExpiry) {
+            updates.premium = false;
+            updates.subscriptionExpiry = null;
+            needsUpdate = true;
+          }
         }
       }
 

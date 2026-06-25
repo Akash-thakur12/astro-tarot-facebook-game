@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
-import { auth } from '../services/firebase';
 import Button from '../components/ui/Button';
+import { initializePayments, purchasePremium, restorePurchases } from '../services/fbPayments';
 
 const Premium = () => {
   const navigate = useNavigate();
-  const { user, refreshUser, getToken } = useAuth();
+  const { refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -54,88 +54,45 @@ const Premium = () => {
 
   const tp = t[currentLanguage] || t.English;
 
-  // Load Razorpay Script
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    document.body.appendChild(script);
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
-
   const handleUpgrade = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const token = await getToken();
+      await initializePayments();
+      const verifyResult = await purchasePremium(getToken);
 
-      // 1. Create Order
-      const orderRes = await fetch('/api/payments/create-order', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error || "Failed to initiate payment");
-
-      // 2. Open Razorpay Checkout
-      const options = {
-        key: orderData.key,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: "AstroTarot",
-        description: "Monthly Premium Subscription",
-        order_id: orderData.id,
-        handler: async function (response) {
-          // 3. Verify Payment
-          try {
-            setLoading(true);
-            const verifyToken = await getToken();
-            const verifyRes = await fetch('/api/payments/verify-purchase', {
-              method: 'POST',
-              headers: { 
-                'Authorization': `Bearer ${verifyToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
-              })
-            });
-
-            const verifyData = await verifyRes.json();
-            if (!verifyRes.ok) throw new Error(verifyData.error || "Verification failed");
-
-            // Success
-            setSuccess(true);
-            await refreshUser();
-          } catch (err) {
-            setError(err.message);
-          } finally {
-            setLoading(false);
-          }
-        },
-        prefill: {
-          email: user?.email || (auth.currentUser?.email || ""),
-        },
-        theme: {
-          color: "#fbbf24" // Mystic Gold
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response) {
-        setError(response.error.description);
-      });
-      rzp.open();
-
+      if (verifyResult && verifyResult.success) {
+        setSuccess(true);
+        await refreshUser();
+      } else {
+        throw new Error("Verification failed on server");
+      }
     } catch (err) {
-      console.error("Payment Flow Error:", err);
-      setError(err.message);
+      console.error("Upgrade Flow Error:", err);
+      setError(err.message || "Upgrade failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      await initializePayments();
+      const verifyResult = await restorePurchases(getToken);
+
+      if (verifyResult && verifyResult.success) {
+        setSuccess(true);
+        await refreshUser();
+      } else {
+        setError("No active Premium purchase found to restore.");
+      }
+    } catch (err) {
+      console.error("Restore Flow Error:", err);
+      setError(err.message || "Failed to restore purchase.");
     } finally {
       setLoading(false);
     }
@@ -205,6 +162,14 @@ const Premium = () => {
           >
             {loading ? tp.processing : tp.upgradeBtn}
           </Button>
+
+          <button
+            onClick={handleRestore}
+            disabled={loading}
+            className="mt-6 text-xs font-black text-mystic-gold hover:text-white uppercase tracking-widest transition-colors block w-full text-center"
+          >
+            {currentLanguage === 'Hindi' ? 'खरीद पुनर्स्थापित करें' : 'Restore Purchase'}
+          </button>
 
           {error && (
             <div className="mt-6 text-red-400 text-xs font-bold animate-fade-in">

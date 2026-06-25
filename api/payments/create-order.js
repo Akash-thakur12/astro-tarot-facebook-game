@@ -47,10 +47,23 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 
+  const key_id = process.env.RAZORPAY_KEY_ID;
+  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!key_id || !key_secret) {
+    console.warn("create-order: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET missing. Returning mock order details.");
+    return res.status(200).json({
+      id: `mock_order_${Date.now()}`,
+      amount: 9900,
+      currency: "INR",
+      key: "mock_key_id"
+    });
+  }
+
   // 2. Initialize Razorpay
   const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
+    key_id,
+    key_secret,
   });
 
   // 3. Create Order (₹99 = 9900 paise)
@@ -69,7 +82,7 @@ export default async function handler(req, res) {
       id: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: process.env.RAZORPAY_KEY_ID // Send Key ID to frontend for convenience
+      key: key_id
     });
   } catch (error) {
     console.error("Razorpay Order Creation Error:", error);

@@ -57,3 +57,27 @@ export const getFBPlayer = () => {
     return null;
   }
 };
+
+export const isPaymentsSupported = () => {
+  return typeof window !== 'undefined' && !!window.FBInstant && !!window.FBInstant.payments;
+};
+
+export const getPaymentsInstance = () => {
+  return isPaymentsSupported() ? window.FBInstant.payments : null;
+};
+
+export const onPaymentsReady = (callback) => {
+  if (isPaymentsSupported()) {
+    window.FBInstant.payments.onReady(callback);
+  }
+};
+
+export const logFBEvent = (eventName, valueToSum = 1, parameters = {}) => {
+  if (typeof window !== 'undefined' && window.FBInstant) {
+    try {
+      window.FBInstant.logEvent(eventName, valueToSum, parameters);
+    } catch (e) {
+      console.warn("FBInstant logEvent failed:", e);
+    }
+  }
+};

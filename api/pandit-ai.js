@@ -504,13 +504,11 @@ function validateAstroResponse(text, astroData) {
   if ([...text.matchAll(INVALID_RASHI_PATTERN)].length > 0) return false;
 
   const lower = text.toLowerCase();
-
   const hasAstro = !!astroData;
 
   // Check Nakshatra
   if (lower.includes("nakshatra") || lower.includes("नक्षत्र")) {
-    if (!hasAstro || !astroData.nakshatra) return false;
-    const calcNak = astroData.nakshatra.toLowerCase();
+    const calcNak = (hasAstro && astroData.nakshatra) ? astroData.nakshatra.toLowerCase() : "";
     for (const nak of NAKSHATRAS) {
       const nakLower = nak.toLowerCase();
       if (nakLower !== calcNak && lower.includes(nakLower)) return false;
@@ -519,48 +517,65 @@ function validateAstroResponse(text, astroData) {
 
   // Check Dasha
   if (lower.includes("mahadasha") || lower.includes("महादशा") || lower.includes("dasha") || lower.includes("दशा")) {
-    if (!hasAstro || !astroData.mahadasha) return false;
-    const calcMaha = astroData.mahadasha.toLowerCase();
-    const calcAntar = astroData.antardasha ? astroData.antardasha.toLowerCase() : "";
+    const calcMaha = (hasAstro && astroData.mahadasha) ? astroData.mahadasha.toLowerCase() : "";
+    const calcAntar = (hasAstro && astroData.antardasha) ? astroData.antardasha.toLowerCase() : "";
     for (const lord of DASHA_LORDS) {
       const lordLower = lord.name.toLowerCase();
       if (lordLower !== calcMaha && lordLower !== calcAntar && lower.includes(lordLower + " dasha")) return false;
     }
   }
 
-  // Check ALL 12 Lagnas, not just Kanya
+  // Check ALL 12 Lagnas
   const lagnas = ['mesh','vrishabh','mithun','kark','simha','kanya','tula','vrishchik','dhanu','makar','kumbh','meen'];
   for (const lagna of lagnas) {
     if (lower.includes(lagna + ' lagna') || lower.includes(lagna + ' लग्न')) {
-      if (!hasAstro || !astroData.lagna || !astroData.lagna.toLowerCase().includes(lagna)) return false;
+      const calcLagna = (hasAstro && astroData.lagna) ? astroData.lagna.toLowerCase() : "";
+      if (!calcLagna.includes(lagna)) return false;
     }
   }
 
-  // Check Planet Positions - if AI mentions Mars in X, verify against calc
-  const planetSigns = hasAstro ? (astroData.planets || {}) : {};
-  for (const [planet, sign] of Object.entries(planetSigns)) {
-    const regex = new RegExp(`${planet}\\s+(in|me)\\s+\\w+`, 'i');
-    const match = text.match(regex);
-    if (match && !match[0].toLowerCase().includes(sign.toLowerCase())) return false;
+  // Check Planet Positions
+  if (hasAstro) {
+    const planetSigns = astroData.planets || {};
+    for (const [planet, sign] of Object.entries(planetSigns)) {
+      const regex = new RegExp(`${planet}\\s+(in|me)\\s+\\w+`, 'i');
+      const match = text.match(regex);
+      if (match && !match[0].toLowerCase().includes(sign.toLowerCase())) return false;
+    }
+  } else {
+    // If no astro data, block any planet position mentions
+    const planetsList = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Rahu', 'Ketu', 'Surya', 'Chandra', 'Budh', 'Guru', 'Shukra', 'Shani'];
+    for (const planet of planetsList) {
+      const regex = new RegExp(`${planet}\\s+(in|me)\\s+\\w+`, 'i');
+      if (regex.test(text)) return false;
+    }
   }
 
   // Check Dhaiya - only allow if calculated
-  if (lower.includes('dhaiya') && (!hasAstro || !astroData.dhaiya)) return false;
+  if (lower.includes('dhaiya')) {
+    if (!hasAstro) {
+      if (/dhaiya\s*(hai|chal|shuru|prabhav)/i.test(lower)) return false;
+    } else if (!astroData.dhaiya) {
+      return false;
+    }
+  }
 
   // Check Sadesati - only allow if calculated
-  if (lower.includes('sadesati') && (!hasAstro || !astroData.sadesati)) return false;
+  if (lower.includes('sadesati')) {
+    if (!hasAstro) {
+      if (/sadesati\s*(hai|chal|shuru|prabhav)/i.test(lower)) return false;
+    } else if (!astroData.sadesati) {
+      return false;
+    }
+  }
 
-  // Check Houses - if AI mentions "4th house", verify against calc
-  const hasHouses = astroData?.houses && Object.keys(astroData.houses).length > 0;
+  // Check Houses
+  const hasHouses = hasAstro && astroData.houses && Object.keys(astroData.houses).length > 0;
   if (!hasHouses) {
-    const forbiddenHousePatterns = [
-      /\b4th\s+(?:house|bhav)\b/i,
-      /\b5th\s+(?:house|bhav)\b/i,
-      /\b7th\s+(?:house|bhav)\b/i,
-      /\b9th\s+(?:house|bhav)\b/i,
-      /\b10th\s+(?:house|bhav)\b/i
-    ];
-    if (forbiddenHousePatterns.some(pattern => pattern.test(text))) {
+    const housePattern = /\b\d+(?:st|nd|rd|th)?\s+(?:house|bhav|ghar)\b/i;
+    const housePatternHindi = /\b(?:bhav|house|ghar)\s+\d+/i;
+    const housePatternHindi2 = /\b\d+\s*(?:bhav|ghar|house|वें\s+भाव|वें\s+घर)\b/i;
+    if (housePattern.test(text) || housePatternHindi.test(text) || housePatternHindi2.test(text)) {
       return false;
     }
   }
@@ -780,6 +795,91 @@ const adminAuth = getAuth();
 const AI_QUESTION_COST = 30; // Increased from 25
 
 // Rate limiting map replaced by Firestore transaction rate limiter
+
+function isGreetingMessage(text) {
+  if (!text) return false;
+  const q = text.toLowerCase().trim().replace(/[^a-z0-9\s\u0900-\u097F]/g, '');
+  const greetings = [
+    'hi', 'hello', 'hlo', 'namaste', 'ram ram', 'ramram', 'guru ji', 'guruji', 
+    'pandit ji', 'panditji', 'pandi ji', 'pandiji', 'pranam', 'pranaam', 'baba', 
+    'radhe radhe', 'jai shree ram', 'hi pandit ji', 'hello pandit ji', 'pranam pandit ji',
+    'नमस्ते', 'राम राम', 'प्रणाम', 'गुरु जी', 'गुरुजी', 'पंडित जी', 'पंडितजी', 'बाबा', 'राधे राधे', 'जय श्री राम'
+  ];
+  return greetings.includes(q);
+}
+
+function isVagueMessage(text) {
+  if (!text) return false;
+  const q = text.toLowerCase().trim().replace(/[^a-z0-9\s\u0900-\u097F]/g, '');
+  const vague = [
+    'mujhe ek sawal puchna hai', 'ek baat puchni hai', 'help', 'kya', 'batao',
+    'suno', 'bolo', 'ek baat', 'ek sawal', 'question', 'help me', 'madad',
+    'मुझे एक सवाल पूछना है', 'एक बात पूछनी है', 'मदद', 'क्या', 'बताओ', 'सुनो', 'बोलो', 'सवाल पूछना है'
+  ];
+  return vague.includes(q);
+}
+
+function getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari) {
+  if (resolvedLanguage === 'English') {
+    return `🔮 Prediction:
+The current alignment of your planets suggests a period of transition and learning.
+
+📿 Astrological Reasoning:
+Although specific chart alignments are currently shifting, general Vedic principles show that cosmic energies are encouraging you to stay patient and positive.
+
+🪔 Guidance:
+I recommend offering water to the Sun in the morning (Surya Arghya) and practicing daily meditation. This will clear the path for success and harmony. How can I assist you further?`;
+  } else if (isDevanagari) {
+    return `🔮 Prediction:
+ग्रहों की वर्तमान स्थिति आपके जीवन में सकारात्मक बदलाव और नई सीख की ओर संकेत कर रही है।
+
+📿 Astrological Reasoning:
+यद्यपि आपके चार्ट के कुछ सूक्ष्म तत्व अभी स्पष्ट हो रहे हैं, सामान्य वैदिक सिद्धांत बताते हैं कि धैर्य और विश्वास रखने से मानसिक शांति और सफलता प्राप्त होगी।
+
+🪔 Guidance:
+नियमित रूप से सूर्य देव को जल अर्पित करें और प्रतिदिन कुछ मिनट ध्यान लगाएं। यह उपाय आपके जीवन में सकारात्मकता लाएगा। क्या आप अपने करियर या विवाह के बारे में कुछ और पूछना चाहेंगे?`;
+  } else {
+    return `🔮 Prediction:
+Grahon ki vartaman sthiti aapke jeevan me sakaratmak badlav aur nayi seekh ki taraf ishara kar rahi hai.
+
+📿 Astrological Reasoning:
+Yadyapi aapke chart ke kuch sookshma tatva abhi spasht ho rahe hain, samanya Vedic jyotish ke anusaar dhairya aur vishwas rakhne se mansik shanti aur safalta prapt hogi.
+
+🪔 Guidance:
+Niyamit roop se surya dev ko jal arpit karein aur roz thoda dhyan lagayein. Yeh upay aapke jeevan me positive energy layega. Kya aap apne career ya vivaah ke baare me aur janna chahte hain?`;
+  }
+}
+
+function getBackendErrorFallback(resolvedLanguage, isDevanagari) {
+  if (resolvedLanguage === 'English') {
+    return `🔮 Prediction:
+I am experiencing difficulty connecting with the cosmic celestial energy at this moment.
+
+📿 Astrological Reasoning:
+The stellar frequencies are temporarily blocked, possibly due to a sudden solar flare or planetary transit.
+
+🪔 Guidance:
+Please pray to Lord Ganesha, the remover of all obstacles. Try asking your question again in a short while once the cosmic alignment is restored.`;
+  } else if (isDevanagari) {
+    return `🔮 Prediction:
+इस समय ब्रह्मांडीय ऊर्जा और नक्षत्रों के साथ संपर्क स्थापित करने में कुछ बाधा आ रही है।
+
+📿 Astrological Reasoning:
+ग्रहों के गोचर और सौर तरंगों में अस्थाई अवरोध के कारण यह व्यवधान उत्पन्न हुआ है।
+
+🪔 Guidance:
+कृपया विघ्नहर्ता भगवान गणेश का ध्यान करें। कुछ समय पश्चात पुनः प्रयास करें, तब तक ग्रहों की स्थिति अनुकूल हो जाएगी।`;
+  } else {
+    return `🔮 Prediction:
+Is samay brahmandiya oorja aur nakshatron ke saath sampark sthapit karne me kuch badha aa rahi hai.
+
+📿 Astrological Reasoning:
+Grahon ke gochar aur solar waves me temporary blockage ke karan yeh vyavdhan utpann hua hai.
+
+🪔 Guidance:
+Kripya vighnaharta Bhagwan Ganesh ka dhyan karein. Kuch samay baad dobara prayas karein, tab tak grahon ki sthiti anukool ho jayegi.`;
+  }
+}
 
 function detectQuestionLanguage(text) {
   if (!text) return 'Hindi';
@@ -1039,17 +1139,6 @@ export default async function handler(req, res) {
   if (mode === 'chat' || mode === 'personal') {
     const questionTextNormalized = (userData.question || '').trim().toLowerCase();
 
-    // Greeting Routing Hotfix (length <= 5 and contains hi, hello, hlo, namaste, ram ram)
-    const cleanInput = questionTextNormalized.replace(/[^a-z0-9\s]/g, '').trim();
-    const isGreeting = (cleanInput.length <= 5 && ['hlo', 'hello', 'hi'].some(g => cleanInput.includes(g))) || 
-                       (cleanInput.length <= 8 && ['namaste', 'ram ram'].some(g => cleanInput.includes(g)));
-
-    if (isGreeting) {
-      return res.status(200).json({
-        text: "Namaste! Kaise hain aap? Main aapki kundali aur tarot prashno ke uttar de sakta hoon. Kripya apna prashna likhein."
-      });
-    }
-    
     // Check for AI identity questions: "tuje kisne banaya" (Step 3)
     if (questionTextNormalized.includes("tuje kisne banaya") || 
         questionTextNormalized.includes("tujhe kisne banaya") || 
@@ -1192,45 +1281,7 @@ export default async function handler(req, res) {
       questionText
     );
 
-    // Structured married/single user guard
 
-    const asksMarriageStatus = (originalIntent === 'marriage_when') || 
-                               questionTextNormalized.includes("shadi kab") || 
-                               questionTextNormalized.includes("shaadi kab") ||
-                               questionTextNormalized.includes("marriage when") ||
-                               questionTextNormalized.includes("shadi ho gyi") || 
-                               questionTextNormalized.includes("shadi ho gayi") ||
-                               questionTextNormalized.includes("shaadi ho gayi") ||
-                               questionTextNormalized.includes("shaadi ho chuki") ||
-                               questionTextNormalized.includes("shadi ho chuki");
-
-    const asksAboutSpouse = questionTextNormalized.includes("wife") ||
-                           questionTextNormalized.includes("patni") ||
-                           questionTextNormalized.includes("husband") ||
-                           questionTextNormalized.includes("pati") ||
-                           questionTextNormalized.includes("biwi") ||
-                           questionTextNormalized.includes("shaadi") ||
-                           questionTextNormalized.includes("bacha") ||
-                           questionTextNormalized.includes("bcha") ||
-                           questionTextNormalized.includes("baby") ||
-                           questionTextNormalized.includes("child");
-
-    if (currentMarital === 'Single' && asksAboutSpouse) {
-      const safeText = "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye vivah/santan sambandhit prashn laagu nahi hota.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.";
-      return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData, progress, getSecretCategory(detectedIntent)) });
-    }
-
-    if (currentMarital === 'Single' && asksMarriageStatus) {
-      return res.status(200).json({
-        text: "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi sambandh ya bhavishya ke vivaah ke baare me poochna hai to uske baare me pooch sakte hain."
-      });
-    }
-
-    if (currentMarital === 'Married' && asksMarriageStatus) {
-      return res.status(200).json({
-        text: "🔮 Prediction:\nAap pehle se vivahit hain.\n\n📿 Reasoning:\nProfile me marital status Married hai.\n\n🪔 Guidance:\nYadi vivaahik jeevan ya punarvivah sambandhit prashn hai to uske baare me pooch sakte hain."
-      });
-    }
   }
   // Client is initialized lazily inside generateAIResponse in services/aiService.js
   // Generate dynamic date context
@@ -1258,64 +1309,66 @@ Current Season: ${season}`;
   if (!resolvedLanguage || resolvedLanguage === 'Unknown') {
     resolvedLanguage = detectQuestionLanguage(questionText);
   }
-  const languagePreference = resolvedLanguage === 'English' ? 'English' : 'Hinglish (Hindi written in Roman script)';
+  
+  const isDevanagari = /[\u0900-\u097F]/.test(questionText);
+  let languagePreference = "";
+  if (resolvedLanguage === 'English') {
+    languagePreference = "English (Latin/Roman script). Write the entire response in English.";
+  } else if (isDevanagari) {
+    languagePreference = "Devanagari Hindi script (हिन्दी लिपि). Write the entire response in pure Devanagari Hindi. Do not use English script (Latin letters) at all.";
+  } else {
+    languagePreference = "Hinglish (Hindi written in Roman/Latin script, e.g., 'Aapki shaadi 2026 me hogi'). Write the entire response in Hinglish. Do not use Devanagari script at all.";
+  }
 
-  const systemInstruction = `Speak as AstroTarot AI Predictor. Natural Hindi. No baba talk.
-Understand occupation semantically.
-Understand marital status semantically.
+  const isGreeting = isGreetingMessage(questionText);
+  const isVague = isVagueMessage(questionText);
 
-PRIMARY RULE:
-* The objective is NOT to refuse questions. Interpret every user question using available astrological information.
-* Never answer: "Ye astrology se sambandhit nahi hai.", "Laagu nahi hota.", "Profile me single hai.", or "Main iska jawab nahi de sakta."
-* Always connect the user's question with kundali, dasha, graha, bhav, yog, transit, or available birth information.
+  if (mode === 'chat' || mode === 'personal') {
+    if (isGreeting) {
+      let greetingText = "";
+      if (resolvedLanguage === 'English') {
+        greetingText = "Hello! How are you? Welcome to Pandit AI. Feel free to ask any question regarding career, marriage, health, or finance. How can I guide you today?";
+      } else if (isDevanagari) {
+        greetingText = "प्रणाम! कैसे हैं आप? कल्याण हो। पंडित जी के डिजिटल दरबार में आपका स्वागत है। आप करियर, विवाह, धन, स्वास्थ्य या किसी अन्य विषय पर मार्गदर्शन प्राप्त कर सकते हैं। आज आप किस बारे में पूछना चाहते हैं?";
+      } else {
+        greetingText = "Namaste! Kaise hain aap? Pranam. Kalyan ho. Boliye, aaj kis vishay me margdarshan chahte hain? Career, vivaah, dhan, swasthya ya kisi aur baat par main sahayata kar sakta hu.";
+      }
+      return res.status(200).json({ text: await injectSecretAndScore(greetingText, uid, userData, progress, getSecretCategory(detectedIntent)) });
+    }
 
-RELATIONSHIP RULE:
-* If the user asks about: wife, husband, girlfriend, boyfriend, partner, ex, divorce, or marriage, NEVER reject. Interpret according to context.
-* If profile says Single: Treat references to "wife", "husband" or "partner" as future spouse, marriage prospects, relationship karma, or previous relationship.
-* Use available 7th house, Venus, Jupiter, Moon, Dasha and relationship indicators.
-
-CAREER RULE:
-* Questions about: Promotion, Job, Government Job, Interview, Transfer, Salary, Business, Clients.
-* Always analyse through: 10th House, 6th House, 11th House, Saturn, Sun, Mercury, Current Dasha (if available).
-
-BUSINESS RULE:
-* Questions about: Loss, Profit, Partner, Investment, Shop, Office, Income.
-* Always analyse through: 2nd House, 7th House, 10th House, 11th House, Mercury, Jupiter, Rahu.
-
-HEALTH RULE:
-* Questions about: Health, Disease, Stress, Accident.
-* Always analyse through available chart indicators.
-* Never diagnose disease. Never advise avoiding medical treatment.
-
-INSUFFICIENT DATA RULE:
-* If some astrological calculations are unavailable: DO NOT refuse.
-* Instead say: "Available kundali indications suggest..." or "Based on the available birth details..." and continue the interpretation.
-
-RESPONSE FORMAT:
-Every answer must include:
-🔮 Prediction:
-[Direct astrological answer connecting query to available birth info]
+    if (isVague) {
+      let vagueText = "";
+      if (resolvedLanguage === 'English') {
+        vagueText = `🔮 Prediction:
+Please feel free to ask your question.
 
 📿 Astrological Reasoning:
-[Provide chart reasoning using dasha/houses/planets from Astro Data below]
+Astrological guidance is based on your birth chart details and planetary positions.
 
 🪔 Guidance:
-[Astro/life guidance advice]
+Please ask your question clearly. I can guide you on career, marriage, love life, finance, health, family, education, and more.`;
+      } else if (isDevanagari) {
+        vagueText = `🔮 Prediction:
+आप बिना किसी संकोच के अपना प्रश्न पूछ सकते हैं।
 
-🙏 Simple Traditional Remedy:
-[Surya ko jal, Hanuman Chalisa, Shiva/Vishnu mantra, Daan, Gau seva, Ann daan, Meditation, or Charity. No expensive gemstones unless requested.]
+📿 Astrological Reasoning:
+ज्योतिषीय मार्गदर्शन आपकी जन्म कुंडली के ग्रहों और नक्षत्रों के आधार पर दिया जाता है।
 
-✨ Daily Positive Tip:
-[Positive motivational daily suggestion]
+🪔 Guidance:
+कृपया अपना प्रश्न खुलकर पूछें। मैं आपके करियर, विवाह, प्रेम जीवन, धन, स्वास्थ्य, परिवार या शिक्षा से संबंधित किसी भी विषय पर मार्गदर्शन करने का प्रयास करूंगा।`;
+      } else {
+        vagueText = `🔮 Prediction:
+Aap bina kisi sankoch ke apna prashna pooch sakte hain.
 
-📊 Confidence:
-[Confidence score: High / Medium / Low]
+📿 Astrological Reasoning:
+Jyotishiya margdarshan aapki janm kundali ke grahon aur nakshatron ke adhar par diya jata hai.
 
-Rules:
-* Reply completely in the requested language: ${languagePreference}. Never mix English and Hinglish in the same response. If language is English, write prediction, reasoning, guidance, remedy and tip in standard English. If language is Hinglish, write them in warm Hinglish/Hindi written in Roman script (e.g. 'Aapki shadi 2026 me hogi').
-* Job/marriage: mention antardashaEnd. If missing: 'Kundali data me timeline uplabdh nahi hai'. No vague timelines.
-* Simple Hindi. No emojis except 🔮, 📿, 🪔, 🙏, ✨, 📊.
-* 80-130 words.`;
+🪔 Guidance:
+Kripya apna prashna khulkar puchiye. Main aapke career, vivaah, prem jeevan, dhan, swasthya, parivaar ya shiksha se sambandhit kisi bhi vishay par margdarshan dene ka prayas karunga.`;
+      }
+      return res.status(200).json({ text: await injectSecretAndScore(vagueText, uid, userData, progress, getSecretCategory(detectedIntent)) });
+    }
+  }
 
   let ageDisplay = "Unknown";
 
@@ -1333,6 +1386,9 @@ Rules:
   let dob = 'Unknown';
   let tob = 'Unknown';
   let pob = 'Unknown';
+  let hasBirthDetails = true;
+  let hasTob = true;
+  let hasPob = true;
 
   if (mode === 'chat' || mode === 'personal') {
     name = profile?.name || userData?.name || 'Unknown';
@@ -1404,28 +1460,45 @@ Rules:
       }
     }
 
+    hasBirthDetails = true;
+    hasTob = true;
+    hasPob = true;
+
     if (!dobDay || !dobMonth || !dobYear) {
-      const errText = `🔮 Prediction:\n${userData.name || ''} ji, janm tarikh sahi format me nahi mili.\n\n📿 Reasoning:\nKripya DOB DD-MM-YYYY format me daalein.\n\n🪔 Guidance:\nDetails dobara submit karke prashna puchiye.`;
-      return res.status(200).json({ text: await injectSecretAndScore(errText, uid, userData, progress, getSecretCategory(detectedIntent)) });
+      hasBirthDetails = false;
+      dob = 'Unknown';
+      tob = 'Unknown';
+      pob = 'Unknown';
+    } else {
+      dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
+      ageDisplay = calculateAge(dob);
+
+      // Time (TOB)
+      const tobHour = userData?.tobHour || profile?.tobHour;
+      const tobMinute = userData?.tobMinute || profile?.tobMinute;
+      const tobPeriod = userData?.tobPeriod || profile?.tobPeriod;
+      if (tobHour !== undefined && tobMinute !== undefined) {
+        tob = `${tobHour}:${String(tobMinute).padStart(2, '0')} ${tobPeriod || ''}`.trim();
+      } else if (profile?.tob) {
+        tob = profile.tob;
+      } else if (profile?.timeOfBirth) {
+        tob = profile.timeOfBirth;
+      } else {
+        hasTob = false;
+        hasBirthDetails = false;
+        tob = 'Unknown';
+      }
+
+      // Place (POB)
+      const pobVal = profile?.pob || profile?.placeOfBirth || userData?.pob;
+      if (pobVal && pobVal !== 'Unknown') {
+        pob = pobVal;
+      } else {
+        hasPob = false;
+        hasBirthDetails = false;
+        pob = 'Unknown';
+      }
     }
-
-    dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
-    ageDisplay = calculateAge(dob);
-
-    // Time (TOB)
-    const tobHour = userData?.tobHour || profile?.tobHour;
-    const tobMinute = userData?.tobMinute || profile?.tobMinute;
-    const tobPeriod = userData?.tobPeriod || profile?.tobPeriod;
-    if (tobHour !== undefined && tobMinute !== undefined) {
-      tob = `${tobHour}:${String(tobMinute).padStart(2, '0')} ${tobPeriod || ''}`.trim();
-    } else if (profile?.tob) {
-      tob = profile.tob;
-    } else if (profile?.timeOfBirth) {
-      tob = profile.timeOfBirth;
-    }
-
-    // Place (POB)
-    pob = profile?.pob || profile?.placeOfBirth || userData?.pob || 'Unknown';
   }
 
   const astroData = (mode === 'chat' || mode === 'personal')
@@ -1475,12 +1548,9 @@ Rules:
     }
     updatedFacts = migrateFactMemory(updatedFacts);
 
-    const contradiction = detectSmartContradiction(
-      questionText,
-      updatedFacts,
-      userData,
-      history
-    );
+    const contradiction = (!isGreeting && !isVague) 
+      ? detectSmartContradiction(questionText, updatedFacts, userData, history)
+      : null;
 
     await updateFactMemory(
       uid,
@@ -1563,6 +1633,113 @@ Recent Pandit Replies:
 ${recentPanditReplies || "None"}`;
     promptSections.push(recentHistoryBlock);
 
+    let modeSpecificInstruction = "";
+    if (isGreeting) {
+      modeSpecificInstruction = `
+[GREETING MODE ACTIVE]
+The user just greeted you. You MUST respond with a warm, welcoming greeting as an experienced Vedic astrologer (Pandit Ji).
+- Offer a blessing (e.g., 'Kalyan ho', 'Ayushman bhava', 'Pranam').
+- Keep the response short, warm, and inviting.
+- Politely invite them to ask their question.
+- Do NOT provide any predictions or technical details.
+- Mention that they can seek guidance on career, marriage, finance, health, family, etc.
+- End with a warm follow-up question.
+- DO NOT refuse the user's message.
+`;
+    } else if (isVague) {
+      modeSpecificInstruction = `
+[VAGUE QUESTION MODE ACTIVE]
+The user's query is vague or asking for permission to ask a question.
+- Welcomingly encourage them to ask their question without any hesitation.
+- Mention that you can guide them on career (job, exams), marriage, love life, finance, health, family, education, and more.
+- Do NOT reject or refuse their message.
+- Ask them a friendly follow-up question to start the reading.
+`;
+    } else if (!hasBirthDetails) {
+      modeSpecificInstruction = `
+[NO BIRTH DETAILS MODE ACTIVE]
+The user has not provided their birth details (DOB, birth time, or birth place).
+- Do NOT refuse to answer. You must help the user.
+- Answer using general Vedic astrology principles matching the context of their query.
+- DO NOT invent/hallucinate any specific lagna, sign, planet positions, dasha, nakshatra, houses, or dates (since they are not calculated).
+- Politely explain that this is a general astrological interpretation.
+- Politely mention: "Agar aap apni Janm Tithi (DOB), Janm Samay (Birth Time) aur Janm Sthan (Birth Place) share karenge to main adhik vyaktigat aur sateek margdarshan de sakunga."
+- End with a relevant follow-up question asking for their birth details.
+`;
+    } else if (dob && (!hasTob || !hasPob)) {
+      const missing = [];
+      if (!hasTob) missing.push("Time of Birth (Janm Samay)");
+      if (!hasPob) missing.push("Place of Birth (Janm Sthan)");
+      modeSpecificInstruction = `
+[PARTIAL BIRTH DETAILS MODE ACTIVE]
+The user has provided only partial birth details.
+- Do NOT refuse to answer.
+- Clearly mention which detail is missing: ${missing.join(" and ")}.
+- Interpret the query using the available chart information (astroData).
+- DO NOT invent/hallucinate any missing astrological parameters (like Lagna or exact houses if time is missing).
+- Present the reading with medium/low confidence and explain why.
+- Politely ask them to provide the missing details (${missing.join(" and ")}) for a complete and precise reading.
+- End with a relevant follow-up question.
+`;
+    } else {
+      modeSpecificInstruction = `
+[FULL BIRTH DETAILS MODE ACTIVE]
+The user has provided full birth details (DOB, Time of Birth, Place of Birth).
+- Provide a highly personalized Vedic astrology reading.
+- Support your predictions with clear astrological reasoning based on the provided Astro Data (Lagna, planets, houses, dasha, gochar).
+- DO NOT invent/hallucinate any other astrological parameters not present in the Astro Data.
+- End with a relevant follow-up question.
+`;
+    }
+
+    const systemInstruction = `
+You are Pandit Ji, a wise, experienced, and humble Vedic Jyotishacharya. Your goal is to guide users through their life questions. Act like a real astrologer, not a robotic validator or AI assistant.
+- Understand occupation semantically.
+- Understand marital status semantically.
+
+CORE PRINCIPLES:
+- Provide a meaningful answer to every normal user message.
+- Never refuse any user question.
+- Never show technical messages or errors to the user.
+- Tone must be Respectful, Empathetic, Warm, Positive, Professional, and Natural.
+
+ZERO REFUSAL POLICY:
+- Never say "This question is not applicable", "Unable to verify", "I cannot answer this question", "Invalid question", "Unsupported request", "Try again later", "Technical issue", or similar phrases.
+- Always attempt to help the user.
+
+ASTROLOGY PRINCIPLES:
+- Understand the user's query in the context of Vedic Astrology (Lagna, houses, planets, dasha, gochar).
+- Data Integrity: Do NOT invent, hallucinate, or assume any astrology data (specific planets, houses, dashas, nakshatras, yogas, dates, or years) that is not explicitly provided in the Astro Data block below.
+
+LANGUAGE RULES:
+- Write the response completely in: \${languagePreference}.
+- Never mix script/languages unless the user does so.
+- Keep the language natural and warm.
+
+REMEDIES:
+- Suggest simple, practical traditional remedies like: Jal arpan (offering water), Mantra jaap (chanting), Daan (charity/donation), Prarthana (prayer), Dhyan (meditation), or Seva (selfless service).
+- Do NOT suggest expensive gemstones or paid rituals unless the user specifically asks for them.
+
+RESPONSE FORMAT:
+Your response must consist of the following sections, separated by blank lines:
+
+🔮 Prediction:
+[Direct and clear astrological answer to the user's question, matching the active mode instructions below.]
+
+📿 Astrological Reasoning:
+[Provide chart-based reasoning using dasha/houses/planets from the Astro Data below if available. If no birth details exist, explain general Vedic astrology principles related to the query without inventing specific planetary placements.]
+
+🪔 Guidance:
+[Provide practical life guidance, simple/traditional remedies, daily positive tip, and always end with a relevant follow-up question to naturally continue the conversation.]
+
+RULES:
+- Do not use any emojis except 🔮, 📿, 🪔, 🙏, ✨, 📊.
+- Keep the response concise, between 80 to 140 words.
+- Follow the active mode instructions below:
+
+\${modeSpecificInstruction}
+`;
+
     fullPrompt = `
 ${systemInstruction}
 
@@ -1615,7 +1792,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       let needsRetry = false;
       let retryReason = "";
 
-      const isAstroDataMissing = (mode === 'chat' || mode === 'personal') && (!astroData || !astroData.lagna);
+      const isAstroDataMissing = false;
 
       if (!isAstroDataMissing) {
         // Check forbidden phrases (Step 4)
@@ -1678,8 +1855,8 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 
       if (needsRetry && retryCount >= 2) {
         console.error("VALIDATION_FAILED_3X");
-        const failText = `🔮 Prediction:\nTakneeki karan se vistar se nahi bata pa raha.\n\n📿 Reasoning:\nKundali data verify nahi ho paya.\n\n🪔 Guidance:\nKuch der baad dobara try karein.`;
-        return res.status(200).json({ text: await injectSecretAndScore(humanize(failText), uid, userData, progress, getSecretCategory(detectedIntent)) });
+        const friendlyFallbackText = getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari);
+        return res.status(200).json({ text: await injectSecretAndScore(friendlyFallbackText, uid, userData, progress, getSecretCategory(detectedIntent)) });
       }
 
       if (!aiText || !aiText.trim()) {
@@ -1791,14 +1968,12 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   const finalStatusCode = lastError?.status || lastError?.response?.status || 500;
   const isQuotaError = finalStatusCode === 429 || lastError?.message?.includes("quota") || lastError?.message?.includes("429");
   
-  const fallbackMessage = isQuotaError 
-    ? "Pandit AI is temporarily busy. Please try again later."
-    : "I apologize, but I am experiencing cosmic interference. Please try again later.";
-
   if (mode === 'chat' || mode === 'personal') {
     console.log("RESPONSE SOURCE = OFFLINE");
+    const backendFallback = getBackendErrorFallback(resolvedLanguage, isDevanagari);
+    const formattedFallback = await injectSecretAndScore(backendFallback, uid, userData, progress, getSecretCategory(detectedIntent));
     return res.status(200).json({ 
-      text: fallbackMessage
+      text: formattedFallback
     });
   }
 
