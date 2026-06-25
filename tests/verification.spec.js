@@ -1300,4 +1300,47 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     await handler(req, res);
     expect(res.jsonData.text).toContain('Haan Beta, sun raha hun');
   });
+
+  it('36. Verify Zero-Refusal Manual Queries', async () => {
+    const queries = [
+      'Hello',
+      'Hlo pandi ji',
+      'Namaste',
+      'Mujhe ek sawal puchna hai',
+      'Help',
+      'Kya',
+      'Meri GF kab wapas aayegi',
+      'Shaadi kab hogi',
+      'Promotion kab hoga',
+      'Business me loss kyu'
+    ];
+
+    for (const q of queries) {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer mock_token' },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_verify_user_manual',
+            question: q
+          },
+          history: []
+        }
+      };
+      const res = {
+        statusCode: 200,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.jsonData = data; return this; }
+      };
+
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      const text = res.jsonData?.text || "";
+      expect(text.toLowerCase()).not.toContain('unable to verify');
+      expect(text.toLowerCase()).not.toContain('invalid question');
+      expect(text.toLowerCase()).not.toContain('unsupported request');
+      expect(text.toLowerCase()).not.toContain('technical issue');
+    }
+  });
 });
