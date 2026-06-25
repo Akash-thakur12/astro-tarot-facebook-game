@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCv9ZQddRac5s4VAB48EsKL22cus_dDydk",
@@ -17,6 +17,18 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase services
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+if (import.meta.env.DEV || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))) {
+  try {
+    connectFirestoreEmulator(db, "localhost", 8080);
+    console.log("Firestore emulator connected successfully.");
+  } catch (error) {
+    // Suppress failed-precondition error during HMR
+    if (error.code !== "failed-precondition") {
+      console.error("Firestore emulator connection error:", error);
+    }
+  }
+}
 
 // Auth Providers
 const googleProvider = new GoogleAuthProvider();

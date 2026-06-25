@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import BottomNav from './BottomNav';
 
 const Layout = ({ children }) => {
+  const location = useLocation();
   const [stars] = useState(() => 
     Array.from({ length: 60 }).map((_, i) => ({
       id: i,
@@ -12,8 +15,11 @@ const Layout = ({ children }) => {
     }))
   );
 
+  const visibleRoutes = ['/', '/ask-pandit', '/tarot', '/fortune-wheel', '/profile'];
+  const isVisible = visibleRoutes.includes(location.pathname);
+
   return (
-    <div className="min-h-screen relative text-white bg-[#020617] flex flex-col font-sans">
+    <div className={`min-h-screen relative text-white bg-[#020617] flex flex-col font-sans ${isVisible ? 'has-bottom-nav' : ''}`}>
       {/* Background Layers */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="stars-container absolute inset-0" />
@@ -38,9 +44,10 @@ const Layout = ({ children }) => {
       </div>
 
       {/* Main Content Area */}
-      <main className="relative z-10 w-full max-w-md mx-auto min-h-screen flex flex-col">
+      <main className={`relative z-10 w-full max-w-md mx-auto min-h-screen flex flex-col ${isVisible ? 'pb-[72px]' : ''}`}>
         {children}
       </main>
+      {isVisible && <BottomNav />}
     </div>
   );
 };

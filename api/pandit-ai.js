@@ -10,6 +10,324 @@ import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
 import { humanize } from '../src/utils/humanizer.js';
 import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
 import { getAstrologyData } from '../src/utils/astroEngine.js';
+import { extractSemanticFacts, mergeSemanticFacts, getFact, setFact, migrateFactMemory, sanitizeFactMemory } from '../src/utils/semanticMemory.js';
+
+const DECEASED_PATTERNS = [
+  /wife.*death/i,
+  /wife.*expire/i,
+  /wife.*mar/i,
+  /patni.*mar/i,
+  /patni.*death/i,
+  /patni.*nahi rahi/i,
+  /swargwas/i,
+  /widow/i,
+  /widower/i
+];
+
+async function getFactMemory(uid) {
+  try {
+    const snap = await db
+      .collection('users')
+      .doc(uid)
+      .collection('factMemory')
+      .doc('facts')
+      .get();
+    if (!snap.exists) return migrateFactMemory(null);
+    return migrateFactMemory(snap.data());
+  } catch (err) {
+    console.error('FACT_MEMORY_READ_FAILED', err);
+    return migrateFactMemory(null);
+  }
+}
+
+async function updateFactMemory(uid, question, facts = {}) {
+  try {
+    if (!uid) return;
+    
+    // Ensure nested schema is migrated
+    const migrated = migrateFactMemory(facts);
+    
+    const isDeceased = DECEASED_PATTERNS.some(pattern => pattern.test(question));
+    if (isDeceased) {
+      setFact(migrated, 'relationship.wifeAlive', false);
+      setFact(migrated, 'relationship.spouseStatus', 'deceased');
+    }
+    
+    const finalData = migrateFactMemory(migrated);
+    const sanitizedData = sanitizeFactMemory(finalData);
+
+    await db
+      .collection('users')
+      .doc(uid)
+      .collection('factMemory')
+      .doc('facts')
+      .set(sanitizedData, { merge: true });
+    
+    console.log("FACT_WRITE_SUCCESS");
+  } catch (err) {
+    console.error('FACT_MEMORY_WRITE_FAILED', err);
+  }
+}
+
+function extractFactsFromMessage(question, existingFacts = {}) {
+  const q = (question || '').toLowerCase();
+  const migrated = migrateFactMemory(existingFacts);
+
+  const targetExam = getFact(migrated, 'career.targetExam');
+  const previousTargetExam = getFact(migrated, 'career.previousTargetExam');
+  if (targetExam && !previousTargetExam) {
+    setFact(migrated, 'career.previousTargetExam', targetExam);
+  }
+
+  // WIFE ALIVE / SPOUSE STATUS
+  const isDeceased = DECEASED_PATTERNS.some(pattern => pattern.test(q));
+  if (isDeceased) {
+    setFact(migrated, 'relationship.wifeAlive', false);
+    setFact(migrated, 'relationship.spouseStatus', 'deceased');
+  } else if (
+    q.includes('wife hai') ||
+    q.includes('meri patni') ||
+    q.includes('meri wife')
+  ) {
+    setFact(migrated, 'relationship.wifeAlive', true);
+  }
+
+  // CHILDREN COUNT
+  if (
+    q.includes('meri ek beti hai') ||
+    q.includes('meri 1 beti hai') ||
+    q.includes('mera ek beta hai') ||
+    q.includes('mera 1 beta hai') ||
+    q.includes('ek beta hai') ||
+    q.includes('ek beti hai')
+  ) {
+    setFact(migrated, 'family.childrenCount', 1);
+  } else if (
+    q.includes('do bachche hain') ||
+    q.includes('do bachhe hain') ||
+    q.includes('2 bachche hain') ||
+    q.includes('2 bachhe hain')
+  ) {
+    setFact(migrated, 'family.childrenCount', 2);
+  }
+
+  // BREAKUP & GIRLFRIEND STATUS
+  if (
+    q.includes('breakup ho gaya') ||
+    q.includes('girlfriend chhod gayi') ||
+    q.includes('relationship toot gaya') ||
+    q.includes('relationship tut gaya')
+  ) {
+    setFact(migrated, 'relationship.girlfriendStatus', 'breakup');
+    setFact(migrated, 'relationship.relationshipStatus', 'breakup');
+  } else if (
+    q.includes('girlfriend') ||
+    q.includes('gf')
+  ) {
+    const gfStatus = getFact(migrated, 'relationship.girlfriendStatus');
+    if (gfStatus !== 'breakup') {
+      setFact(migrated, 'relationship.girlfriendStatus', 'active');
+    }
+  }
+
+  // EXAMS
+  if (q.includes('ssc')) {
+    setFact(migrated, 'career.targetExam', 'SSC');
+  }
+  if (q.includes('upsc')) {
+    setFact(migrated, 'career.targetExam', 'UPSC');
+  }
+  if (q.includes('banking')) {
+    setFact(migrated, 'career.targetExam', 'Banking');
+  }
+
+  // DREAM JOB
+  if (q.includes('ias')) {
+    setFact(migrated, 'career.dreamJob', 'IAS');
+  }
+
+  // FINANCIAL
+  if (
+    q.includes('loan hai') ||
+    q.includes('karza hai') ||
+    q.includes('debt me hu') ||
+    q.includes('karz') ||
+    q.includes('loan')
+  ) {
+    setFact(migrated, 'finance.status', 'debt');
+  } else if (!getFact(migrated, 'finance.status')) {
+    setFact(migrated, 'finance.status', 'normal');
+  }
+
+  // HEALTH
+  if (
+    q.includes('diabetes') ||
+    q.includes('bp') ||
+    q.includes('thyroid')
+  ) {
+    setFact(migrated, 'health.issues', ['diabetes']);
+  }
+
+  return migrated;
+}
+
+function detectSmartContradiction(
+  question,
+  factMemory,
+  userData = {},
+  history = []
+) {
+  const q = (question || '').toLowerCase();
+  const wifeAlive = getFact(factMemory, 'relationship.wifeAlive');
+  const spouseStatus = getFact(factMemory, 'relationship.spouseStatus');
+  const maritalStatus = getFact(factMemory, 'relationship.relationshipStatus') || userData?.maritalStatus;
+
+  // Rule 1: wifeAlive=false + wife communication question
+  if (
+    (wifeAlive === false || spouseStatus === 'deceased') &&
+    (
+      q.includes('wife kab baat karegi') ||
+      q.includes('meri wife mujhse baat') ||
+      (q.includes('wife') && q.includes('baat')) ||
+      (q.includes('patni') && q.includes('baat'))
+    )
+  ) {
+    return {
+      type: 'deceased_spouse_clarification',
+      text: `🔮 Prediction:
+
+Aapne pehle bataya tha ki patni ab is duniya me nahi hain.
+
+📿 Reasoning:
+
+Isliye samanya dampatya sambandhit prashn spasht nahi hai.
+
+🪔 Guidance:
+
+Kya aap purani yaadon, punarvivah ya kisi anya sambandh ke baare me pooch rahe hain?`
+    };
+  }
+
+  // Married + shaadi kab
+  if (
+    (maritalStatus === 'Married') &&
+    q.includes('shaadi') &&
+    q.includes('kab')
+  ) {
+    return {
+      type: 'second_marriage',
+      text: `🔮 Prediction:
+
+Aap pehle se vivahit hain.
+
+📿 Reasoning:
+
+Profile ke anusaar pehla vivaah ho chuka hai.
+
+🪔 Guidance:
+
+Kya aap punarvivah ya vaivahik jeevan ke baare me pooch rahe hain?`
+    };
+  }
+
+  // Age >32 govt job + UPSC
+  const age = getFact(factMemory, 'career.age') || userData?.age;
+  const parsedAge = parseInt(age);
+  const occupation = getFact(factMemory, 'career.occupation') || userData?.occupation;
+  if (
+    occupation === 'Government Job' &&
+    !isNaN(parsedAge) &&
+    parsedAge > 32 &&
+    q.includes('upsc')
+  ) {
+    return {
+      type: 'career_redirect',
+      text: `🔮 Prediction:
+
+Rajya seva, SSC aur anya departmental avsar adhik upyogi dikhte hain.
+
+📿 Reasoning:
+
+Vartaman avastha me anubhav aur sthirta sambandhit yog adhik majboot hain.
+
+🪔 Guidance:
+
+State PSC, SSC aur anya government service opportunities par dhyan dena adhik labhdayak ho sakta hai.`
+    };
+  }
+
+  // Rule 2: childrenCount >= 1 and question contains "bachcha kab hoga"
+  const childrenCount = getFact(factMemory, 'family.childrenCount');
+  if (
+    childrenCount !== null && childrenCount !== undefined && childrenCount >= 1 &&
+    (q.includes('bachcha kab hoga') || q.includes('bachha kab hoga'))
+  ) {
+    return {
+      type: 'second_child_clarification',
+      text: `🔮 Prediction:
+
+Pehle se santan sambandhit jankari uplabdh hai.
+
+📿 Reasoning:
+
+Memory ke anusaar pehle ek santan ka ullekh ho chuka hai.
+
+🪔 Guidance:
+
+Kya aap doosri santan ke baare me pooch rahe hain?`
+    };
+  }
+
+  // Rule 3: recentBreakup = true/girlfriendStatus = 'breakup' and girlfriend query
+  const girlfriendStatus = getFact(factMemory, 'relationship.girlfriendStatus');
+  const relationshipStatus = getFact(factMemory, 'relationship.relationshipStatus');
+  const recentBreakup = girlfriendStatus === 'breakup' || relationshipStatus === 'breakup';
+  if (
+    (recentBreakup || girlfriendStatus === 'breakup' || relationshipStatus === 'breakup') &&
+    (q.includes('girlfriend') || q.includes('gf'))
+  ) {
+    return {
+      type: 'relationship_breakup',
+      text: `🔮 Prediction:
+
+Pehle rishte me breakup ka ullekh kiya gaya hai.
+
+📿 Reasoning:
+
+Vartaman prashn girlfriend se sambandhit hai jabki pichli jankari breakup ki hai.
+
+🪔 Guidance:
+
+Kya aap patch-up ke baare me pooch rahe hain ya naye sambandh ke baare me?`
+    };
+  }
+
+  // Rule 5: targetExam = 'SSC' and question contains UPSC
+  const targetExam = getFact(factMemory, 'career.targetExam');
+  const previousTargetExam = getFact(factMemory, 'career.previousTargetExam');
+  if (
+    (targetExam === 'SSC' || previousTargetExam === 'SSC') &&
+    q.includes('upsc')
+  ) {
+    return {
+      type: 'exam_contradiction',
+      text: `🔮 Prediction:
+
+Pehle SSC taiyari ka ullekh kiya gaya tha.
+
+📿 Reasoning:
+
+Memory aur vartaman prashn alag exam dikhate hain.
+
+🪔 Guidance:
+
+Kya focus ab bhi SSC par hai ya UPSC ki taraf badal gaya hai?`
+    };
+  }
+
+  return null;
+}
+
 
 
 function buildAstrologyBlock(astroData) {
@@ -71,27 +389,112 @@ const MARITAL_RULES = {
   Widowed: 'Focus on emotional recovery and stability.'
 };
 
-function buildCompactContext(userData, astroData) {
-  const occ = userData?.occupation || 'Other';
-  const mar = userData?.maritalStatus || 'Single';
+// Age calculation helper
+function calculateAge(dobString) {
+  if (!dobString) return "Unknown";
+  try {
+    const today = new Date();
+    const birthDate = new Date(dobString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  } catch (err) {
+    console.error("Age calculation error:", err);
+    return "Unknown";
+  }
+}
 
-  return `
+export function buildCompactContext(userData, astroData, factMemory = {}) {
+  const occ = userData?.occupation || 'Other';
+  const wifeAlive = getFact(factMemory, 'relationship.wifeAlive');
+  const spouseStatus = getFact(factMemory, 'relationship.spouseStatus');
+  const relationshipLoss = wifeAlive === false || spouseStatus === 'deceased';
+  const mar = relationshipLoss ? 'Widowed' : (userData?.maritalStatus || 'Single');
+  const age = getFact(factMemory, 'career.age') || "Unknown";
+
+  let occRule = OCCUPATION_RULES[occ] || OCCUPATION_RULES.Other;
+  const parsedAge = parseInt(age);
+  if (occ === 'Government Job' && !isNaN(parsedAge) && parsedAge > 28) {
+    occRule = 'Focus on government service, departmental opportunities, state exams. Avoid always mentioning UPSC (SSC/UPSC only when suitable).';
+  }
+
+  const hasHouses = astroData?.houses && Object.keys(astroData.houses).length > 0;
+  let houseRule = "";
+  if (!hasHouses) {
+    houseRule = "HOUSE SAFETY RULES: FORBIDDEN: Do NOT mention specific houses (e.g., 4th, 5th, 7th, 9th, 10th house). Never invent houses.";
+  } else {
+    houseRule = "Never mention 5th/7th/10th house if empty in astroData.";
+  }
+
+  let lossBlock = "";
+  if (relationshipLoss) {
+    lossBlock = "User experienced loss. DO NOT immediately suggest remarriage. Focus on emotional recovery/healing.";
+  }
+
+  let spouseStatusBlock = "";
+  if (spouseStatus) {
+    spouseStatusBlock = `SpouseStatus=${spouseStatus}. No active spouse comm if deceased.`;
+  }
+
+  let wifeAliveBlock = "";
+  if (wifeAlive !== null && wifeAlive !== undefined) {
+    wifeAliveBlock = `WifeAlive=${wifeAlive}`;
+  }
+
+  const childrenCount = getFact(factMemory, 'family.childrenCount');
+  let childrenBlock = "";
+  if (childrenCount !== null && childrenCount !== undefined) {
+    childrenBlock = `ChildrenCount=${childrenCount}\nChildren=${childrenCount}`;
+  }
+
+  const targetExam = getFact(factMemory, 'career.targetExam');
+  let targetExamBlock = "";
+  if (targetExam !== null && targetExam !== undefined) {
+    targetExamBlock = `TargetExam=${targetExam}`;
+  }
+
+  const financialStatus = getFact(factMemory, 'finance.status');
+  let financialStatusBlock = "";
+  if (financialStatus !== null && financialStatus !== undefined) {
+    financialStatusBlock = `FinancialStatus=${financialStatus}`;
+  }
+
+  let safetyRulesBlock = "";
+  if (wifeAlive === false) {
+    safetyRulesBlock += "WifeAlive=false: no spouse comm.\n";
+  }
+  if (childrenCount !== null && childrenCount !== undefined && childrenCount >= 1) {
+    safetyRulesBlock += "ChildrenCount>=1: child Q means addl child.\n";
+  }
+  if (financialStatus === 'debt') {
+    safetyRulesBlock += "FinancialStatus=debt: Avoid costly remedies, gemstones and expensive pujas.\n";
+  }
+
+  const text = `
 USER PROFILE
 Occupation=${occ}
 Marital=${mar}
 Dasha=${astroData?.mahadasha || 'Unknown'}/${astroData?.antardasha || 'Unknown'}
-
+Age=${age}
+${wifeAliveBlock ? wifeAliveBlock : ''}
+${childrenBlock ? childrenBlock : ''}
+${targetExamBlock ? targetExamBlock : ''}
+${financialStatusBlock ? financialStatusBlock : ''}
 RULES:
-${OCCUPATION_RULES[occ] || OCCUPATION_RULES.Other}
+${occRule}
 ${MARITAL_RULES[mar]}
-
+${lossBlock}
+${spouseStatusBlock}
+${safetyRulesBlock}
 CRITICAL:
 Match advice to occupation.
-Married users = no first-marriage prediction.
-Business users = no exam advice.
-Government Job users = mention SSC/UPSC/Banking when relevant.
-Never mention 5th/7th/10th house if astroData.houses is empty or unavailable. Use general phrases like 'Career sambandhit yog dikhte hain' instead of '10th house strong hai'.
-`;
+${houseRule}
+`.trim().replace(/\n+/g, '\n');
+
+  return text;
 }
 
 function validateAstroResponse(text, astroData) {
@@ -101,9 +504,6 @@ function validateAstroResponse(text, astroData) {
   if ([...text.matchAll(INVALID_RASHI_PATTERN)].length > 0) return false;
 
   const lower = text.toLowerCase();
-
-  const invalidWords = [];
-  if (invalidWords.some(w => lower.includes(w))) return false;
 
   const hasAstro = !!astroData;
 
@@ -151,11 +551,26 @@ function validateAstroResponse(text, astroData) {
   if (lower.includes('sadesati') && (!hasAstro || !astroData.sadesati)) return false;
 
   // Check Houses - if AI mentions "4th house", verify against calc
+  const hasHouses = astroData?.houses && Object.keys(astroData.houses).length > 0;
+  if (!hasHouses) {
+    const forbiddenHousePatterns = [
+      /\b4th\s+(?:house|bhav)\b/i,
+      /\b5th\s+(?:house|bhav)\b/i,
+      /\b7th\s+(?:house|bhav)\b/i,
+      /\b9th\s+(?:house|bhav)\b/i,
+      /\b10th\s+(?:house|bhav)\b/i
+    ];
+    if (forbiddenHousePatterns.some(pattern => pattern.test(text))) {
+      return false;
+    }
+  }
+
   const houseRegex = /(\w+)\s+(\d+)(?:st|nd|rd|th)\s+(house|bhav)/gi;
   let match;
   while ((match = houseRegex.exec(text)) !== null) {
     const planet = match[1];
     const houseNum = parseInt(match[2]);
+    if (!hasHouses) return false;
     if (hasAstro && astroData.houses?.[planet] && astroData.houses[planet] !== houseNum) return false;
   }
 
@@ -167,7 +582,7 @@ function validateAstroResponse(text, astroData) {
   return true;
 }
 
-function containsForbiddenPhrases(text) {
+function containsForbiddenPhrases(text, factMemory = {}) {
   if (!text) return false;
   const blacklist = ['beta','😂','😁','😆'];
   if (blacklist.some(w => text.toLowerCase().includes(w))) return true;
@@ -200,6 +615,8 @@ function containsForbiddenPhrases(text) {
 
   const brokenHindiRegex = /\b(aabki|fayda daru|shahar ke antardasha)\b/i;
   if (brokenHindiRegex.test(lower)) return true;
+
+  // Debt-specific forbidden remedies moved to buildCompactContext prompt rules to avoid validation retry loops
 
   return false;
 }
@@ -362,8 +779,7 @@ const adminAuth = getAuth();
 
 const AI_QUESTION_COST = 30; // Increased from 25
 
-// Rate limiting map (in-memory, per Vercel instance)
-const rateLimits = new Map();
+// Rate limiting map replaced by Firestore transaction rate limiter
 
 function getLevel(score) {
   if (score < 100) return 'Seeker';
@@ -372,15 +788,19 @@ function getLevel(score) {
   return 'Master';
 }
 
-async function injectSecretAndScore(text, uid, userData) {
+async function injectSecretAndScore(text, uid, userData, cachedProgress = null) {
   if (!text) return text;
 
   const progressUid = userData?.uid || uid || 'guest';
   let progress = { score: 0, streak: 0, lastLogin: '', secrets: {} };
-  try {
-    progress = await getProgress(progressUid);
-  } catch (err) {
-    console.error("injectSecretAndScore getProgress failed", err);
+  if (cachedProgress) {
+    progress = cachedProgress;
+  } else {
+    try {
+      progress = await getProgress(progressUid);
+    } catch (err) {
+      console.error("injectSecretAndScore getProgress failed", err);
+    }
   }
   const today = new Date().toISOString().split('T')[0];
   const dobKey = (userData?.dobDay || '') + '' + (userData?.dobMonth || '') + '' + (userData?.dobYear || '');
@@ -390,8 +810,10 @@ async function injectSecretAndScore(text, uid, userData) {
   let cleaned = text;
 
   // Replace/remove existing secret and score sections if AI generated them
-  cleaned = cleaned.replace(/🎲\s*Aaj\s*Ka\s*Secret:[\s\S]*?(?=📊|$)/gi, "");
-  cleaned = cleaned.replace(/📊\s*Karma\s*Score:[\s\S]*?$/gi, "");
+  cleaned = cleaned.replace(/(?:🎲\s*)?(?:Aaj\s+Ka\s+)?Secret:[\s\S]*?(?=(?:📊\s*)?(?:Karma\s+)?Score:|$)/gi, "");
+  cleaned = cleaned.replace(/(?:📊\s*)?(?:Karma\s+)?Score:[\s\S]*?$/gi, "");
+  cleaned = cleaned.replace(/(?:🎲\s*)?(?:Aaj\s+Ka\s+)?Secret:[\s\S]*?$/gi, "");
+  cleaned = cleaned.replace(/(?:📊\s*)?(?:Karma\s+)?Score:[\s\S]*?$/gi, "");
   cleaned = cleaned.trim();
 
   // Append clean/correct sections from code
@@ -440,18 +862,73 @@ export default async function handler(req, res) {
   const year = now.getFullYear();
   const todayString = `${year}-${monthStr}-${dayStr}`;
 
-  const userRate = rateLimits.get(uid) || { count: 0, resetTime: nowMs + 60000 };
-  if (nowMs > userRate.resetTime) {
-    userRate.count = 0;
-    userRate.resetTime = nowMs + 60000;
+  const rateLimitRef = db.collection('rateLimits').doc(uid);
+  let rateLimitHit = false;
+  
+  try {
+    await db.runTransaction(async (tx) => {
+      const docSnap = await tx.get(rateLimitRef);
+      let count = 0;
+      let windowStart = nowMs;
+      
+      if (docSnap.exists) {
+        const data = docSnap.data();
+        if (data && typeof data.count === 'number' && typeof data.windowStart === 'number') {
+          count = data.count;
+          windowStart = data.windowStart;
+        }
+      }
+      
+      if (nowMs - windowStart > 60000) {
+        count = 0;
+        windowStart = nowMs;
+        console.log("RATE_LIMIT_RESET");
+      }
+      
+      if (count >= 20) {
+        rateLimitHit = true;
+        console.log("RATE_LIMIT_HIT");
+        return;
+      }
+      
+      const newCount = count + 1;
+      const updateData = { count: newCount, windowStart };
+      
+      if (docSnap.exists && typeof tx.update === 'function') {
+        tx.update(rateLimitRef, updateData);
+      } else if (typeof tx.set === 'function') {
+        tx.set(rateLimitRef, updateData);
+      } else {
+        tx.update(rateLimitRef, updateData);
+      }
+    });
+  } catch (error) {
+    console.error("Rate limiter transaction failed:", error);
   }
-  if (userRate.count >= 20) {
+  
+  if (rateLimitHit) {
     return res.status(429).json({ error: 'Too many requests. Please wait a minute.' });
   }
-  userRate.count++;
-  rateLimits.set(uid, userRate);
 
-  const { mode, userData, history } = req.body;
+  const { mode, userData, history, purpose, prompt } = req.body;
+
+  if (purpose === 'semantic-memory') {
+    try {
+      const promptToSend = prompt || userData?.question || '';
+      const aiText = await generateAIResponse(promptToSend, { purpose: 'semantic-memory', jsonMode: true });
+      let parsed;
+      try {
+        parsed = JSON.parse(aiText);
+      } catch (pe) {
+        console.warn("WARNING: Semantic memory parsing failed, fallback to {}", pe);
+        parsed = {};
+      }
+      return res.status(200).json(parsed);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   let detectedIntent = 'general';
   let marriedGuardInstruction = "";
   let aiText = "";
@@ -470,7 +947,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    await updateProgress(progressUid, 'checkin'); // Auto streak
+    progress = await updateProgress(progressUid, 'checkin', progress); // Auto streak, reuse progress
   } catch (err) {
     console.error("updateProgress failed at start", err);
   }
@@ -533,6 +1010,7 @@ export default async function handler(req, res) {
 
   const userRef = db.collection('users').doc(uid);
   let userDoc;
+  let userDataDoc;
   try {
     userDoc = await userRef.get();
     if (!userDoc.exists) {
@@ -550,15 +1028,16 @@ export default async function handler(req, res) {
         dailyChallengesClaimed: false,
         joinedAt: FieldValue.serverTimestamp()
       };
-      await userRef.set(defaultUser);
-      userDoc = await userRef.get();
+      await userRef.set(defaultUser, { merge: true });
+      userDataDoc = defaultUser;
+    } else {
+      userDataDoc = userDoc.data();
     }
   } catch (e) {
     console.error("User initialization error:", e);
     return res.status(500).json({ error: 'Failed to initialize user session' });
   }
 
-  const userDataDoc = userDoc.data();
   if (!userDataDoc) {
     return res.status(500).json({ error: 'User profile not found' });
   }
@@ -596,7 +1075,7 @@ export default async function handler(req, res) {
 
   if (updated) {
     try {
-      await factsRef.set(facts);
+      await factsRef.set(facts, { merge: true });
     } catch (e) {
       console.error("Error writing updated facts to Firestore:", e);
     }
@@ -616,30 +1095,19 @@ export default async function handler(req, res) {
     profile = profileDoc.data();
   }
 
-  // Age calculation helper
-  function calculateAge(dobString) {
-    if (!dobString) return "Unknown";
-    try {
-      const today = new Date();
-      const birthDate = new Date(dobString);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      return age;
-    } catch (err) {
-      console.error("Age calculation error:", err);
-      return "Unknown";
-    }
-  }
-
-
+  let relationshipLoss = false;
+  const factMemory = (mode === 'chat' || mode === 'personal') ? await getFactMemory(uid) : {};
 
   // Intent detection and contradiction routing
   if (mode === 'chat' || mode === 'personal') {
+    const questionTextNormalized = (userData.question || '').trim().toLowerCase();
+    const detectedLoss = DECEASED_PATTERNS.some(pattern => pattern.test(questionTextNormalized)) || getFact(factMemory, 'relationship.spouseStatus') === 'deceased';
+
     let currentMarital = 'Unknown';
-    if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
+    if (detectedLoss) {
+      currentMarital = 'Widowed';
+      relationshipLoss = true;
+    } else if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
       currentMarital = userData.maritalStatus;
     } else if (profile?.maritalStatus && profile.maritalStatus !== 'Unknown') {
       currentMarital = profile.maritalStatus;
@@ -647,6 +1115,10 @@ export default async function handler(req, res) {
       currentMarital = 'Married';
     } else if (getFactValue(facts.married) === false) {
       currentMarital = 'Single';
+    }
+
+    if (currentMarital === 'Widowed') {
+      relationshipLoss = true;
     }
 
     const originalIntent = detectIntent(questionText);
@@ -658,7 +1130,6 @@ export default async function handler(req, res) {
     );
 
     // Structured married/single user guard
-    const questionTextNormalized = (userData.question || '').trim().toLowerCase();
 
     const asksMarriageStatus = (originalIntent === 'marriage_when') || 
                                questionTextNormalized.includes("shadi kab") || 
@@ -683,7 +1154,7 @@ export default async function handler(req, res) {
 
     if (currentMarital === 'Single' && asksAboutSpouse) {
       const safeText = "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye vivah/santan sambandhit prashn laagu nahi hota.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.";
-      return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData) });
+      return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData, progress) });
     }
 
     if (currentMarital === 'Single' && asksMarriageStatus) {
@@ -719,95 +1190,44 @@ Current Day: ${weekdayName}
 Current Quarter: ${quarter}
 Current Season: ${season}`;
 
-  const systemInstruction = `Speak as an AstroTarot AI Predictor. Respond in natural, conversational Hindi. Remove any baba or generic GPT behavior.
+  const systemInstruction = `Speak as AstroTarot AI Predictor. Natural Hindi. No baba talk.
+Understand occupation semantically.
+Understand marital status semantically.
 
-CRITICAL RULES:
+CRITICAL:
+* Married = no first-marriage predictions.
+* Business = no exam advice.
+* Gov Job = mention SSC/UPSC/Banking when relevant.
+* Private Job = promotions/growth.
+* Housewife = family/finances.
+* No houses (4/5/7/9/10) unless in Houses block. If empty, say "Career sambandhit yog" or "Grah sthiti".
 
-* Understand occupation semantically.
-* Adapt advice according to occupation category.
-* Understand marital status semantically.
-* Married users should not receive first-marriage predictions.
-* Business users should not receive exam advice.
-* Students should receive education-oriented predictions.
-* Government Job users should mention SSC, UPSC, State PSC, Banking or government service when relevant.
-* Private Job users should discuss promotions and company opportunities.
-* Housewife users should focus on family and finances.
-* Never mention 5th house, 7th house, or 10th house unless astrology data contains actual computed house information under Houses block. If house data is unavailable, say "Career sambandhit yog dikhte hain" or "Kundali data me timeline uplabdh nahi hai" instead of claiming a specific house is strong.
-
-1. You must always structure your response exactly in this format:
-
+Format:
 🔮 Prediction:
-[Direct answer first]
+[Direct answer]
 
 📿 Reasoning:
-[Use ONLY PROVIDED ASTROLOGY DATA below.
-Never invent Lagna, Mahadasha, Antardasha, Nakshatra, Gochar,
-planet positions, Shani Dhaiya, or timelines.
-
-If data missing say:
-"Kundali data uplabdh nahi hai."]
+[Use ONLY Astro Data below. If missing: "Kundali data uplabdh nahi hai."]
 
 🪔 Guidance:
-[Specific practical remedy based on provided data only]
+[Practical remedy]
 
-🎲 Aaj Ka Secret:
-[Use this exact value: ${secret}. Never invent. Never skip.]
+🎲 Aaj Ka Secret: ${secret}
 
 📊 Karma Score: ${progress.score}/${nextLevel} | Level: ${getLevel(progress.score)} | Streak: ${progress.streak}🔥
 
-4. For job/career/marriage timing questions, YOU MUST mention antardashaEnd year from PROVIDED ASTROLOGY DATA. If antardashaEnd missing, say 'Kundali data me timeline uplabdh nahi hai'. Never say 'agle 2 saal' or vague terms.
-
-2. LANGUAGE RULES - STRICT
-
-* Use simple educated Hindi.
-
-* No Google Translate Hindi.
-
-* Never use:
-  beta
-  bhai
-  mere bhai
-  bhagwan ki kripa
-  sab theek ho jayega
-  taare dekho
-  atkal
-
-* Never use emojis except:
-  🔮
-  📿
-  🪔
-
-* Never use:
-  aabki
-  fayda daru
-  shahar ke antardasha
-
-* Antardasha = time period.
-
-* Moon sign ≠ city.
-
-* Write like a professional astrologer.
-
-3. Word count:
-   80-130 words.
-
-FOR NON-ASTROLOGY QUESTIONS:
-You must still use the 4-section format. Never refuse blank.
-🔮 Prediction: Mai jyotish se sambandhit prashna ka hi uttar de sakta hun.
-📿 Reasoning: Aapka prashna [user question] kundali par aadharit nahi hai. Jyotish me [related topic] dekha jata hai.
+Rules:
+* Job/marriage: mention antardashaEnd. If missing: 'Kundali data me timeline uplabdh nahi hai'. No vague timelines.
+* Simple Hindi. No emojis except 🔮, 📿, 🪔.
+* Forbidden: beta, bhai, mere bhai, bhagwan ki kripa, sab theek ho jayega, taare dekho, atkal, aabki, fayda daru, shahar ke antardasha.
+* 80-130 words.
+For non-astro query: use format. Pred: "Mai jyotish se sambandhit prashna ka hi uttar de sakta hun." Reason: "Aapka prashna [user question] kundali par aadharit nahi hai. Jyotish me [related topic] dekha jata hai."
 🪔 Guidance: Agar aap [astro alternative] jaanna chahte hain to puch sakte hain.
 Then add 🎲 Secret and 📊 Score normally.`;
 
   let ageDisplay = "Unknown";
 
-  if (mode === 'chat' || mode === 'personal') {
-    const { dobDay, dobMonth, dobYear } = userData;
-
-    if (dobDay && dobMonth && dobYear) {
-      const dobStr = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
-      ageDisplay = calculateAge(dobStr);
-    }
-  } else {
+  if (mode !== 'chat' && mode !== 'personal') {
     const { p1, p2 } = userData;
     if (!p1 || !p2) {
       return res.status(400).json({ error: 'Compatibility mode requires p1 and p2 in userData' });
@@ -836,7 +1256,9 @@ Then add 🎲 Secret and 📊 Score normally.`;
     gender = resolvedGender;
 
     let resolvedMarital = 'Unknown';
-    if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
+    if (relationshipLoss) {
+      resolvedMarital = 'Widowed';
+    } else if (userData?.maritalStatus && userData.maritalStatus !== 'Unknown') {
       resolvedMarital = userData.maritalStatus;
     } else if (profile?.maritalStatus && profile.maritalStatus !== 'Unknown') {
       resolvedMarital = profile.maritalStatus;
@@ -892,10 +1314,11 @@ Then add 🎲 Secret and 📊 Score normally.`;
 
     if (!dobDay || !dobMonth || !dobYear) {
       const errText = `🔮 Prediction:\n${userData.name || ''} ji, janm tarikh sahi format me nahi mili.\n\n📿 Reasoning:\nKripya DOB DD-MM-YYYY format me daalein.\n\n🪔 Guidance:\nDetails dobara submit karke prashna puchiye.`;
-      return res.status(200).json({ text: await injectSecretAndScore(errText, uid, userData) });
+      return res.status(200).json({ text: await injectSecretAndScore(errText, uid, userData, progress) });
     }
 
     dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
+    ageDisplay = calculateAge(dob);
 
     // Time (TOB)
     const tobHour = userData?.tobHour || profile?.tobHour;
@@ -917,8 +1340,69 @@ Then add 🎲 Secret and 📊 Score normally.`;
     ? await getAstrologyData({ dob, tob, pob })
     : null;
 
+  let updatedFacts = factMemory;
   // Construct prompt for API providers
   let fullPrompt = "";
+  if (mode === 'chat' || mode === 'personal') {
+    const occupation = profile?.occupation || userData?.occupation || 'Unknown';
+
+    let semanticFacts = null;
+    try {
+      semanticFacts = await extractSemanticFacts({
+        question: questionText,
+        existingFacts: factMemory,
+        userProfile: {
+          maritalStatus,
+          occupation,
+          age: ageDisplay
+        }
+      });
+    } catch (err) {
+      console.error("Semantic fact extraction failed:", err);
+    }
+
+    if (semanticFacts && typeof semanticFacts.confidence === 'number' && semanticFacts.confidence >= 0.80) {
+      updatedFacts = mergeSemanticFacts(factMemory, semanticFacts);
+    } else {
+      updatedFacts = extractFactsFromMessage(questionText, factMemory);
+    }
+
+    if (relationshipLoss) {
+      setFact(updatedFacts, 'relationship.spouseStatus', 'deceased');
+      setFact(updatedFacts, 'relationship.wifeAlive', false);
+    }
+    if (maritalStatus && maritalStatus !== 'Unknown') {
+      updatedFacts.maritalStatus = maritalStatus;
+      if (updatedFacts.facts) updatedFacts.facts.maritalStatus = maritalStatus;
+    }
+    if (occupation && occupation !== 'Unknown') {
+      setFact(updatedFacts, 'career.occupation', occupation);
+    }
+    if (ageDisplay && ageDisplay !== 'Unknown') {
+      setFact(updatedFacts, 'career.age', ageDisplay);
+    }
+    updatedFacts = migrateFactMemory(updatedFacts);
+
+    const contradiction = detectSmartContradiction(
+      questionText,
+      updatedFacts,
+      userData,
+      history
+    );
+
+    await updateFactMemory(
+      uid,
+      questionText,
+      updatedFacts
+    );
+
+    if (contradiction) {
+      return res.status(200).json({
+        text: contradiction.text
+      });
+    }
+  }
+
   if (mode === 'chat' || mode === 'personal') {
     let promptSections = [];
 
@@ -942,13 +1426,14 @@ Then add 🎲 Secret and 📊 Score normally.`;
 Name: ${name}
 Gender: ${gender}
 DOB: ${dob}
+Age: ${ageDisplay}
 Time: ${tob}
 Place: ${pob}
 Marital Status: ${maritalStatus}`;
 
     promptSections.push(astrologyProfileBlock);
 
-    promptSections.push(buildCompactContext(userData, astroData));
+    promptSections.push(buildCompactContext(userData, astroData, updatedFacts));
 
     // Inject calculated astroData (Step 8)
     promptSections.push(buildAstrologyBlock(astroData));
@@ -1042,13 +1527,13 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 
       if (!isAstroDataMissing) {
         // Check forbidden phrases (Step 4)
-        if (containsForbiddenPhrases(aiText)) {
+        if (containsForbiddenPhrases(aiText, updatedFacts)) {
           needsRetry = true;
           retryReason = "blacklist";
         }
 
         // Check astrology hallucinations (Step 11)
-        const validatedText = await injectSecretAndScore(aiText, uid, userData);
+        const validatedText = await injectSecretAndScore(aiText, uid, userData, progress);
         if (!needsRetry && !validateAstroResponse(validatedText, astroData)) {
           needsRetry = true;
           retryReason = "hallucination";
@@ -1083,14 +1568,14 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         aiText = await generateAIResponse(retryPrompt);
         aiText = humanize(aiText);
 
-        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData);
+        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData, progress);
         needsRetry =
-          containsForbiddenPhrases(aiText)
+          containsForbiddenPhrases(aiText, updatedFacts)
           ||
           !validateAstroResponse(validatedRetryText, astroData);
 
         if (needsRetry) {
-          if (containsForbiddenPhrases(aiText)) {
+          if (containsForbiddenPhrases(aiText, updatedFacts)) {
             retryReason = "blacklist";
           } else {
             retryReason = "hallucination";
@@ -1102,7 +1587,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       if (needsRetry && retryCount >= 2) {
         console.error("VALIDATION_FAILED_3X");
         const failText = `🔮 Prediction:\nTakneeki karan se vistar se nahi bata pa raha.\n\n📿 Reasoning:\nKundali data verify nahi ho paya.\n\n🪔 Guidance:\nKuch der baad dobara try karein.`;
-        return res.status(200).json({ text: await injectSecretAndScore(humanize(failText), uid, userData) });
+        return res.status(200).json({ text: await injectSecretAndScore(humanize(failText), uid, userData, progress) });
       }
 
       if (!aiText || !aiText.trim()) {
@@ -1112,7 +1597,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       if (mode === 'chat' || mode === 'personal') {
         const deduplicatedText = removeDuplicateSentences(aiText);
         jsonResponse = {
-          text: await injectSecretAndScore(deduplicatedText, uid, userData)
+          text: await injectSecretAndScore(deduplicatedText, uid, userData, progress)
         };
       } else {
         const parsedData = parseModelResponse(aiText);
@@ -1139,7 +1624,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         const fallbackText = buildResponse(progressUid, detectedIntent, todayString, questionText);
         aiText = fallbackText;
         jsonResponse = {
-          text: await injectSecretAndScore(fallbackText, uid, userData)
+          text: await injectSecretAndScore(fallbackText, uid, userData, progress)
         };
         success = true;
       } catch (fallbackError) {
@@ -1205,9 +1690,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
     }
     console.log("RESPONSE SOURCE =", responseSource);
     if (mode === 'chat' || mode === 'personal') {
-      let finalText = humanize(aiText);
-      finalText = await injectSecretAndScore(finalText, uid, userData);
-      return res.status(200).json({ text: finalText });
+      return res.status(200).json({ text: jsonResponse.text });
     }
     return res.status(200).json(jsonResponse);
   }

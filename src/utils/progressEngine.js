@@ -24,9 +24,9 @@ export async function getProgress(uid) {
   }
 }
 
-export async function updateProgress(uid, action) {
+export async function updateProgress(uid, action, cachedProgress = null) {
   try {
-    const u = await getProgress(uid);
+    const u = cachedProgress ? { ...cachedProgress } : await getProgress(uid);
     const today = new Date().toISOString().split('T')[0];
 
     if (action === 'checkin') {

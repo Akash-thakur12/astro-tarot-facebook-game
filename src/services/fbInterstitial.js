@@ -1,68 +1,49 @@
 /**
  * Facebook Instant Games Interstitial Ads Service
+ * Single Owner of the Interstitial Ads responsibility.
  */
 
-import { INTERSTITIAL_TAROT_ID } from '../config/adConfig';
-
-let interstitialAd = null;
-let isReady = false;
-let isPreloading = false;
-let lastInterstitialTime = 0;
-const COOLDOWN_MS = 60000;
-let currentPlacementId = INTERSTITIAL_TAROT_ID;
+import { Placements } from './facebook/ads/placements';
+import { AdErrors } from './facebook/ads/types';
+import { isCooldownActive, setAdShown } from './facebook/ads/cooldown';
+import { preloadAd, isAdReady, showAd } from './facebook/ads/lifecycle';
+import { logAdEvent } from './facebook/ads/analytics';
 
 /**
- * Preloads an interstitial ad
- * @param {string} placementId - The audience network placement ID
+ * Preloads an interstitial ad.
+ * @param {string} placementId 
  */
-export const preloadInterstitial = async (placementId = INTERSTITIAL_TAROT_ID) => {
-  if (typeof window === 'undefined' || !window.FBInstant) return;
-  if (isReady || isPreloading) return;
-
-  try {
-    isPreloading = true;
-    currentPlacementId = placementId;
-    interstitialAd = await window.FBInstant.getInterstitialAdAsync(placementId);
-    await interstitialAd.loadAsync();
-    isReady = true;
-  } catch (error) {
-    console.error('FAN: Interstitial load failed:', error);
-    isReady = false;
-  } finally {
-    isPreloading = false;
-  }
+export const preloadInterstitial = async (placementId = Placements.INTERSTITIAL.TAROT.id) => {
+  return preloadAd(placementId, 'interstitial');
 };
 
 /**
- * Shows the preloaded interstitial ad
+ * Shows the preloaded interstitial ad.
+ * @param {string} placementId
+ * @returns {Promise<boolean>}
  */
-export const showInterstitial = async () => {
-  if (typeof window === 'undefined' || !window.FBInstant) return false;
+export const showInterstitial = async (placementId = Placements.INTERSTITIAL.TAROT.id) => {
+  const config = Object.values(Placements.INTERSTITIAL).find(p => p.id === placementId);
+  const cooldownMs = config ? config.cooldownMs : 60000;
 
-  const now = Date.now();
-  if (now - lastInterstitialTime < COOLDOWN_MS) {
-    console.warn('FAN: Interstitial cooldown active');
-    return false;
-  }
-
-  if (!interstitialAd || !isReady) {
-    console.warn('FAN: Interstitial not ready');
-    preloadInterstitial(currentPlacementId);
+  if (isCooldownActive(placementId, cooldownMs)) {
+    logAdEvent('ad_rejected_cooldown', placementId, { type: 'interstitial' });
     return false;
   }
 
   try {
-    await interstitialAd.showAsync();
-    lastInterstitialTime = Date.now();
-    isReady = false; // Reset state after showing
-    interstitialAd = null;
-    preloadInterstitial(currentPlacementId);
+    await showAd(placementId, 'interstitial');
+    setAdShown(placementId);
     return true;
   } catch (error) {
+    if (error.message === 'AD_NOT_READY') {
+      console.warn('FAN: Interstitial not ready for placement:', placementId);
+      // Auto-trigger preloading for the next time
+      preloadInterstitial(placementId).catch(() => {});
+      return false;
+    }
     console.error('FAN: Interstitial show failed:', error);
-    isReady = false;
-    interstitialAd = null;
-    preloadInterstitial(currentPlacementId);
+    preloadInterstitial(placementId).catch(() => {});
     return false;
   }
 };

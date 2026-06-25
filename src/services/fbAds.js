@@ -1,52 +1,71 @@
 /**
  * Facebook Instant Games Rewarded Video Ads Service
+ * Single Owner of the Rewarded Video Ads responsibility.
  */
 
-let rewardedAd = null;
-let isReady = false;
-let isPreloading = false;
+import { auth } from './firebase';
+import { Placements } from './facebook/ads/placements';
+import { AdErrors } from './facebook/ads/types';
+import { isCooldownActive, setAdShown } from './facebook/ads/cooldown';
+import { preloadAd, isAdReady, showAd } from './facebook/ads/lifecycle';
+import { logAdEvent } from './facebook/ads/analytics';
+import { verifyRewardOnServer } from './facebook/ads/rewardVerifier';
 
-export const isRewardedReady = () => isReady;
-
-/**
- * Preloads a rewarded video ad
- * @param {string} placementId - The audience network placement ID
- */
-export const preloadRewardedAd = async (placementId) => {
-  if (typeof window === 'undefined' || !window.FBInstant) return;
-  if (isReady || isPreloading) return;
-
-  try {
-    isPreloading = true;
-    rewardedAd = await window.FBInstant.getRewardedVideoAsync(placementId);
-    await rewardedAd.loadAsync();
-    isReady = true;
-  } catch (error) {
-    console.error('FAN: Rewarded video load failed:', error);
-    isReady = false;
-  } finally {
-    isPreloading = false;
-  }
+export const isRewardedReady = (placementId = Placements.REWARDED.TAROT_UNLOCK.id) => {
+  return isAdReady(placementId);
 };
 
 /**
- * Shows the preloaded rewarded video ad
- * @returns {Promise<boolean>} True if ad was watched to completion
+ * Preloads a rewarded video ad.
+ * @param {string} placementId 
  */
-export const showRewardedAd = async () => {
-  if (!rewardedAd || !isReady) {
-    console.warn('FAN: Rewarded ad not ready');
-    return false;
+export const preloadRewardedAd = async (placementId = Placements.REWARDED.TAROT_UNLOCK.id) => {
+  return preloadAd(placementId, 'rewarded');
+};
+
+/**
+ * Shows the preloaded rewarded video ad and calls server signature verification.
+ * @param {string} placementId 
+ * @returns {Promise<boolean>}
+ */
+export const showRewardedAd = async (placementId = Placements.REWARDED.TAROT_UNLOCK.id) => {
+  const config = Object.values(Placements.REWARDED).find(p => p.id === placementId);
+  const cooldownMs = config ? config.cooldownMs : 30000;
+
+  if (isCooldownActive(placementId, cooldownMs)) {
+    logAdEvent('ad_rejected_cooldown', placementId, { type: 'rewarded' });
+    throw new Error(AdErrors.COOLDOWN_ACTIVE);
   }
 
   try {
-    await rewardedAd.showAsync();
-    // Ad watched to completion
-    isReady = false; // Reset state after showing
-    rewardedAd = null;
+    // Show Facebook ad
+    await showAd(placementId, 'rewarded');
+
+    // Callback function to get idToken from Firebase Auth
+    const getToken = async () => {
+      if (auth.currentUser) {
+        return await auth.currentUser.getIdToken(true);
+      }
+      return null;
+    };
+
+    // Call server transaction to verify reward cryptographically and update DB
+    logAdEvent('ad_verification_start', placementId);
+    const verificationResult = await verifyRewardOnServer(getToken, placementId);
+
+    setAdShown(placementId);
+    logAdEvent('ad_reward_granted', placementId, verificationResult);
     return true;
   } catch (error) {
-    console.error('FAN: Rewarded ad show failed or dismissed:', error);
-    return false;
+    if (error.message === 'AD_NOT_READY') {
+      throw new Error(AdErrors.AD_NOT_READY);
+    }
+    if (error.message === 'DAILY_LIMIT') {
+      throw new Error(AdErrors.DAILY_LIMIT);
+    }
+    if (error.message === 'DUPLICATE_REWARD') {
+      throw new Error(AdErrors.DUPLICATE_REWARD);
+    }
+    throw error;
   }
 };

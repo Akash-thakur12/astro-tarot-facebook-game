@@ -55,6 +55,13 @@ test.describe.serial('E2E Application Flow', () => {
     await page.goto('/#/');
     await page.waitForTimeout(2000);
 
+    // If redirected to login, perform guest login
+    if (page.url().includes('/login') || await page.getByRole('button', { name: 'Continue as Guest' }).isVisible()) {
+      await page.getByRole('button', { name: 'Continue as Guest' }).click();
+      await expect(page).toHaveURL(/.*#\//);
+      await page.waitForTimeout(2000);
+    }
+
     // Navigate to Tarot
     await page.getByRole('heading', { name: 'Today\'s Tarot' }).click();
     await expect(page).toHaveURL(/.*#\/tarot/);

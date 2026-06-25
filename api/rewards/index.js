@@ -29,8 +29,7 @@ if (!apps || apps.length === 0) {
 const db = getFirestore();
 const adminAuth = getAuth();
 
-// Shared Rate Limiting Map
-const rateLimits = new Map();
+// Rate limiting map replaced by Firestore transaction rate limiter
 
 // Helper: Verify Auth
 async function verifyAuth(req) {
@@ -46,21 +45,55 @@ async function verifyAuth(req) {
   return uid;
 }
 
-// Helper: Rate Limit
-function checkRateLimit(uid) {
+// Helper: Rate Limit (Firestore transaction based)
+async function checkRateLimit(uid) {
   const now = new Date();
   const nowMs = now.getTime();
-  const userRate = rateLimits.get(uid) || { count: 0, resetTime: nowMs + 60000 };
-  if (nowMs > userRate.resetTime) {
-    userRate.count = 0;
-    userRate.resetTime = nowMs + 60000;
+  const rateLimitRef = db.collection('rateLimits').doc(uid);
+  let rateLimitHit = false;
+  
+  try {
+    await db.runTransaction(async (tx) => {
+      const docSnap = await tx.get(rateLimitRef);
+      let count = 0;
+      let windowStart = nowMs;
+      
+      if (docSnap.exists) {
+        const data = docSnap.data();
+        if (data && typeof data.count === 'number' && typeof data.windowStart === 'number') {
+          count = data.count;
+          windowStart = data.windowStart;
+        }
+      }
+      
+      if (nowMs - windowStart > 60000) {
+        count = 0;
+        windowStart = nowMs;
+        console.log("RATE_LIMIT_RESET");
+      }
+      
+      if (count >= 15) {
+        rateLimitHit = true;
+        console.log("RATE_LIMIT_HIT");
+        return;
+      }
+      
+      const newCount = count + 1;
+      const updateData = { count: newCount, windowStart };
+      
+      if (docSnap.exists && typeof tx.update === 'function') {
+        tx.update(rateLimitRef, updateData);
+      } else if (typeof tx.set === 'function') {
+        tx.set(rateLimitRef, updateData);
+      } else {
+        tx.update(rateLimitRef, updateData);
+      }
+    });
+  } catch (error) {
+    console.error("Rate limiter transaction failed:", error);
   }
-  if (userRate.count >= 15) { // Slightly increased since it's a consolidated endpoint
-    return false;
-  }
-  userRate.count++;
-  rateLimits.set(uid, userRate);
-  return true;
+  
+  return !rateLimitHit;
 }
 
 export default async function handler(req, res) {
@@ -80,7 +113,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  if (!checkRateLimit(uid)) {
+  const rateLimitAllowed = await checkRateLimit(uid);
+  if (!rateLimitAllowed) {
     return res.status(429).json({ error: 'Too many requests.' });
   }
 

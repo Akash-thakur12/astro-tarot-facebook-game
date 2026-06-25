@@ -29,8 +29,7 @@ if (!apps || apps.length === 0) {
 const db = getFirestore();
 const adminAuth = getAuth();
 
-// Rate limiting map (in-memory, per Vercel instance)
-const rateLimits = new Map();
+// Rate limiting map replaced by Firestore transaction rate limiter
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -54,19 +53,56 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 
-  // Basic Rate Limiting
+  // Firestore transaction based rate limiter
   const now = new Date();
   const nowMs = now.getTime();
-  const userRate = rateLimits.get(uid) || { count: 0, resetTime: nowMs + 60000 };
-  if (nowMs > userRate.resetTime) {
-    userRate.count = 0;
-    userRate.resetTime = nowMs + 60000;
+  const rateLimitRef = db.collection('rateLimits').doc(uid);
+  let rateLimitHit = false;
+  
+  try {
+    await db.runTransaction(async (tx) => {
+      const docSnap = await tx.get(rateLimitRef);
+      let count = 0;
+      let windowStart = nowMs;
+      
+      if (docSnap.exists) {
+        const data = docSnap.data();
+        if (data && typeof data.count === 'number' && typeof data.windowStart === 'number') {
+          count = data.count;
+          windowStart = data.windowStart;
+        }
+      }
+      
+      if (nowMs - windowStart > 60000) {
+        count = 0;
+        windowStart = nowMs;
+        console.log("RATE_LIMIT_RESET");
+      }
+      
+      if (count >= 10) {
+        rateLimitHit = true;
+        console.log("RATE_LIMIT_HIT");
+        return;
+      }
+      
+      const newCount = count + 1;
+      const updateData = { count: newCount, windowStart };
+      
+      if (docSnap.exists && typeof tx.update === 'function') {
+        tx.update(rateLimitRef, updateData);
+      } else if (typeof tx.set === 'function') {
+        tx.set(rateLimitRef, updateData);
+      } else {
+        tx.update(rateLimitRef, updateData);
+      }
+    });
+  } catch (error) {
+    console.error("Rate limiter transaction failed:", error);
   }
-  if (userRate.count >= 10) {
+  
+  if (rateLimitHit) {
     return res.status(429).json({ error: 'Too many requests.' });
   }
-  userRate.count++;
-  rateLimits.set(uid, userRate);
 
   const { method } = req.body;
   const userRef = db.collection('users').doc(uid);

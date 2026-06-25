@@ -27,7 +27,7 @@ function getClient() {
  * @param {string} prompt - The prompt to send to the models.
  * @returns {Promise<string>} The generated text.
  */
-export async function generateAIResponse(prompt) {
+export async function generateAIResponse(prompt, options = {}) {
   const clientInstance = getClient();
   if (!clientInstance) {
     throw new Error('AI Service not configured: Missing BEDROCK_API_KEY or BEDROCK_BASE_URL');
@@ -43,13 +43,17 @@ export async function generateAIResponse(prompt) {
 
   for (const model of models) {
     try {
-      console.log("Trying model:", model);
+      console.log("Trying model:", model, "with options:", JSON.stringify(options));
+      const bodyParams = {
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+      };
+      if (options.jsonMode) {
+        bodyParams.response_format = { type: 'json_object' };
+      }
       const response = await clientInstance.chat.completions.create(
-        {
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1,
-        },
+        bodyParams,
         {
           timeout: 5000, // 5 seconds timeout per request
         }

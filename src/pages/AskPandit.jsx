@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
@@ -8,10 +8,14 @@ import { preloadInterstitial, showInterstitial } from '../services/fbInterstitia
 import { INTERSTITIAL_PANDIT_ID } from '../config/adConfig';
 import Button from '../components/ui/Button';
 
+const QUESTION_COST = 30;
+
 // Extracted outside the main component to prevent re-renders on state changes causing focus loss
-const InputField = ({ label, value, onChange, placeholder }) => (
+const InputField = ({ label, value, onChange, placeholder, required }) => (
   <div className="flex flex-col gap-1 w-full">
-    <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{label}</label>
+    <label className="text-[10px] uppercase tracking-widest text-mystic-gold font-bold ml-1">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
     <input 
       type="text" 
       value={value} 
@@ -21,6 +25,122 @@ const InputField = ({ label, value, onChange, placeholder }) => (
     />
   </div>
 );
+
+const parsePanditResponse = (text) => {
+  const result = {
+    hasStructured: false,
+    rawText: text || '',
+    prediction: null,
+    reasoning: null,
+    guidance: null,
+    secret: null,
+    karma: null
+  };
+
+  if (!text || typeof text !== 'string') {
+    return result;
+  }
+
+  // Regexes to capture the full header block from the start of a line or text, including optional emojis, spaces, and markdown
+  const headerPatterns = [
+    { key: 'prediction', regex: /(?:^|\s|[^\w\u0900-\u097F])(Prediction|भविष्यवाणी|फलकथन)[\s\*\_\-\#]*:/i },
+    { key: 'reasoning', regex: /(?:^|\s|[^\w\u0900-\u097F])(Reasoning|तर्क|कारण|विश्लेषण)[\s\*\_\-\#]*:/i },
+    { key: 'guidance', regex: /(?:^|\s|[^\w\u0900-\u097F])(Guidance|मार्गदर्शन|सलाह|उपाय)[\s\*\_\-\#]*:/i },
+    { key: 'secret', regex: /(?:^|\s|[^\w\u0900-\u097F])(Aaj\s+Ka\s+Secret|Secret|आज\s+का\s+रहस्य|रहस्य|सीक्रेट)[\s\*\_\-\#]*:/i },
+    { key: 'karma', regex: /(?:^|\s|[^\w\u0900-\u097F])(Karma\s+Score|Score|कर्म\s+स्कोर|स्कोर|कर्म\s+अंक)[\s\*\_\-\#]*:/i }
+  ];
+
+  const sections = [];
+  headerPatterns.forEach(({ key, regex }) => {
+    const match = regex.exec(text);
+    if (match) {
+      const colonIndex = text.indexOf(':', match.index);
+      if (colonIndex !== -1) {
+        sections.push({
+          key,
+          index: match.index,
+          contentStart: colonIndex + 1
+        });
+      }
+    }
+  });
+
+  if (sections.length === 0) {
+    return result;
+  }
+
+  sections.sort((a, b) => a.index - b.index);
+
+  for (let i = 0; i < sections.length; i++) {
+    const current = sections[i];
+    const end = (i + 1 < sections.length) ? sections[i + 1].index : text.length;
+    let sectionContent = text.substring(current.contentStart, end).trim();
+    
+    sectionContent = sectionContent.replace(/^[\s\*\_\-\#\:\n]+|[\s\*\_\-\#\:\n]+$/g, '').trim();
+
+    if (sectionContent) {
+      result[current.key] = sectionContent;
+      result.hasStructured = true;
+    }
+  }
+
+  return result;
+};
+
+const renderSectionContent = (text) => {
+  return text.split('\n').map((line, idx) => (
+    <p key={idx} className={line.trim() ? "mb-2 last:mb-0" : "h-1"}>
+      {line}
+    </p>
+  ));
+};
+
+const AiMessageContent = ({ content }) => {
+  const parsed = useMemo(() => parsePanditResponse(content), [content]);
+
+  if (!parsed.hasStructured) {
+    return content.split('\n').map((line, idx) => (
+      <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
+        {line}
+      </p>
+    ));
+  }
+
+  return (
+    <div className="space-y-4 w-full">
+      {parsed.prediction && (
+        <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-mystic-gold block mb-1">🔮 Prediction</span>
+          <div className="text-white/90 text-sm leading-relaxed">{renderSectionContent(parsed.prediction)}</div>
+        </div>
+      )}
+      {parsed.reasoning && (
+        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-mystic-gold block mb-1">📿 Reasoning</span>
+          <div className="text-white/80 text-sm leading-relaxed">{renderSectionContent(parsed.reasoning)}</div>
+        </div>
+      )}
+      {parsed.guidance && (
+        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-mystic-gold block mb-1">🪔 Guidance</span>
+          <div className="text-white/80 text-sm leading-relaxed">{renderSectionContent(parsed.guidance)}</div>
+        </div>
+      )}
+      {parsed.secret && (
+        <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-mystic-gold block mb-1">🎲 Daily Secret</span>
+          <div className="text-white/90 text-sm leading-relaxed">{renderSectionContent(parsed.secret)}</div>
+        </div>
+      )}
+      {parsed.karma && (
+        <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-mystic-gold block mb-1">📊 Karma Status</span>
+          <div className="text-white/90 text-sm leading-relaxed">{renderSectionContent(parsed.karma)}</div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SelectorButton = ({ value, options, placeholder, title, onSelect, setPickerConfig }) => {
   const selectedOption = options.find(opt => (typeof opt === 'object' ? opt.value : opt) === value);
@@ -95,9 +215,16 @@ const AskPandit = () => {
   const [hasEnteredDetails, setHasEnteredDetails] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showLowCoinsModal, setShowLowCoinsModal] = useState(false);
+  const [showAccuracyModal, setShowAccuracyModal] = useState(false);
   const [pickerConfig, setPickerConfig] = useState(null);
   const [inputText, setInputText] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const coins = user?.coins || 0;
+  const isPremium = !!user?.premium;
+  const isFreeInput = !isPremium && !user?.dailyQuestionUsed;
+  const hasEnoughCoinsInput = coins >= QUESTION_COST;
+  const isInsufficient = !isPremium && !isFreeInput && !hasEnoughCoinsInput;
 
   // Forms
   const [personalForm, setPersonalForm] = useState({ 
@@ -189,8 +316,7 @@ const AskPandit = () => {
         console.warn("Firestore error, staying on local data.", e);
       }
 
-      // Check if history is empty and profile exists, then insert profile card
-      const isProfileValid = finalForm.name && finalForm.gender && finalForm.dobDay && finalForm.dobMonth && finalForm.dobYear && finalForm.pob;
+      const isProfileValid = finalForm.name && finalForm.dobDay && finalForm.dobMonth && finalForm.dobYear && finalForm.tobHour && finalForm.tobMinute && finalForm.tobPeriod;
       if (hasDetails || isProfileValid) {
         const genderIcon = finalForm.gender === 'Male' ? '♂️' : finalForm.gender === 'Female' ? '♀️' : '👤';
         const genderText = isHindi 
@@ -209,17 +335,16 @@ const AskPandit = () => {
 
         const timeOfBirth = `${finalForm.tobHour}:${finalForm.tobMinute} ${finalForm.tobPeriod}`;
 
-        const introMessage = `🧾 Birth Details Submitted
+        let detailsLines = [];
+        detailsLines.push(`👤 ${finalForm.name}`);
+        if (finalForm.gender) detailsLines.push(`${genderIcon} ${genderText}`);
+        detailsLines.push(`🎂 ${dobFormatted}`);
+        if (finalForm.maritalStatus) detailsLines.push(`💍 ${maritalText}`);
+        if (finalForm.occupation) detailsLines.push(`💼 ${occupationText}`);
+        detailsLines.push(`🕐 ${timeOfBirth}`);
+        if (finalForm.pob) detailsLines.push(`📍 ${finalForm.pob}`);
 
-👤 ${finalForm.name}
-${genderIcon} ${genderText}
-🎂 ${dobFormatted}
-💍 ${maritalText}
-💼 ${occupationText}
-🕐 ${timeOfBirth}
-📍 ${finalForm.pob}
-
-Kripya meri janm jankari ke anusar margdarshan dein.`;
+        const introMessage = `🧾 Birth Details Submitted\n\n${detailsLines.join('\n')}\n\nKripya meri janm jankari ke anusar margdarshan dein.`;
 
         const profileBubble = {
           role: "user",
@@ -320,17 +445,16 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
       ? (personalForm.occupation === 'Student' ? 'छात्र' : personalForm.occupation === 'Private Job' ? 'प्राइवेट नौकरी' : personalForm.occupation === 'Government Job' ? 'सरकारी नौकरी' : personalForm.occupation === 'Business Owner' ? 'व्यापार मालिक' : personalForm.occupation === 'Self Employed' ? 'स्व-नियोजित' : personalForm.occupation === 'Homemaker' ? 'गृहणी' : personalForm.occupation === 'Retired' ? 'सेवानिवृत्त' : personalForm.occupation === 'Other' ? 'अन्य' : personalForm.occupation)
       : personalForm.occupation;
 
-    const introMessage = `🧾 Birth Details Submitted
+    let detailsLines = [];
+    detailsLines.push(`👤 ${personalForm.name}`);
+    if (personalForm.gender) detailsLines.push(`${genderIcon} ${genderText}`);
+    detailsLines.push(`🎂 ${dobFormatted}`);
+    if (personalForm.maritalStatus) detailsLines.push(`💍 ${maritalText}`);
+    if (personalForm.occupation) detailsLines.push(`💼 ${occupationText}`);
+    detailsLines.push(`🕐 ${timeOfBirth}`);
+    if (personalForm.pob) detailsLines.push(`📍 ${personalForm.pob}`);
 
-👤 ${personalForm.name}
-${genderIcon} ${genderText}
-🎂 ${dobFormatted}
-💍 ${maritalText}
-💼 ${occupationText}
-🕐 ${timeOfBirth}
-📍 ${personalForm.pob}
-
-Kripya meri janm jankari ke anusar margdarshan dein.`;
+    const introMessage = `🧾 Birth Details Submitted\n\n${detailsLines.join('\n')}\n\nKripya meri janm jankari ke anusar margdarshan dein.`;
 
     const profileBubble = {
       role: "user",
@@ -377,9 +501,9 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
     invalidDate: isHindi ? 'कृपया मान्य जन्म तिथि दर्ज करें' : 'Please enter a valid birth date',
     unlimited: isHindi ? 'असीमित' : 'Unlimited',
     freeToday: isHindi ? 'आज मुफ़्त' : 'FREE Today',
-    tenCoins: isHindi ? '30 सिक्के' : '30 Coins',
+    tenCoins: isHindi ? `${QUESTION_COST} सिक्के` : `${QUESTION_COST} Coins`,
     notEnough: isHindi ? 'सिक्के कम हैं' : 'Not enough coins',
-    modalSub: isHindi ? 'परामर्श के लिए 30 सिक्के या प्रीमियम सदस्यता आवश्यक है।' : 'Consulting requires 30 coins or a Premium subscription.',
+    modalSub: isHindi ? `परामर्श के लिए ${QUESTION_COST} सिक्के या प्रीमियम सदस्यता आवश्यक है।` : `Consulting requires ${QUESTION_COST} coins or a Premium subscription.`,
     upgradeButton: isHindi ? 'प्रीमियम ₹99 अनलॉक करें' : 'Unlock Premium ₹99',
     earnButton: isHindi ? 'मुफ्त सिक्के कमाएं' : 'Watch Ad to Continue',
     maybeLater: isHindi ? 'बाद में' : 'Maybe Later',
@@ -460,6 +584,22 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
     personalForm.occupation && 
     dobError === null;
 
+  const isRequiredFormValid = 
+    personalForm.name && 
+    personalForm.dobDay && 
+    personalForm.dobMonth && 
+    personalForm.dobYear && 
+    personalForm.tobHour && 
+    personalForm.tobMinute && 
+    personalForm.tobPeriod && 
+    dobError === null;
+
+  const hasMissingOptional = 
+    !personalForm.pob || 
+    !personalForm.gender || 
+    !personalForm.maritalStatus || 
+    !personalForm.occupation;
+
   const executeSendMessage = async (question, currentMessages) => {
     setErrorMsg('');
 
@@ -530,66 +670,73 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
     }
   };
 
+  const submitProfile = async () => {
+    setLoading(true);
+    try {
+      const dob = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
+      const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
+      const placeOfBirth = personalForm.pob;
+
+      const profileData = {
+        name: personalForm.name,
+        gender: personalForm.gender,
+        dob,
+        timeOfBirth,
+        placeOfBirth,
+        maritalStatus: personalForm.maritalStatus,
+        occupation: personalForm.occupation
+      };
+
+      await saveUserProfile(user.uid, profileData);
+      setHasEnteredDetails(true);
+
+      const genderIcon = personalForm.gender === 'Male' ? '♂️' : personalForm.gender === 'Female' ? '♀️' : '👤';
+      const genderText = isHindi 
+        ? (personalForm.gender === 'Male' ? 'पुरुष' : personalForm.gender === 'Female' ? 'महिला' : 'अन्य') 
+        : personalForm.gender;
+      
+      const dobFormatted = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
+      
+      const maritalText = isHindi
+        ? (personalForm.maritalStatus === 'Single' ? 'एकल' : personalForm.maritalStatus === 'Married' ? 'विवाहित' : personalForm.maritalStatus === 'Divorced' ? 'तलाकशुदा' : personalForm.maritalStatus === 'Separated' ? 'अलग' : personalForm.maritalStatus === 'Widowed' ? 'विधवा/विधुर' : personalForm.maritalStatus)
+        : personalForm.maritalStatus;
+
+      const occupationText = isHindi
+        ? (personalForm.occupation === 'Student' ? 'छात्र' : personalForm.occupation === 'Private Job' ? 'प्राइवेट नौकरी' : personalForm.occupation === 'Government Job' ? 'सरकारी नौकरी' : personalForm.occupation === 'Business Owner' ? 'व्यापार मालिक' : personalForm.occupation === 'Self Employed' ? 'स्व-नियोजित' : personalForm.occupation === 'Homemaker' ? 'गृहणी' : personalForm.occupation === 'Retired' ? 'सेवानिवृत्त' : personalForm.occupation === 'Other' ? 'अन्य' : personalForm.occupation)
+        : personalForm.occupation;
+
+      let detailsLines = [];
+      detailsLines.push(`👤 ${personalForm.name}`);
+      if (personalForm.gender) detailsLines.push(`${genderIcon} ${genderText}`);
+      detailsLines.push(`🎂 ${dobFormatted}`);
+      if (personalForm.maritalStatus) detailsLines.push(`💍 ${maritalText}`);
+      if (personalForm.occupation) detailsLines.push(`💼 ${occupationText}`);
+      detailsLines.push(`🕐 ${timeOfBirth}`);
+      if (personalForm.pob) detailsLines.push(`📍 ${placeOfBirth}`);
+
+      const introMessage = `🧾 Birth Details Submitted\n\n${detailsLines.join('\n')}\n\nKripya meri janm jankari ke anusar margdarshan dein.`;
+
+      setMessages([
+        {
+          role: "user",
+          type: "profile",
+          content: introMessage
+        }
+      ]);
+    } catch (err) {
+      console.error("Error saving profile details:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStartChat = async () => {
-    if (isFormValid) {
-      setLoading(true);
-      try {
-        const dob = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
-        const timeOfBirth = `${personalForm.tobHour}:${personalForm.tobMinute} ${personalForm.tobPeriod}`;
-        const placeOfBirth = personalForm.pob;
-
-        const profileData = {
-          name: personalForm.name,
-          gender: personalForm.gender,
-          dob,
-          timeOfBirth,
-          placeOfBirth,
-          maritalStatus: personalForm.maritalStatus,
-          occupation: personalForm.occupation
-        };
-
-        await saveUserProfile(user.uid, profileData);
-        setHasEnteredDetails(true);
-
-        const genderIcon = personalForm.gender === 'Male' ? '♂️' : personalForm.gender === 'Female' ? '♀️' : '👤';
-        const genderText = isHindi 
-          ? (personalForm.gender === 'Male' ? 'पुरुष' : personalForm.gender === 'Female' ? 'महिला' : 'अन्य') 
-          : personalForm.gender;
-        
-        const dobFormatted = `${personalForm.dobDay}-${personalForm.dobMonth}-${personalForm.dobYear}`;
-        
-        const maritalText = isHindi
-          ? (personalForm.maritalStatus === 'Single' ? 'एकल' : personalForm.maritalStatus === 'Married' ? 'विवाहित' : personalForm.maritalStatus === 'Divorced' ? 'तलाकशुदा' : personalForm.maritalStatus === 'Separated' ? 'अलग' : personalForm.maritalStatus === 'Widowed' ? 'विधवा/विधुर' : personalForm.maritalStatus)
-          : personalForm.maritalStatus;
-
-        const occupationText = isHindi
-          ? (personalForm.occupation === 'Student' ? 'छात्र' : personalForm.occupation === 'Private Job' ? 'प्राइवेट नौकरी' : personalForm.occupation === 'Government Job' ? 'सरकारी नौकरी' : personalForm.occupation === 'Business Owner' ? 'व्यापार मालिक' : personalForm.occupation === 'Self Employed' ? 'स्व-नियोजित' : personalForm.occupation === 'Homemaker' ? 'गृहणी' : personalForm.occupation === 'Retired' ? 'सेवानिवृत्त' : personalForm.occupation === 'Other' ? 'अन्य' : personalForm.occupation)
-          : personalForm.occupation;
-
-        const introMessage = `🧾 Birth Details Submitted
-
-👤 ${personalForm.name}
-${genderIcon} ${genderText}
-🎂 ${dobFormatted}
-💍 ${maritalText}
-💼 ${occupationText}
-🕐 ${timeOfBirth}
-📍 ${placeOfBirth}
-
-Kripya meri janm jankari ke anusar margdarshan dein.`;
-
-        setMessages([
-          {
-            role: "user",
-            type: "profile",
-            content: introMessage
-          }
-        ]);
-      } catch (err) {
-        console.error("Error saving profile details:", err);
-      } finally {
-        setLoading(false);
+    if (isRequiredFormValid) {
+      if (hasMissingOptional) {
+        setShowAccuracyModal(true);
+        return;
       }
+      await submitProfile();
     }
   };
 
@@ -601,7 +748,7 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
     setInputText('');
 
     const isFree = !user?.premium && !user?.dailyQuestionUsed;
-    const hasEnoughCoins = (user?.coins || 0) >= 30;
+    const hasEnoughCoins = (user?.coins || 0) >= QUESTION_COST;
 
     if (!user?.premium && !isFree && !hasEnoughCoins) {
       setShowLowCoinsModal(true);
@@ -615,29 +762,14 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
     <div className="px-6 space-y-4 animate-fade-in py-6">
       <div className="glass-card p-6 rounded-[2rem] border-white/5 space-y-4">
         <h2 className="text-mystic-gold text-[10px] font-black uppercase tracking-widest text-center">Birth Details</h2>
-        <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="e.g. Rahul" />
+        
+        {/* REQUIRED FIELDS */}
+        <InputField label={t.name} value={personalForm.name} onChange={e => setPersonalForm({...personalForm, name: e.target.value})} placeholder="e.g. Rahul" required />
         
         <div className="space-y-1.5">
-          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.gender}</label>
-          <div className="grid grid-cols-3 gap-2">
-            {genderOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setPersonalForm({ ...personalForm, gender: opt.value })}
-                className={`py-2.5 text-[10px] font-bold rounded-xl border transition-all ${
-                  personalForm.gender === opt.value 
-                    ? 'bg-mystic-gold text-mystic-indigo border-mystic-gold' 
-                    : 'bg-white/5 text-white/40 border-white/10 hover:border-white/20'
-                }`}
-              >
-                {opt.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.dob}</label>
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">
+            {t.dob} <span className="text-red-500">*</span>
+          </label>
           <div className="grid grid-cols-3 gap-2">
             <SelectorButton value={personalForm.dobDay} options={days} placeholder={t.day} title="Select Day" onSelect={(val) => setPersonalForm(p => ({ ...p, dobDay: val }))} setPickerConfig={setPickerConfig} />
             <SelectorButton value={personalForm.dobMonth} options={months} placeholder={t.month} title="Select Month" onSelect={(val) => setPersonalForm(p => ({ ...p, dobMonth: val }))} setPickerConfig={setPickerConfig} />
@@ -650,47 +782,10 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
           )}
         </div>
 
-        <div className="space-y-1.5 animate-fade-in">
-          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">Marital Status</label>
-          <SelectorButton 
-            value={personalForm.maritalStatus} 
-            options={[
-              { name: isHindi ? 'एकल' : 'Single', value: 'Single' },
-              { name: isHindi ? 'विवाहित' : 'Married', value: 'Married' },
-              { name: isHindi ? 'तलाकशुदा' : 'Divorced', value: 'Divorced' },
-              { name: isHindi ? 'अलग' : 'Separated', value: 'Separated' },
-              { name: isHindi ? 'विधवा/विधुर' : 'Widowed', value: 'Widowed' }
-            ]} 
-            placeholder="Select Marital Status" 
-            title="Select Marital Status" 
-            onSelect={(val) => setPersonalForm(p => ({ ...p, maritalStatus: val }))} 
-            setPickerConfig={setPickerConfig} 
-          />
-        </div>
-
-        <div className="space-y-1.5 animate-fade-in">
-          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">Occupation</label>
-          <SelectorButton 
-            value={personalForm.occupation} 
-            options={[
-              { name: isHindi ? 'छात्र' : 'Student', value: 'Student' },
-              { name: isHindi ? 'प्राइवेट नौकरी' : 'Private Job', value: 'Private Job' },
-              { name: isHindi ? 'सरकारी नौकरी' : 'Government Job', value: 'Government Job' },
-              { name: isHindi ? 'व्यापार मालिक' : 'Business Owner', value: 'Business Owner' },
-              { name: isHindi ? 'स्व-नियोजित' : 'Self Employed', value: 'Self Employed' },
-              { name: isHindi ? 'गृहणी' : 'Homemaker', value: 'Homemaker' },
-              { name: isHindi ? 'सेवानिवृत्त' : 'Retired', value: 'Retired' },
-              { name: isHindi ? 'अन्य' : 'Other', value: 'Other' }
-            ]} 
-            placeholder="Select Occupation" 
-            title="Select Occupation" 
-            onSelect={(val) => setPersonalForm(p => ({ ...p, occupation: val }))} 
-            setPickerConfig={setPickerConfig} 
-          />
-        </div>
-
         <div className="space-y-1.5">
-          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.tob}</label>
+          <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">
+            {t.tob} <span className="text-red-500">*</span>
+          </label>
           <div className="grid grid-cols-3 gap-2">
             <SelectorButton value={personalForm.tobHour} options={hours} placeholder={t.hour} title="Select Hour" onSelect={(val) => setPersonalForm(p => ({ ...p, tobHour: val }))} setPickerConfig={setPickerConfig} />
             <SelectorButton value={personalForm.tobMinute} options={minutes} placeholder={t.min} title="Select Minute" onSelect={(val) => setPersonalForm(p => ({ ...p, tobMinute: val }))} setPickerConfig={setPickerConfig} />
@@ -698,10 +793,78 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
           </div>
         </div>
 
-        <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="e.g. New Delhi" />
+        {/* COLLAPSED OPTIONAL FIELDS */}
+        <details className="group w-full space-y-4">
+          <summary className="text-[10px] font-black uppercase tracking-widest text-mystic-gold/80 cursor-pointer list-none flex items-center justify-center gap-1 hover:text-mystic-gold transition-colors py-2">
+            <span>More details (recommended for higher accuracy)</span>
+            <span className="transition-transform duration-300 group-open:rotate-180">▼</span>
+          </summary>
+          <div className="pt-4 space-y-4 border-t border-white/5 animate-fade-in">
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">{t.gender}</label>
+              <div className="grid grid-cols-3 gap-2">
+                {genderOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPersonalForm({ ...personalForm, gender: opt.value })}
+                    className={`py-2.5 text-[10px] font-bold rounded-xl border transition-all ${
+                      personalForm.gender === opt.value 
+                        ? 'bg-mystic-gold text-mystic-indigo border-mystic-gold' 
+                        : 'bg-white/5 text-white/40 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    {opt.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">Marital Status</label>
+              <SelectorButton 
+                value={personalForm.maritalStatus} 
+                options={[
+                  { name: isHindi ? 'एकल' : 'Single', value: 'Single' },
+                  { name: isHindi ? 'विवाहित' : 'Married', value: 'Married' },
+                  { name: isHindi ? 'तलाकशुदा' : 'Divorced', value: 'Divorced' },
+                  { name: isHindi ? 'अलग' : 'Separated', value: 'Separated' },
+                  { name: isHindi ? 'विधवा/विधुर' : 'Widowed', value: 'Widowed' }
+                ]} 
+                placeholder="Select Marital Status" 
+                title="Select Marital Status" 
+                onSelect={(val) => setPersonalForm(p => ({ ...p, maritalStatus: val }))} 
+                setPickerConfig={setPickerConfig} 
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-widest text-mystic-gold font-bold ml-1">Occupation</label>
+              <SelectorButton 
+                value={personalForm.occupation} 
+                options={[
+                  { name: isHindi ? 'छात्र' : 'Student', value: 'Student' },
+                  { name: isHindi ? 'प्राइवेट नौकरी' : 'Private Job', value: 'Private Job' },
+                  { name: isHindi ? 'सरकारी नौकरी' : 'Government Job', value: 'Government Job' },
+                  { name: isHindi ? 'व्यापार मालिक' : 'Business Owner', value: 'Business Owner' },
+                  { name: isHindi ? 'स्व-नियोजित' : 'Self Employed', value: 'Self Employed' },
+                  { name: isHindi ? 'गृहणी' : 'Homemaker', value: 'Homemaker' },
+                  { name: isHindi ? 'सेवानिवृत्त' : 'Retired', value: 'Retired' },
+                  { name: isHindi ? 'अन्य' : 'Other', value: 'Other' }
+                ]} 
+                placeholder="Select Occupation" 
+                title="Select Occupation" 
+                onSelect={(val) => setPersonalForm(p => ({ ...p, occupation: val }))} 
+                setPickerConfig={setPickerConfig} 
+              />
+            </div>
+
+            <InputField label={t.pob} value={personalForm.pob} onChange={e => setPersonalForm({...personalForm, pob: e.target.value})} placeholder="e.g. New Delhi" />
+          </div>
+        </details>
       </div>
 
-      <Button fullWidth variant="gold" onClick={handleStartChat} disabled={!isFormValid} className="h-14 text-base tracking-widest">
+      <Button fullWidth variant="gold" onClick={handleStartChat} disabled={!isRequiredFormValid} className="h-14 text-base tracking-widest">
         {t.startChat}
       </Button>
     </div>
@@ -731,11 +894,15 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
                   : 'bg-white/5 text-white/90 border border-white/10 max-w-[95%] rounded-tl-none backdrop-blur-md'
                 }
               `}>
-                {msg.content.split('\n').map((line, idx) => (
-                  <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
-                    {line}
-                  </p>
-                ))}
+                {msg.role === 'model' ? (
+                  <AiMessageContent content={msg.content} />
+                ) : (
+                  msg.content.split('\n').map((line, idx) => (
+                    <p key={idx} className={line.trim() ? "mb-4 last:mb-0" : "h-2"}>
+                      {line}
+                    </p>
+                  ))
+                )}
               </div>
             </div>
           ))}
@@ -775,12 +942,22 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={t.question}
-            className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-16 py-5 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.6)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
+            className="w-full bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 rounded-full pl-8 pr-32 py-5 text-white text-base shadow-[0_8px_32px_rgba(0,0,0,0.6)] focus:outline-none focus:border-mystic-gold/40 transition-all placeholder:text-white/20"
           />
+          <div className="absolute right-[68px] flex items-center gap-1 bg-[#020617]/80 border border-mystic-gold/20 px-2.5 py-1 rounded-full text-[10px] font-black text-mystic-gold/80 shadow-md pointer-events-none select-none z-10">
+            <span>{QUESTION_COST}</span>
+            <span>🪙</span>
+          </div>
           <button 
             type="submit" 
-            disabled={loading || !inputText.trim()}
-            className="absolute right-3 w-12 h-12 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer z-10"
+            disabled={
+              loading ||
+              !inputText.trim() ||
+              isInsufficient
+            }
+            className={`absolute right-3 w-12 h-12 bg-mystic-gold text-mystic-indigo rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:scale-105 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer z-10 ${
+              isInsufficient ? 'opacity-30 grayscale' : ''
+            }`}
           >
             <span className="text-xl font-black">➔</span>
           </button>
@@ -824,9 +1001,18 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
                 🔄 {t.newChat}
               </button>
             )}
-            <div className="flex items-center gap-1.5 bg-mystic-gold/10 px-3 py-1.5 rounded-full border border-mystic-gold/20">
-               <span className="text-xs">🪙</span>
-               <span className="text-mystic-gold font-black text-xs">{user?.coins || 0}</span>
+            <div className="flex flex-col items-end">
+              <span className="text-[8px] uppercase tracking-widest text-white/40 font-bold">Balance</span>
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all duration-300 ${
+                (user?.coins || 0) < QUESTION_COST
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : (user?.coins || 0) < 100
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse'
+                  : 'bg-mystic-gold/10 border-mystic-gold/20 text-mystic-gold'
+              }`}>
+                <span className="font-black text-xs">{user?.coins || 0}</span>
+                <span className="text-xs">🪙</span>
+              </div>
             </div>
           </div>
         </div>
@@ -843,24 +1029,67 @@ Kripya meri janm jankari ke anusar margdarshan dein.`;
       </div>
 
       {showLowCoinsModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card p-8 rounded-[32px] w-full max-w-sm border border-white/10 text-center space-y-6">
-            <div className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-4xl mx-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="fixed inset-0" onClick={() => setShowLowCoinsModal(false)} />
+          <div className="glass-card p-8 rounded-[32px] w-full max-w-sm border border-mystic-gold/30 text-center space-y-6 relative z-10 shadow-[0_20px_60px_rgba(0,0,0,0.8)] transition-all">
+            <div className="w-20 h-20 rounded-full bg-mystic-gold/10 border border-mystic-gold/30 flex items-center justify-center text-4xl mx-auto shadow-[0_0_20px_rgba(212,175,55,0.2)] animate-pulse">
               <span className="text-white">🪙</span>
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white">{t.notEnough}</h2>
-              <p className="text-white/60 text-sm">{t.modalSub}</p>
+              <h2 className="text-2xl font-black uppercase tracking-wider premium-gradient-text text-white">{t.notEnough}</h2>
+              <p className="text-white/70 text-sm leading-relaxed">{t.modalSub}</p>
             </div>
             <div className="flex flex-col gap-3">
-              <Button fullWidth variant="gold" onClick={() => navigate('/premium')}>
+              <Button fullWidth variant="gold" onClick={() => navigate('/premium')} className="py-4 font-black tracking-widest hover:scale-105 active:scale-95 transition-all">
                 {t.upgradeButton}
               </Button>
-              <Button fullWidth variant="primary" onClick={() => navigate('/')}>
+              <Button fullWidth variant="primary" onClick={() => navigate('/')} className="py-4 font-black tracking-widest hover:scale-105 active:scale-95 transition-all">
                 {t.earnButton}
               </Button>
-              <button onClick={() => setShowLowCoinsModal(false)} className="text-xs font-bold text-white/40 uppercase tracking-widest pt-2">
+              <button 
+                onClick={() => setShowLowCoinsModal(false)} 
+                className="text-xs font-black text-white/40 uppercase tracking-[0.2em] hover:text-white/60 transition-colors pt-2"
+              >
                 {t.maybeLater}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccuracyModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="fixed inset-0" onClick={() => setShowAccuracyModal(false)} />
+          <div className="glass-card p-8 rounded-[32px] w-full max-w-sm border border-mystic-gold/30 text-center space-y-6 relative z-10 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-mystic-gold/10 border border-mystic-gold/20 flex items-center justify-center text-3xl mx-auto">
+              🔮
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-mystic-gold">Higher Accuracy</h3>
+              <p className="text-white/80 text-xs leading-relaxed text-left max-w-[240px] mx-auto">
+                For better prediction accuracy you can also provide:<br />
+                • Birth Place<br />
+                • Gender<br />
+                • Marital Status<br />
+                • Occupation
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <Button fullWidth variant="gold" onClick={() => {
+                setShowAccuracyModal(false);
+                const detailsEl = document.querySelector('details');
+                if (detailsEl) detailsEl.open = true;
+              }} className="py-4 font-black tracking-widest hover:scale-105 active:scale-95 transition-all">
+                Add Details
+              </Button>
+              <button 
+                onClick={async () => {
+                  setShowAccuracyModal(false);
+                  await submitProfile();
+                }} 
+                className="text-xs font-black text-white/40 uppercase tracking-[0.2em] hover:text-white/60 transition-colors pt-2"
+              >
+                Continue Anyway
               </button>
             </div>
           </div>
