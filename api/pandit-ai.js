@@ -781,6 +781,69 @@ const AI_QUESTION_COST = 30; // Increased from 25
 
 // Rate limiting map replaced by Firestore transaction rate limiter
 
+function detectQuestionLanguage(text) {
+  if (!text) return 'Hindi';
+  const cleanText = text.toLowerCase().trim();
+
+  // Common Hinglish words
+  const hinglishWords = [
+    'kab', 'hogi', 'hoga', 'hai', 'meri', 'mera', 'kya', 'shadi', 'shaadi', 'karein',
+    'gaya', 'ho', 'nahi', 'rahi', 'patni', 'beti', 'beta', 'santan', 'karza', 'kaise',
+    'kabse', 'milegi', 'lagegi', 'se', 'ko', 'ki', 'ka', 'ke', 'bata', 'rha', 'raha',
+    'rhi', 'rahi', 'hun', 'hoon', 'tha', 'thi', 'the', 'kuch', 'baat', 'par', 'vivaah',
+    'kis', 'kisko', 'he', 'h', 'hai', 'taraf', 'tarah', 'kare', 'kar', 'karna'
+  ];
+
+  // Common English helper/question words
+  const englishWords = [
+    'when', 'will', 'what', 'is', 'my', 'get', 'married', 'relationship', 'talking',
+    'job', 'career', 'business', 'health', 'future', 'about', 'for', 'why', 'how',
+    'who', 'the', 'shall', 'does', 'did', 'are', 'you', 'your', 'should', 'would',
+    'could', 'have', 'has', 'was', 'were', 'which', 'an', 'of', 'to', 'with', 'our',
+    'i', 'me', 'we', 'us', 'they', 'them', 'he', 'she', 'his', 'her', 'ex'
+  ];
+
+  const words = cleanText.split(/[^a-zA-Z]+/);
+  let hinglishCount = 0;
+  let englishCount = 0;
+
+  for (const word of words) {
+    if (!word) continue;
+    if (hinglishWords.includes(word)) {
+      hinglishCount++;
+    }
+    if (englishWords.includes(word)) {
+      englishCount++;
+    }
+  }
+
+  if (hinglishCount > 0 || englishCount === 0) {
+    return 'Hindi';
+  }
+  return 'English';
+}
+
+function getSecretCategory(intent) {
+  if (!intent) return 'General';
+  const clean = intent.toLowerCase();
+  if (clean.includes('love') || clean.includes('breakup') || clean.includes('gf') || clean.includes('girlfriend') || clean.includes('boyfriend') || clean.includes('ex')) {
+    return 'Love';
+  }
+  if (clean.includes('marry') || clean.includes('marriage') || clean.includes('spouse') || clean.includes('wife') || clean.includes('husband') || clean.includes('vivaah') || clean.includes('shadi')) {
+    return 'Marriage';
+  }
+  if (clean.includes('job') || clean.includes('work') || clean.includes('salary') || clean.includes('career') || clean.includes('promotion') || clean.includes('ssc') || clean.includes('upsc')) {
+    return 'Career';
+  }
+  if (clean.includes('business') || clean.includes('shop') || clean.includes('investment') || clean.includes('profit') || clean.includes('loss') || clean.includes('client') || clean.includes('debt') || clean.includes('karz')) {
+    return 'Business';
+  }
+  if (clean.includes('health') || clean.includes('stress') || clean.includes('accident') || clean.includes('disease') || clean.includes('pain')) {
+    return 'Health';
+  }
+  return 'General';
+}
+
 function getLevel(score) {
   if (score < 100) return 'Seeker';
   if (score < 300) return 'Explorer';
@@ -788,7 +851,7 @@ function getLevel(score) {
   return 'Master';
 }
 
-async function injectSecretAndScore(text, uid, userData, cachedProgress = null) {
+async function injectSecretAndScore(text, uid, userData, cachedProgress = null, category = 'General') {
   if (!text) return text;
 
   const progressUid = userData?.uid || uid || 'guest';
@@ -804,7 +867,7 @@ async function injectSecretAndScore(text, uid, userData, cachedProgress = null) 
   }
   const today = new Date().toISOString().split('T')[0];
   const dobKey = (userData?.dobDay || '') + '' + (userData?.dobMonth || '') + '' + (userData?.dobYear || '');
-  const secret = getDailySecret(dobKey, today);
+  const secret = getDailySecret(dobKey, today, category);
   const nextLevel = Math.ceil((progress.score + 1) / 100) * 100;
 
   let cleaned = text;
@@ -1154,7 +1217,7 @@ export default async function handler(req, res) {
 
     if (currentMarital === 'Single' && asksAboutSpouse) {
       const safeText = "🔮 Prediction:\nAapke profile ke anusaar aap avivahit hain, isliye vivah/santan sambandhit prashn laagu nahi hota.\n\n📿 Reasoning:\nCurrent profile me marital status Single hai.\n\n🪔 Guidance:\nYadi bhavishya ke vivaah ya sambandh ke baare me poochna hai to uske baare me pooch sakte hain.";
-      return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData, progress) });
+      return res.status(200).json({ text: await injectSecretAndScore(safeText, uid, userData, progress, getSecretCategory(detectedIntent)) });
     }
 
     if (currentMarital === 'Single' && asksMarriageStatus) {
@@ -1189,6 +1252,13 @@ Current Month: ${monthName}
 Current Day: ${weekdayName}
 Current Quarter: ${quarter}
 Current Season: ${season}`;
+
+  // Existing language resolution flow extended with final fallback auto-detection
+  let resolvedLanguage = req.body.language || userData?.language;
+  if (!resolvedLanguage || resolvedLanguage === 'Unknown') {
+    resolvedLanguage = detectQuestionLanguage(questionText);
+  }
+  const languagePreference = resolvedLanguage === 'English' ? 'English' : 'Hinglish (Hindi written in Roman script)';
 
   const systemInstruction = `Speak as AstroTarot AI Predictor. Natural Hindi. No baba talk.
 Understand occupation semantically.
@@ -1242,6 +1312,7 @@ Every answer must include:
 [Confidence score: High / Medium / Low]
 
 Rules:
+* Reply completely in the requested language: ${languagePreference}. Never mix English and Hinglish in the same response. If language is English, write prediction, reasoning, guidance, remedy and tip in standard English. If language is Hinglish, write them in warm Hinglish/Hindi written in Roman script (e.g. 'Aapki shadi 2026 me hogi').
 * Job/marriage: mention antardashaEnd. If missing: 'Kundali data me timeline uplabdh nahi hai'. No vague timelines.
 * Simple Hindi. No emojis except 🔮, 📿, 🪔, 🙏, ✨, 📊.
 * 80-130 words.`;
@@ -1335,7 +1406,7 @@ Rules:
 
     if (!dobDay || !dobMonth || !dobYear) {
       const errText = `🔮 Prediction:\n${userData.name || ''} ji, janm tarikh sahi format me nahi mili.\n\n📿 Reasoning:\nKripya DOB DD-MM-YYYY format me daalein.\n\n🪔 Guidance:\nDetails dobara submit karke prashna puchiye.`;
-      return res.status(200).json({ text: await injectSecretAndScore(errText, uid, userData, progress) });
+      return res.status(200).json({ text: await injectSecretAndScore(errText, uid, userData, progress, getSecretCategory(detectedIntent)) });
     }
 
     dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
@@ -1437,7 +1508,7 @@ Rules:
     const occupation = profile?.occupation || userData?.occupation || 'Unknown';
     factMemoryBlock += `Occupation: ${occupation}\n`;
 
-    const language = req.body.language || userData?.language || 'Hindi';
+    const language = resolvedLanguage;
     factMemoryBlock += `Language Preference: ${language}`;
 
     promptSections.push(factMemoryBlock.trim());
@@ -1554,7 +1625,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         }
 
         // Check astrology hallucinations (Step 11)
-        const validatedText = await injectSecretAndScore(aiText, uid, userData, progress);
+        const validatedText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent));
         if (!needsRetry && !validateAstroResponse(validatedText, astroData)) {
           needsRetry = true;
           retryReason = "hallucination";
@@ -1589,7 +1660,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         aiText = await generateAIResponse(retryPrompt);
         aiText = humanize(aiText);
 
-        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData, progress);
+        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent));
         needsRetry =
           containsForbiddenPhrases(aiText, updatedFacts)
           ||
@@ -1608,7 +1679,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       if (needsRetry && retryCount >= 2) {
         console.error("VALIDATION_FAILED_3X");
         const failText = `🔮 Prediction:\nTakneeki karan se vistar se nahi bata pa raha.\n\n📿 Reasoning:\nKundali data verify nahi ho paya.\n\n🪔 Guidance:\nKuch der baad dobara try karein.`;
-        return res.status(200).json({ text: await injectSecretAndScore(humanize(failText), uid, userData, progress) });
+        return res.status(200).json({ text: await injectSecretAndScore(humanize(failText), uid, userData, progress, getSecretCategory(detectedIntent)) });
       }
 
       if (!aiText || !aiText.trim()) {
@@ -1618,7 +1689,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
       if (mode === 'chat' || mode === 'personal') {
         const deduplicatedText = removeDuplicateSentences(aiText);
         jsonResponse = {
-          text: await injectSecretAndScore(deduplicatedText, uid, userData, progress)
+          text: await injectSecretAndScore(deduplicatedText, uid, userData, progress, getSecretCategory(detectedIntent))
         };
       } else {
         const parsedData = parseModelResponse(aiText);
@@ -1645,7 +1716,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         const fallbackText = buildResponse(progressUid, detectedIntent, todayString, questionText);
         aiText = fallbackText;
         jsonResponse = {
-          text: await injectSecretAndScore(fallbackText, uid, userData, progress)
+          text: await injectSecretAndScore(fallbackText, uid, userData, progress, getSecretCategory(detectedIntent))
         };
         success = true;
       } catch (fallbackError) {

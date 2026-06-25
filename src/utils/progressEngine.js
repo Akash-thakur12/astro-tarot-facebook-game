@@ -46,15 +46,58 @@ export async function updateProgress(uid, action, cachedProgress = null) {
   }
 }
 
-export function getDailySecret(dob, today) {
-  const hash = (dob + today).split('').reduce((a,b)=>a+b.charCodeAt(0),0);
-  const secrets = [
-    "Aaj 3-4 PM lucky time hai",
-    "Kaale kapde avoid karo",
-    "Laal rang pehne, confidence badhega",
-    "Pani ka daan karein",
-    "Dakshin disha me na baithen",
-    "Namak ka paani ghar me chhidkein"
-  ];
-  return secrets[hash % secrets.length];
+export function getDailySecret(dob, today, category = 'General') {
+  const secretsMap = {
+    Love: [
+      "Prem sambandho me aaj madhurta rahegi",
+      "Krodh par niyantran rakhein, sambandh bachenge",
+      "Pani me thoda gulab jal dalkar snan karein",
+      "Safed vastra dharan karein, aakarshan badhega",
+      "Sukra dev ke mantra ka jaap karein"
+    ],
+    Marriage: [
+      "Vivaah ke yog ban rahe hain",
+      "Dampatya jeevan me shanti banaye rakhein",
+      "Guru grah ki pooja karein",
+      "Haldi ka tilak mathay par lagayein",
+      "Peeli cheezon ka daan karein"
+    ],
+    Career: [
+      "Naye rozgar ke avsar prapt honge",
+      "Karyakshetra me prashansa milegi",
+      "Surya ko arghya dena shuru karein",
+      "Koyla behte paani me bahayein",
+      "Nele kapde avoid karein"
+    ],
+    Business: [
+      "Aaj naya nivesh karne se bachein",
+      "Vyapaar me vridhi ke sanket hain",
+      "Budh ke beej mantra ka jaap karein",
+      "Hari moong ki daal ka daan karein",
+      "Gau seva karein, labh hoga"
+    ],
+    Health: [
+      "Swasthya par vishesh dhyan dein",
+      "Subah ki sair labhdayak rahegi",
+      "Pranayam aur dhyan karein",
+      "Mahamrityunjaya mantra ka jaap karein",
+      "Hari sabziyon ka sevan badhayein"
+    ],
+    General: [
+      "Aaj 3-4 PM lucky time hai",
+      "Kaale kapde avoid karo",
+      "Laal rang pehne, confidence badhega",
+      "Pani ka daan karein",
+      "Dakshin disha me na baithen",
+      "Namak ka paani ghar me chhidkein"
+    ]
+  };
+
+  const secrets = secretsMap[category] || secretsMap.General;
+  const hashStr = dob + today + category;
+  const hash = hashStr.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const dayOffset = new Date(today).getDate() || 1;
+  const index = (hash + dayOffset) % secrets.length;
+
+  return secrets[index];
 }
