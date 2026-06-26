@@ -43,16 +43,16 @@ async function getFactMemory(uid) {
 async function updateFactMemory(uid, question, facts = {}) {
   try {
     if (!uid) return;
-    
+
     // Ensure nested schema is migrated
     const migrated = migrateFactMemory(facts);
-    
+
     const isDeceased = DECEASED_PATTERNS.some(pattern => pattern.test(question));
     if (isDeceased) {
       setFact(migrated, 'relationship.wifeAlive', false);
       setFact(migrated, 'relationship.spouseStatus', 'deceased');
     }
-    
+
     const finalData = migrateFactMemory(migrated);
     const sanitizedData = sanitizeFactMemory(finalData);
 
@@ -62,7 +62,7 @@ async function updateFactMemory(uid, question, facts = {}) {
       .collection('factMemory')
       .doc('facts')
       .set(sanitizedData, { merge: true });
-    
+
     console.log("FACT_WRITE_SUCCESS");
   } catch (err) {
     console.error('FACT_MEMORY_WRITE_FAILED', err);
@@ -337,7 +337,7 @@ function buildAstrologyBlock(astroData) {
     return `PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE`;
   }
 
-  const planetPos = astroData.planets 
+  const planetPos = astroData.planets
     ? Object.entries(astroData.planets).map(([p, sign]) => `${p} in ${sign}`).join(", ")
     : "DATA UNAVAILABLE";
 
@@ -355,10 +355,10 @@ Houses: ${Object.entries(astroData.houses || {}).map(([p, h]) => `${p}: ${h}th`)
 }
 
 const NAKSHATRAS = [
-  "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", 
-  "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni", 
-  "Hasta", "Chitra", "Swati", "Visakha", "Anuradha", "Jyeshtha", 
-  "Mula", "Purva Ashadha", "Uttara Ashadha", "Sravana", "Dhanishta", "Shatabhisha", 
+  "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
+  "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
+  "Hasta", "Chitra", "Swati", "Visakha", "Anuradha", "Jyeshtha",
+  "Mula", "Purva Ashadha", "Uttara Ashadha", "Sravana", "Dhanishta", "Shatabhisha",
   "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
 ];
 
@@ -529,7 +529,7 @@ function validateAstroResponse(text, astroData) {
   }
 
   // Check ALL 12 Lagnas
-  const lagnas = ['mesh','vrishabh','mithun','kark','simha','kanya','tula','vrishchik','dhanu','makar','kumbh','meen'];
+  const lagnas = ['mesh', 'vrishabh', 'mithun', 'kark', 'simha', 'kanya', 'tula', 'vrishchik', 'dhanu', 'makar', 'kumbh', 'meen'];
   for (const lagna of lagnas) {
     if (lower.includes(lagna + ' lagna') || lower.includes(lagna + ' लग्न')) {
       const calcLagna = (hasAstro && astroData.lagna) ? astroData.lagna.toLowerCase() : "";
@@ -604,15 +604,15 @@ function containsForbiddenPhrases(text, factMemory = {}) {
   if (!text) return false;
   let checkText = text;
   checkText = checkText.replace(/Haan\s+Beta,\s+sun\s+raha\s+hun/gi, "");
-  
-  const blacklist = ['beta','😂','😁','😆'];
+
+  const blacklist = ['beta', '😂', '😁', '😆'];
   if (blacklist.some(w => checkText.toLowerCase().includes(w))) return true;
 
   const INVALID_RASHI_PATTERN = /(surya|chandra|mangal|budh|guru|shukra|shani|rahu|ketu)\s+(rashi|राशि)\s+me/gi;
   if ([...checkText.matchAll(INVALID_RASHI_PATTERN)].length > 0) return true;
 
   const lower = checkText.toLowerCase();
-  
+
   const forbidden = [
     "beta",
     "बेटा",
@@ -627,7 +627,7 @@ function containsForbiddenPhrases(text, factMemory = {}) {
     "taare dekho",
     "atkal"
   ];
-  
+
   for (const term of forbidden) {
     if (lower.includes(term.toLowerCase())) {
       return true;
@@ -672,7 +672,7 @@ export function parseModelResponse(text) {
 
   const cleanText = text.trim();
   const cleanedJSONText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  
+
   if (cleanedJSONText.startsWith('{')) {
     try {
       const parsed = JSON.parse(cleanedJSONText);
@@ -750,24 +750,24 @@ export function parseModelResponse(text) {
 
 function sanitizePromptInput(text) {
   if (!text || typeof text !== 'string') return '';
-  
+
   let sanitized = text;
-  
+
   // Remove potential instruction injection patterns
   sanitized = sanitized.replace(/ignore previous instructions/gi, '');
   sanitized = sanitized.replace(/system:/gi, '');
   sanitized = sanitized.replace(/assistant:/gi, '');
   sanitized = sanitized.replace(/developer:/gi, '');
   sanitized = sanitized.replace(/user:/gi, '');
-  
+
   // Collapse repeated spaces
   sanitized = sanitized.replace(/\s+/g, ' ');
-  
+
   // Limit size to 1000 chars
   if (sanitized.length > 1000) {
     sanitized = sanitized.substring(0, 1000);
   }
-  
+
   return sanitized.trim();
 }
 
@@ -798,18 +798,18 @@ function getCleanTopicName(intent) {
 
 function removeDuplicateSentences(text) {
   if (!text || typeof text !== 'string') return text;
-  
+
   const sentences = text.match(/[^.!?।|]+(?:[.!?।|]+|\s*$)/g) || [text];
-  
+
   const uniqueSentences = [];
   const seenRecords = [];
-  
+
   for (const sentence of sentences) {
     const trimmed = sentence.trim();
     if (!trimmed) continue;
-    
+
     const normalized = trimmed.toLowerCase().replace(/[^a-z0-9\u0900-\u097F]/gi, '');
-    
+
     let isDuplicate = false;
     for (const record of seenRecords) {
       if (normalized === record.normalized) {
@@ -822,13 +822,13 @@ function removeDuplicateSentences(text) {
         break;
       }
     }
-    
+
     if (!isDuplicate) {
       uniqueSentences.push(trimmed);
       seenRecords.push({ original: trimmed, normalized: normalized });
     }
   }
-  
+
   return uniqueSentences.join(' ');
 }
 
@@ -872,8 +872,8 @@ function isGreetingMessage(text) {
   if (!text) return false;
   const q = text.toLowerCase().trim().replace(/[^a-z0-9\s\u0900-\u097F]/g, '');
   const greetings = [
-    'hi', 'hello', 'hey', 'hii', 'hlo', 'namaste', 'ram ram', 'ramram', 'guru ji', 'guruji', 
-    'pandit ji', 'panditji', 'pandi ji', 'pandiji', 'pranam', 'pranaam', 'baba', 
+    'hi', 'hello', 'hey', 'hii', 'hlo', 'namaste', 'ram ram', 'ramram', 'guru ji', 'guruji',
+    'pandit ji', 'panditji', 'pandi ji', 'pandiji', 'pranam', 'pranaam', 'baba',
     'radhe radhe', 'jai shree ram', 'hi pandit ji', 'hello pandit ji', 'pranam pandit ji',
     'hlo pandi ji', 'hlo pandit ji', 'hello pandi ji', 'pranam pandi ji', 'hii pandit ji', 'hii pandi ji',
     'नमस्ते', 'राम राम', 'प्रणाम', 'गुरु जी', 'गुरुजी', 'पंडित जी', 'पंडितजी', 'बाबा', 'राधे राधे', 'जय श्री राम'
@@ -1103,13 +1103,13 @@ export default async function handler(req, res) {
 
   const rateLimitRef = db.collection('rateLimits').doc(uid);
   let rateLimitHit = false;
-  
+
   try {
     await db.runTransaction(async (tx) => {
       const docSnap = await tx.get(rateLimitRef);
       let count = 0;
       let windowStart = nowMs;
-      
+
       if (docSnap.exists) {
         const data = docSnap.data();
         if (data && typeof data.count === 'number' && typeof data.windowStart === 'number') {
@@ -1117,22 +1117,22 @@ export default async function handler(req, res) {
           windowStart = data.windowStart;
         }
       }
-      
+
       if (nowMs - windowStart > 60000) {
         count = 0;
         windowStart = nowMs;
         console.log("RATE_LIMIT_RESET");
       }
-      
+
       if (count >= 20) {
         rateLimitHit = true;
         console.log("RATE_LIMIT_HIT");
         return;
       }
-      
+
       const newCount = count + 1;
       const updateData = { count: newCount, windowStart };
-      
+
       if (docSnap.exists && typeof tx.update === 'function') {
         tx.update(rateLimitRef, updateData);
       } else if (typeof tx.set === 'function') {
@@ -1144,7 +1144,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Rate limiter transaction failed:", error);
   }
-  
+
   if (rateLimitHit) {
     return res.status(429).json({ error: 'Too many requests. Please wait a minute.' });
   }
@@ -1216,11 +1216,11 @@ export default async function handler(req, res) {
     const questionTextNormalized = (userData.question || '').trim().toLowerCase();
 
     // Check for AI identity questions: "tuje kisne banaya" (Step 3)
-    if (questionTextNormalized.includes("tuje kisne banaya") || 
-        questionTextNormalized.includes("tujhe kisne banaya") || 
-        questionTextNormalized.includes("tumhe kisne banaya") || 
-        /who\s+(created|made|built)\s+you/i.test(questionTextNormalized) ||
-        (questionTextNormalized.includes("kisne") && questionTextNormalized.includes("banaya"))) {
+    if (questionTextNormalized.includes("tuje kisne banaya") ||
+      questionTextNormalized.includes("tujhe kisne banaya") ||
+      questionTextNormalized.includes("tumhe kisne banaya") ||
+      /who\s+(created|made|built)\s+you/i.test(questionTextNormalized) ||
+      (questionTextNormalized.includes("kisne") && questionTextNormalized.includes("banaya"))) {
       return res.status(200).json({
         text: "Main AstroTarot AI hoon. Mujhe AI models aur AstroTarot system ne banaya hai."
       });
@@ -1365,7 +1365,7 @@ export default async function handler(req, res) {
   const monthName = now.toLocaleString('en-US', { month: 'long' });
   const weekdayName = now.toLocaleString('en-US', { weekday: 'long' });
   const quarter = `Q${Math.floor(monthNum / 3) + 1}`;
-  
+
   // Seasonal Logic (approximate for general AI context)
   let season = "Winter";
   if (monthNum >= 2 && monthNum <= 4) season = "Spring";
@@ -1385,7 +1385,7 @@ Current Season: ${season}`;
   if (!resolvedLanguage || resolvedLanguage === 'Unknown') {
     resolvedLanguage = detectQuestionLanguage(questionText);
   }
-  
+
   const isDevanagari = /[\u0900-\u097F]/.test(questionText);
   let languagePreference = "";
   if (resolvedLanguage === 'English') {
@@ -1424,7 +1424,7 @@ Current Season: ${season}`;
   if (mode === 'chat' || mode === 'personal') {
     const birthDetails = userData?.birthDetails || userData || {};
     name = profile?.name || birthDetails.name || 'Unknown';
-    
+
     let resolvedGender = 'Unknown';
     if (birthDetails.gender && birthDetails.gender !== 'Unknown') {
       resolvedGender = birthDetails.gender;
@@ -1581,7 +1581,7 @@ Current Season: ${season}`;
     }
     updatedFacts = migrateFactMemory(updatedFacts);
 
-    const contradiction = (!isGreeting && !isVague) 
+    const contradiction = (!isGreeting && !isVague)
       ? detectSmartContradiction(questionText, updatedFacts, userData, history)
       : null;
 
@@ -1603,11 +1603,11 @@ Current Season: ${season}`;
 
     // Fact Memory (Married, Gender, Occupation) & Language Preference
     let factMemoryBlock = "Fact Memory:\n";
-    
+
     const isMarried = (maritalStatus === 'Married');
     factMemoryBlock += `Married: ${isMarried ? "Yes" : "No"}\n`;
     factMemoryBlock += `Gender: ${gender}\n`;
-    
+
     const occupation = profile?.occupation || userData?.occupation || 'Unknown';
     factMemoryBlock += `Occupation: ${occupation}\n`;
 
@@ -1635,7 +1635,7 @@ Marital Status: ${maritalStatus}`;
 
     // Recent Conversation (Recent 3 turns)
     const allHistoryMsgs = Array.isArray(history) ? history : [];
-    
+
     // Ensure we exclude the current question if it is the last message
     let pastHistory = [];
     if (allHistoryMsgs.length > 0) {
@@ -1650,7 +1650,7 @@ Marital Status: ${maritalStatus}`;
     const pastAssistantMsgs = pastHistory.filter(m => m.role === 'model' || m.role === 'assistant');
 
     const recentUserQuestions = pastUserMsgs.slice(-3).map(m => `- ${sanitizePromptInput(m.content)}`).join('\n');
-    
+
     const recentPanditReplies = pastAssistantMsgs.slice(-3).map((m) => {
       const content = sanitizePromptInput(m.content);
       const words = content.split(/\s+/);
@@ -1741,12 +1741,12 @@ Roz subah Surya ko jal dein.
 Kya aap jaanna chahengi kaunsa din promotion letter ke liye shubh hai?
 
 Plain text only. Max 5 lines. No headers.
-
-${modeSpecificInstruction}
 `;
 
     fullPrompt = `
 ${systemInstruction}
+
+${modeSpecificInstruction}
 
 ${promptSections.join('\n\n')}
 
@@ -1814,7 +1814,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         }
 
         // Check repetition (if no retry triggered yet)
-        const lastAssistantMsg = Array.isArray(history) 
+        const lastAssistantMsg = Array.isArray(history)
           ? [...history].reverse().find(m => m.role === 'model' || m.role === 'assistant')
           : null;
 
@@ -1972,18 +1972,18 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   console.error("ALL MODELS FAILED. Final error state recorded.");
   const finalStatusCode = lastError?.status || lastError?.response?.status || 500;
   const isQuotaError = finalStatusCode === 429 || lastError?.message?.includes("quota") || lastError?.message?.includes("429");
-  
+
   if (mode === 'chat' || mode === 'personal') {
     console.log("RESPONSE SOURCE = OFFLINE");
     const backendFallback = getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus);
     const formattedFallback = await injectSecretAndScore(backendFallback, uid, userData, progress, getSecretCategory(detectedIntent));
-    return res.status(200).json({ 
+    return res.status(200).json({
       text: formattedFallback
     });
   }
 
   console.log("RESPONSE SOURCE = OFFLINE");
-  return res.status(finalStatusCode === 429 ? 429 : 500).json({ 
+  return res.status(finalStatusCode === 429 ? 429 : 500).json({
     error: isQuotaError ? "Quota exceeded" : (lastError?.message || "Internal Server Error"),
   });
 }
