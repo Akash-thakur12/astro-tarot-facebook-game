@@ -34,7 +34,8 @@ const parsePanditResponse = (text) => {
     reasoning: null,
     guidance: null,
     secret: null,
-    karma: null
+    karma: null,
+    main: null
   };
 
   if (!text || typeof text !== 'string') {
@@ -84,6 +85,13 @@ const parsePanditResponse = (text) => {
     }
   }
 
+  // Case B fallback: capture main greeting/text if structured content starts later in string
+  if (!result.prediction && !result.reasoning && !result.guidance && (result.secret || result.karma)) {
+    if (sections[0] && sections[0].index > 0) {
+      result.main = text.substring(0, sections[0].index).trim();
+    }
+  }
+
   return result;
 };
 
@@ -108,6 +116,11 @@ const AiMessageContent = ({ content }) => {
 
   return (
     <div className="space-y-4 w-full">
+      {parsed.main && (
+        <div className="text-white/90 text-sm leading-relaxed mb-2">
+          {renderSectionContent(parsed.main)}
+        </div>
+      )}
       {parsed.prediction && (
         <div className="bg-mystic-gold/10 border border-mystic-gold/20 p-4 rounded-2xl">
           <span className="text-[10px] font-black uppercase tracking-widest text-mystic-gold block mb-1">🔮 Prediction</span>
