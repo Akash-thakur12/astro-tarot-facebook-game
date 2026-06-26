@@ -665,21 +665,87 @@ function isNewDay(lastDate, today = new Date()) {
     lastDate.getFullYear() !== today.getFullYear();
 }
 
-function parseModelResponse(text) {
-  let cleanedText = text.trim();
-  cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+export function parseModelResponse(text) {
+  if (!text || typeof text !== 'string') {
+    throw new Error('INVALID_AI_RESPONSE');
+  }
 
-  try {
-    return JSON.parse(cleanedText);
-  } catch (parseError) {
-    const scoreMatch = cleanedText.match(/"?score"?\s*:\s*(\d+)/);
-    const guidanceMatch = cleanedText.match(/"?guidance"?\s*:\s*"(.*?)"/);
+  const cleanText = text.trim();
+  const cleanedJSONText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  
+  if (cleanedJSONText.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(cleanedJSONText);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    } catch (e) {
+      // Ignore and fallback
+    }
+  }
+
+  const scoreMatch = cleanedJSONText.match(/"?score"?\s*:\s*(\d+)/);
+  if (scoreMatch) {
+    const guidanceMatch = cleanedJSONText.match(/"?guidance"?\s*:\s*"(.*?)"/);
     return {
-      score: scoreMatch ? parseInt(scoreMatch[1]) : 0,
-      guidance: guidanceMatch ? guidanceMatch[1] : cleanedText,
+      score: parseInt(scoreMatch[1]),
+      guidance: guidanceMatch ? guidanceMatch[1] : cleanText,
       sections: []
     };
   }
+
+  const result = {
+    prediction: '',
+    reasoning: '',
+    guidance: '',
+    dailySecret: '', // System injects this
+    karmaStatus: '' // System injects this
+  };
+
+  // Strategy 1: Try parsing with headers first
+  const predMatch = cleanText.match(/🔮\s*Prediction([\s\S]*?)(?=📿|🪔|🎲|📊|$)/i);
+  const reasonMatch = cleanText.match(/📿\s*Reasoning([\s\S]*?)(?=🪔|🎲|📊|$)/i);
+  const guideMatch = cleanText.match(/🪔\s*Guidance([\s\S]*?)(?=🎲|📊|$)/i);
+
+  if (predMatch || reasonMatch || guideMatch) {
+    result.prediction = predMatch ? predMatch[1].trim() : '';
+    result.reasoning = reasonMatch ? reasonMatch[1].trim() : '';
+    result.guidance = guideMatch ? guideMatch[1].trim() : '';
+  } else {
+    // Strategy 2: FALLBACK for Gemma/Plain text - Krishnamurti Style
+    const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    if (lines.length >= 1) {
+      // First 1-2 lines = Direct Answer = Prediction
+      result.prediction = lines.slice(0, 2).join(' ');
+    }
+    if (lines.length >= 3) {
+      // 3rd line = Reason
+      result.reasoning = lines[2];
+    }
+    if (lines.length >= 4) {
+      // Rest = Upay + Hook = Guidance
+      result.guidance = lines.slice(3).join(' ');
+    }
+    // If only 1-2 lines total, put all in prediction
+    if (lines.length <= 2) {
+      result.prediction = cleanText;
+      result.guidance = "Kya aap is vishay me aur detail chahengi?";
+    }
+  }
+
+  // Final Safety: If everything empty, use full text as prediction
+  if (!result.prediction && !result.reasoning && !result.guidance) {
+    result.prediction = cleanText;
+    result.guidance = "Kya aap is vishay me aur gehrai se jaanna chahengi?";
+  }
+
+  // Validation: At least prediction must exist
+  if (result.prediction.length < 5) {
+    throw new Error('INCOMPLETE_AI_RESPONSE');
+  }
+
+  return result;
 }
 
 function sanitizePromptInput(text) {
