@@ -1361,4 +1361,46 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
       expect(text.toLowerCase()).not.toContain('technical issue');
     }
   });
+
+  it('37. Verify parseModelResponse() utility behavior', async () => {
+    const { parseModelResponse } = await import('../api/pandit-ai.js');
+
+    // 1. JSON Backward Compatibility
+    const jsonInput = '{"score": 85, "guidance": "Relationship looks very compatible.", "sections": []}';
+    const parsedJson = parseModelResponse(jsonInput);
+    expect(parsedJson.score).toBe(85);
+    expect(parsedJson.guidance).toBe("Relationship looks very compatible.");
+
+    // 2. Structured Headers
+    const headerInput = `
+🔮 Prediction
+Aapko 15 Dec 2026 tak job milegi.
+
+📿 Reasoning
+10th bhav me shani gochar kar raha hai.
+
+🪔 Guidance
+Shanivaar ko til daan karein. Kya aap career ke baare me detail chahengi?
+`;
+    const parsedHeaders = parseModelResponse(headerInput);
+    expect(parsedHeaders.prediction).toContain("Aapko 15 Dec 2026 tak job milegi.");
+    expect(parsedHeaders.reasoning).toContain("10th bhav me shani gochar kar raha hai.");
+    expect(parsedHeaders.guidance).toContain("Shanivaar ko til daan karein. Kya aap career ke baare me detail chahengi?");
+
+    // 3. Fallback plaintext (Krishnamurti Style)
+    const plainInput = `
+Govt job ke 80% yog ban rahe hain agle saal.
+Mehnat badhao aur positive raho.
+Dasha me shukra aur gochar me guru anukool hain.
+Ganesh ji ki upasana karein. Kya aur kuch janna chahte hain?
+`;
+    const parsedPlain = parseModelResponse(plainInput);
+    expect(parsedPlain.prediction).toContain("Govt job ke 80% yog ban rahe hain agle saal.");
+    expect(parsedPlain.reasoning).toContain("Dasha me shukra aur gochar me guru anukool hain.");
+    expect(parsedPlain.guidance).toContain("Ganesh ji ki upasana karein. Kya aur kuch janna chahte hain?");
+
+    // 4. Short / empty safety
+    expect(() => parseModelResponse("No")).toThrow('INCOMPLETE_AI_RESPONSE');
+    expect(() => parseModelResponse(null)).toThrow('INVALID_AI_RESPONSE');
+  });
 });
