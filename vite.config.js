@@ -18,6 +18,16 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['tests/memoryEngine.spec.js', 'tests/evidenceMemoryEngine.spec.js', 'tests/aiService.spec.js', 'tests/progress.spec.js', 'tests/verification.spec.js', 'tests/semanticMemory.spec.js'],
+    include: [
+      'tests/memoryEngine.spec.js',
+      'tests/evidenceMemoryEngine.spec.js',
+      'tests/aiService.spec.js',
+      'tests/progress.spec.js',
+      'tests/verification.spec.js',
+      'tests/semanticMemory.spec.js',
+      'tests/threeTierResponse.spec.js',
+      'tests/validationSuite.spec.js',
+      'tests/specialtyEngines.spec.js'
+    ],
   },
 })

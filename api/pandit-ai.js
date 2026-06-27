@@ -11,6 +11,231 @@ import { humanize } from '../src/utils/humanizer.js';
 import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
 import { getAstrologyData } from '../src/utils/astroEngine.js';
 import { extractSemanticFacts, mergeSemanticFacts, getFact, setFact, migrateFactMemory, sanitizeFactMemory } from '../src/utils/semanticMemory.js';
+import {
+  calculateLoveEngine,
+  calculateMoneyEngine,
+  calculateDailyTransitEngine,
+  calculateHealthEngine,
+  calculateForeignTravelEngine,
+  calculateChildrenEngine,
+  getDreamMeaning,
+  getSpiritualGuidance
+} from '../src/utils/specialtyEngines.js';
+
+export function getTopicAndSubType(question) {
+  const q = question.toLowerCase();
+
+  // 1. Tier 1 - Full Engine
+  if (/naukri|job|career|promotion|vyapar|business|salary|interview|tarakki|unnati/i.test(q))
+    return { tier: 1, topic: 'career' };
+
+  if (/shadi|vivah|marriage|marry|married|rishta|engagement|jeevan saathi/i.test(q))
+    return { tier: 1, topic: 'marriage' };
+
+  // 2. Nazar (Specific Tier 3)
+  if (/nazar|negative|bhoot|kala jadu|atma|paranormal|darr/i.test(q))
+    return { tier: 3, topic: 'nazar' };
+
+  // 3. Specific Tier 2 Topics
+  if (/pyaar|love|crush|\bex\b|relationship|partner|soulmate|breakup|patch up/i.test(q))
+    return { tier: 2, topic: 'love' };
+
+  if (/paisa|\bdhan\b|rich|crorepati|lottery|stock|crypto|property|karz|wealth|financial/i.test(q))
+    return { tier: 2, topic: 'money' };
+
+  if (/health|bimari|stress|mental|recovery|surgery|fitness|swasthya|swasth|anxiety/i.test(q))
+    return { tier: 2, topic: 'health' };
+
+  if (/videsh|foreign|visa|\bpr\b|abroad/i.test(q))
+    return { tier: 2, topic: 'foreign' };
+
+  if (/bachcha|bachche|santan|pregnancy|ivf|beta|beti|family growth/i.test(q))
+    return { tier: 2, topic: 'children' };
+
+  if (/family|ghar|parents|bhai|behen|property dispute/i.test(q))
+    return { tier: 2, topic: 'family' };
+
+  // 4. Daily (Tier 2 Daily - Checked after specific Tier 2 but before Future and other Tier 3)
+  if (/\baaj\b|\bkal\b|is hafte|is mahine|daily|lucky color|number|today/i.test(q))
+    return { tier: 2, topic: 'daily' };
+
+  // 5. Future (Tier 2 Future)
+  if (/agla saal|6 mahine|kismat|turning point|success|future/i.test(q))
+    return { tier: 2, topic: 'future' };
+
+  // 6. Other Tier 3 Topics
+  if (/sapne|sapna|dream|saanp|paani|mandir|shivling/i.test(q))
+    return { tier: 3, topic: 'dreams' };
+
+  if (/isht dev|mantra|vrat|pooja|gemstone|daan|bhagya|dosh/i.test(q))
+    return { tier: 3, topic: 'spiritual' };
+
+  if (/lucky (number|color|day|date|direction|mobile|vehicle)/i.test(q))
+    return { tier: 3, topic: 'lucky' };
+
+  return { tier: 3, topic: 'general' };
+}
+
+export function calculateTier1Data(topic, astroData) {
+  if (!astroData) return null;
+  const planets = astroData.planets || {};
+  const houses = astroData.houses || {};
+  
+  const SIGN_LORDS = {
+    Mesh: 'Mars', Vrishabh: 'Venus', Mithun: 'Mercury', Kark: 'Moon', Simha: 'Sun', Kanya: 'Mercury',
+    Tula: 'Venus', Vrishchik: 'Mars', Dhanu: 'Jupiter', Makar: 'Saturn', Kumbh: 'Saturn', Meen: 'Jupiter'
+  };
+
+  const housePrefix = (planet) => {
+    const key = Object.keys(houses).find(k => k.toLowerCase() === planet.toLowerCase());
+    return key ? houses[key] : null;
+  };
+
+  if (topic === 'career') {
+    let h10_score = 10;
+    const benefics = ["moon", "mercury", "venus", "jupiter"];
+    for (const p of benefics) {
+      if (housePrefix(p) === 10) h10_score += 5;
+    }
+    if (housePrefix("rahu") === 10 || housePrefix("ketu") === 10) {
+      h10_score -= 10;
+    }
+    h10_score = Math.max(0, Math.min(20, h10_score));
+
+    const lagna = astroData.lagna || 'Mesh';
+    const SIGNS = ['Mesh', 'Vrishabh', 'Mithun', 'Kark', 'Simha', 'Kanya', 'Tula', 'Vrishchik', 'Dhanu', 'Makar', 'Kumbh', 'Meen'];
+    const lagnaIdx = SIGNS.indexOf(lagna);
+    const house10Sign = lagnaIdx !== -1 ? SIGNS[(lagnaIdx + 9) % 12] : 'Mesh';
+    const lord_10 = SIGN_LORDS[house10Sign] || 'Mars';
+    const lord_10_house = housePrefix(lord_10) || 1;
+
+    let lord10_score = 12;
+    if ([1, 4, 7, 10, 5, 9].includes(lord_10_house)) {
+      lord10_score += 8;
+    } else if ([6, 8, 12].includes(lord_10_house)) {
+      lord10_score -= 8;
+    }
+    lord10_score = Math.max(0, Math.min(20, lord10_score));
+
+    const saturn_house = housePrefix("saturn") || 1;
+    let saturn_score = 10;
+    if ([1, 4, 7, 10, 5, 9].includes(saturn_house)) {
+      saturn_score += 5;
+    } else if ([6, 8, 12].includes(saturn_house)) {
+      saturn_score -= 5;
+    }
+    saturn_score = Math.max(0, Math.min(15, saturn_score));
+
+    const jup_house = housePrefix("jupiter") || 1;
+    let jupiter_score = 8;
+    if ([10, 6, 2, 4].includes(jup_house)) {
+      jupiter_score += 7;
+    } else if ([1, 4, 7, 10, 5, 9].includes(jup_house)) {
+      jupiter_score += 3;
+    }
+    jupiter_score = Math.max(0, Math.min(15, jupiter_score));
+
+    const total_score = h10_score + lord10_score + saturn_score + jupiter_score + 10;
+
+    let dateWindow = "2026-11";
+    if (astroData.antardashaEnd) {
+      const parts = astroData.antardashaEnd.split('/');
+      if (parts.length === 2) {
+        const mm = parts[0].padStart(2, '0');
+        const yyyy = parts[1];
+        dateWindow = `${yyyy}-${mm}`;
+      }
+    }
+
+    return {
+      score: total_score,
+      date: dateWindow
+    };
+  } else if (topic === 'marriage') {
+    let h7_score = 15;
+    const benefics = ["moon", "mercury", "venus", "jupiter"];
+    const malefics = ["sun", "saturn", "rahu", "ketu", "mars"];
+    for (const p of benefics) {
+      if (housePrefix(p) === 7) h7_score += 5;
+    }
+    for (const p of malefics) {
+      if (housePrefix(p) === 7) h7_score -= 5;
+    }
+    h7_score = Math.max(0, Math.min(20, h7_score));
+
+    const lagna = astroData.lagna || 'Mesh';
+    const SIGNS = ['Mesh', 'Vrishabh', 'Mithun', 'Kark', 'Simha', 'Kanya', 'Tula', 'Vrishchik', 'Dhanu', 'Makar', 'Kumbh', 'Meen'];
+    const lagnaIdx = SIGNS.indexOf(lagna);
+    const house7Sign = lagnaIdx !== -1 ? SIGNS[(lagnaIdx + 6) % 12] : 'Mesh';
+    const lord_7 = SIGN_LORDS[house7Sign] || 'Mars';
+    const lord_7_house = housePrefix(lord_7) || 1;
+
+    let lord7_score = 12;
+    if ([1, 4, 7, 10, 5, 9].includes(lord_7_house)) {
+      lord7_score += 4;
+    } else if ([6, 8, 12].includes(lord_7_house)) {
+      lord7_score -= 4;
+    }
+    lord7_score = Math.max(0, Math.min(20, lord7_score));
+
+    const venus_house = housePrefix("venus") || 1;
+    let venus_score = 12;
+    if ([1, 4, 7, 10, 5, 9].includes(venus_house)) {
+      venus_score += 4;
+    } else if ([6, 8, 12].includes(venus_house)) {
+      venus_score -= 4;
+    }
+    venus_score = Math.max(0, Math.min(20, venus_score));
+
+    const jup_house = housePrefix("jupiter") || 1;
+    let jup_score = 9;
+    if ([1, 4, 7, 10, 5, 9].includes(jup_house)) {
+      jup_score += 3;
+    } else if ([6, 8, 12].includes(jup_house)) {
+      jup_score -= 3;
+    }
+    jup_score = Math.max(0, Math.min(15, jup_score));
+
+    const total_score = h7_score + lord7_score + venus_score + jup_score + 15;
+
+    let dateWindow = "2026-11";
+    if (astroData.antardashaEnd) {
+      const parts = astroData.antardashaEnd.split('/');
+      if (parts.length === 2) {
+        const mm = parts[0].padStart(2, '0');
+        const yyyy = parts[1];
+        dateWindow = `${yyyy}-${mm}`;
+      }
+    }
+
+    return {
+      score: total_score,
+      date: dateWindow
+    };
+  }
+  return null;
+}
+
+export function convertScore(score) {
+  if (score >= 90) return "Bahut mazboot yog";
+  if (score >= 75) return "Kaafi achhe yog";
+  if (score >= 60) return "Madhyam se achhe yog";
+  return "Mehnat aur sanyam ki avashyakta";
+}
+
+export function convertDateWindow(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+  const match = dateStr.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return dateStr;
+  const year = match[1];
+  const month = parseInt(match[2]);
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  return `${monthNames[month - 1]} ${year} ke beech`;
+}
+
 
 const DECEASED_PATTERNS = [
   /wife.*death/i,
@@ -1716,36 +1941,126 @@ The user has provided full birth details (DOB, Time of Birth, Place of Birth).
     const time = tob;
     const place = pob;
 
-    // ONLY ONE systemInstruction - No duplicates
-    const systemInstruction = `
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const todayFormatted = currentDate.toLocaleDateString('hi-IN');
+    const dayOfWeek = currentDate.toLocaleDateString('hi-IN', { weekday: 'long' });
+
+    const classification = getTopicAndSubType(questionText);
+    const tierType = classification.tier;
+    const questionTopic = classification.topic;
+
+    let tier1DataStr = "N/A";
+    let weekdayRemedy = "Om ka jaap karein";
+    if (dayOfWeek.includes('रवि') || dayOfWeek.toLowerCase().includes('sun')) weekdayRemedy = 'Surya dev ko jal arpit karein';
+    else if (dayOfWeek.includes('सोम') || dayOfWeek.toLowerCase().includes('mon')) weekdayRemedy = 'Shivling par jal chadhayein';
+    else if (dayOfWeek.includes('मंगल') || dayOfWeek.toLowerCase().includes('tue')) weekdayRemedy = 'Hanuman Chalisa ka path karein';
+    else if (dayOfWeek.includes('बुध') || dayOfWeek.toLowerCase().includes('wed')) weekdayRemedy = 'Ganesh ji ko doorva chadhayein';
+    else if (dayOfWeek.includes('गुरु') || dayOfWeek.includes('बृहस्पति') || dayOfWeek.toLowerCase().includes('thu')) weekdayRemedy = 'Vishnu ji ki puja karein aur peela tilak lagayein';
+    else if (dayOfWeek.includes('शुक्र') || dayOfWeek.toLowerCase().includes('fri')) weekdayRemedy = 'Gareeb ko doodh ya safed mithai daan karein';
+    else if (dayOfWeek.includes('शनि') || dayOfWeek.toLowerCase().includes('sat')) weekdayRemedy = 'Shani dev ke mandir me tel ka diya jalayein';
+
+    if (tierType === 1) {
+      const tier1Data = calculateTier1Data(questionTopic, astroData);
+      if (tier1Data) {
+        tier1DataStr = `Score: ${tier1Data.score}, Date: ${tier1Data.date}`;
+      }
+    }
+
+    const tierStrategyBlock = `
+=== 3-TIER RESPONSE STRATEGY CONTEXT ===
+TIER_TYPE: Tier ${tierType}
+QUESTION_TOPIC: ${questionTopic}
+TIER_1_DATA: ${tier1DataStr}
+TODAY_DATE: ${todayFormatted}
+DAY_OF_WEEK: ${dayOfWeek}
+CURRENT_YEAR: ${currentYear}
+`;
+    promptSections.push(tierStrategyBlock.trim());
+
+    let systemInstruction = "";
+    if (tierType === 1) {
+      systemInstruction = `
 You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
 
-RESPONSE STYLE - YOU MUST MATCH THIS FORMAT EXACTLY:
-Line 1: Start with "${name} Beta, aapki kundli ke hisaab se..."
-Line 2: 1-line yog/dasha ka naam
-Line 3: 1-line uska matlab simple Hindi me
-Line 4: 1-line timing ya result
-Line 5: 1-line reason: "Kyunki..."
-Line 6: 1-line upay: "Upay:"
-Line 7: End with question: "Kya aap..."
-
-FORBIDDEN phrases/words: "Aapki prashna ka seedha jawab", "Technical karan", English words (do not use English words like Career, Promotion, Job, salary, marriage. Use simple Hindi words like tarakki, naukri, vivaah, shadi, aamdani).
-
-GREETING INPUT "Hlo", "Hi", "Suno" → Reply: "Namaste ${name} Beta, mann me kya sawal hai? Jaldi batao, agle 72 ghante important hain. Kya naukri aur shadi ka raaz kholun?"
-
-MARRIED + "shaadi kab hogi" → "Aap vivahit hain. Patni se rishte sudharne ka upay: Roz subah unka chehra dekhkar muskurayein. Kya jaanna chahenge kaunsa mantra rishte me pyar layega?"
-
-Plain text only. Do not use any markdown headers.
+RESPONSE FORMAT - YOU MUST FOLLOW THIS EXACTLY:
+Summary: Start with "${name} Beta, aapki kundli ke hisaab se..." and describe the yog/dasha and its strength.
+Timing: timing ya result.
+Reason: Kyunki...
+Upay: Upay: ...
+Question: End with a question asking if they want to know more.
 
 Example of correct response style:
-Amisha Beta, aapki kundli ke hisaab se...
-Guru-Rahu chandal yog bana hua hai.
-Yeh yog buddhi ko sankochit karta hai aur dhyan bhatkata hai.
+Amisha Beta, aapki kundli ke hisaab se Guru-Rahu chandal yog bana hua hai, jo buddhi ko sankochit karta hai aur dhyan bhatkata hai.
 Naukri me tarakki aapko February 2027 se April 2027 ke beech mil sakti hai.
 Kyunki dashmesh bhav par guru grah ki dristi pad rahi hai.
 Upay: Roz subah surya dev ko jal dein aur peele phool chadhayein.
 Kya aap jaanna chahengi ki kaunsa din tarakki ke patra ke liye sabse shubh rahega?
+
+Use engine data only. Never invent astrology. Do not use English words like Career, Promotion, Job, salary, marriage. Use simple Hindi/Hinglish words.
 `;
+    } else if (tierType === 2) {
+      systemInstruction = `
+You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+
+TIER 2 RESPONSE RULES:
+- No specific prediction.
+- No specific astrology calculations (like Shani dasha, planet in house, etc.).
+- Structure your response EXACTLY like this template (do not change the sentence structure, just fill in the variables):
+  "${name} Beta, [topic] ke liye vistaar se kundli dekhni padti hai.
+  Filhal samanya grah sthiti ke anusaar [generic guidance].
+  Aaj [dayOfWeek] hai, isliye [safe weekday remedy].
+  Kya aap career ya vivah ke baare me jaanna chahenge? Uske liye yog ki ganana uplabdh hai."
+
+Use these values for the template variables:
+- [topic]: ${questionTopic}
+- [dayOfWeek]: ${dayOfWeek}
+- [safe weekday remedy]: ${weekdayRemedy}
+- [generic guidance] based on topic:
+  - daily: "Aaj man ko shant rakhne se kaam banenge"
+  - love: "Shukra ko mazboot karne se prem me mithaas aati hai"
+  - money: "Shaniwar ko gareeb ko daan karne se dhan aagman ke yog bante hain"
+  - health: "Surya ko jal dene se urja aur swasthya laabh hota hai"
+  - future: "Grah badalte rehte hain, mehnat aur upay se kismat banati hai"
+  - other topics: "samanya grah sthiti badalti rehti hai, thoda sabr rakhein"
+`;
+    } else {
+      systemInstruction = `
+You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+
+TIER 3 RESPONSE RULES:
+- No prediction.
+- No fear.
+- No paranormal confirmation (do not confirm nazar, black magic, ghosts, paranormal).
+- Structure your response EXACTLY like this template (do not change the sentence structure, just fill in the variables):
+  "${name} Beta, [topic] ke vishay me shastra me kaha gaya hai...
+  [general spiritual principle]
+  Upay: [safe remedy only]
+  Mann shant rakhein. Kya career ya vivah sambandhi prashn hai?"
+
+Use these values for the template variables:
+- [topic]: ${questionTopic}
+- [general spiritual principle] based on topic:
+  - nazar: "Nazar dosh aur nakaratmak urja man ki sthiti se prabhavit hoti hai."
+  - dreams: "Sapne hamare avachetan man ke vicharon ko darshate hain."
+  - spiritual: "Ishwar ki bhakti aur mantra jaap se man ko shanti aur shakti milti hai."
+  - lucky: "Bhagya aur lucky numbers hamare achhe karmon ka phal hote hain."
+  - general: "Jeevan ke har sankat me dhairya aur ishwar par vishwas sabse bada sahara hai."
+- [safe remedy only] based on topic:
+  - nazar: "Hanuman Chalisa ka paath karein aur ghar me dhoop-batti lagayein."
+  - dreams: "Sone se pehle haath-muh dhokar Bhagwan ka dhyan karein."
+  - spiritual: "Mantra 'Om Namah Shivaya' ka 108 baar jaap karein."
+  - lucky: "Roz subah mata-pita ka aashirwad lein aur bejubaano ko bhojan dein."
+  - general: "Pratidin subah dhyan lagayein aur sakaratmak sochein."
+`;
+    }
+
+    const forbiddenRulesBlock = `
+=== FORBIDDEN RULES ===
+- Do NOT output: "Data not available", "score" (except in "Karma Score:"), "window", exact dates without engine calculations, "khatra", "maut", "barbaad".
+- For Tier 2 and Tier 3, you must NEVER output: "Aapki Shani dasha...", "Budh 10th ghar me...", "March me shaadi...", any specific astrology calculation, or any specific prediction.
+`;
+    promptSections.push(forbiddenRulesBlock.trim());
 
     fullPrompt = `
 ${systemInstruction}
@@ -1894,12 +2209,124 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   }
 
   if (!success) {
-    console.log("OFFLINE FALLBACK TRIGGERED");
+    console.log("3-TIER OFFLINE FALLBACK TRIGGERED");
     responseSource = "OFFLINE";
     if (mode === 'chat' || mode === 'personal') {
       try {
-        console.log("Using horoscopeEngine / dataset fallback");
-        const fallbackText = buildResponse(progressUid, detectedIntent, todayString, questionText);
+        let fallbackText = "";
+
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const todayFormatted = currentDate.toLocaleDateString('hi-IN');
+        const dayOfWeek = currentDate.toLocaleDateString('hi-IN', { weekday: 'long' });
+
+        const classification = getTopicAndSubType(questionText);
+        const tierType = classification.tier;
+        const questionTopic = classification.topic;
+
+        let weekdayRemedy = "Om ka jaap karein";
+        if (dayOfWeek.includes('रवि') || dayOfWeek.toLowerCase().includes('sun')) weekdayRemedy = 'Surya dev ko jal arpit karein';
+        else if (dayOfWeek.includes('सोम') || dayOfWeek.toLowerCase().includes('mon')) weekdayRemedy = 'Shivling par jal chadhayein';
+        else if (dayOfWeek.includes('मंगल') || dayOfWeek.toLowerCase().includes('tue')) weekdayRemedy = 'Hanuman Chalisa ka path karein';
+        else if (dayOfWeek.includes('बुध') || dayOfWeek.toLowerCase().includes('wed')) weekdayRemedy = 'Ganesh ji ko doorva chadhayein';
+        else if (dayOfWeek.includes('गुरु') || dayOfWeek.includes('बृहस्पति') || dayOfWeek.toLowerCase().includes('thu')) weekdayRemedy = 'Vishnu ji ki puja karein aur peela tilak lagayein';
+        else if (dayOfWeek.includes('शुक्र') || dayOfWeek.toLowerCase().includes('fri')) weekdayRemedy = 'Gareeb ko doodh ya safed mithai daan karein';
+        else if (dayOfWeek.includes('शनि') || dayOfWeek.toLowerCase().includes('sat')) weekdayRemedy = 'Shani dev ke mandir me tel ka diya jalayein';
+
+        if (tierType === 1) {
+          const tier1Data = calculateTier1Data(questionTopic, astroData) || { score: 50, date: "2026-11" };
+          const scoreText = convertScore(tier1Data.score);
+          const timingText = convertDateWindow(tier1Data.date);
+
+          const summary = `${name} Beta, aapki kundli ke hisaab se ${questionTopic === 'career' ? 'career/naukri' : 'vivah/marriage'} ke liye ${scoreText}.`;
+          const timing = `${questionTopic === 'career' ? 'Naukri' : 'Shaadi'} ke yog aapko ${timingText} milne ke bante hain.`;
+          const reason = `Kyunki aapki kundli me ${astroData?.mahadasha || 'Sun'} ki mahadasha aur ${astroData?.antardasha || 'Moon'} ki antardasha chal rahi hai.`;
+          const upay = `Upay: Roz subah surya dev ko jal arpit karein.`;
+          const question = `Kya aap is vishay me aur gehrai se jaanna chahenge?`;
+
+          fallbackText = `${summary}\n\n${timing}\n\n${reason}\n\n${upay}\n\n${question}`;
+        } else if (tierType === 2) {
+          const qTextLower = (questionText || '').toLowerCase();
+          if (questionTopic === 'love') {
+            const data = calculateLoveEngine(astroData);
+            let specificGuidance = `Rishte ki sthiti: ${data.relationshipStrength}.`;
+            if (/ex|wapas|patch|reunion/i.test(qTextLower)) {
+              specificGuidance = `Reunion hone ke yog: ${data.reunionPotential}.`;
+            } else if (/soulmate|sachcha|sacha|true/i.test(qTextLower)) {
+              specificGuidance = `Soulmate potential: ${data.soulmatePotential}.`;
+            } else if (/crush|pasand|loyal|dhokha/i.test(qTextLower)) {
+              specificGuidance = `Rishte me vishwas aur sthiti: ${data.relationshipStrength}.`;
+            }
+            fallbackText = `${name} Beta, aapki kundli ke hisaab se prem yog ki anukoolta ${convertScore(data.loveScore)} hai. ${specificGuidance} Timing: ${data.loveWindows.join(', ')}.`;
+          } else if (questionTopic === 'money') {
+            const data = calculateMoneyEngine(astroData);
+            let specificGuidance = `Aamdani potential: ${data.incomePotential}.`;
+            if (/karz|debt|loan/i.test(qTextLower)) {
+              specificGuidance = `Karz se chhutkara aur bachat: ${data.savingsPotential}.`;
+            } else if (/invest|stock|crypto|share/i.test(qTextLower)) {
+              specificGuidance = `Nivesh aur dhansanchay: ${data.savingsPotential}.`;
+            }
+            fallbackText = `${name} Beta, aapki kundli me dhan yog ki anukoolta ${convertScore(data.wealthScore)} hai. ${specificGuidance} Timing: ${data.wealthWindows.join(', ')}.`;
+          } else if (questionTopic === 'daily') {
+            const data = calculateDailyTransitEngine(astroData, dayOfWeek);
+            let specificGuidance = `Mood: ${data.mood}. Kaam: ${data.work}.`;
+            if (/color|rang/i.test(qTextLower)) {
+              specificGuidance = `Aaj ka din anukul rahega aur mood ${data.mood} rahega.`;
+            } else if (/number|ank/i.test(qTextLower)) {
+              specificGuidance = `Dhan sthiti ${data.money} rahegi.`;
+            } else if (/savdhani|caution/i.test(qTextLower)) {
+              specificGuidance = `Savdhani: ${data.caution}.`;
+            }
+            fallbackText = `${name} Beta, aaj aapka bhagya pratishat ${convertScore(data.todayScore)} hai. ${specificGuidance} Rishte: ${data.relationships}.`;
+          } else if (questionTopic === 'health') {
+            const data = calculateHealthEngine(astroData);
+            let specificGuidance = `Stress level: ${data.stressLevel}.`;
+            if (/stress|mental|anxiety/i.test(qTextLower)) {
+              specificGuidance = `Stress aur chinta se recovery: ${data.recoveryPotential}.`;
+            }
+            fallbackText = `${name} Beta, swasthya vitality level ${convertScore(data.vitalityScore)} hai. ${specificGuidance} Guidance: ${data.healthGuidance}.`;
+          } else if (questionTopic === 'foreign') {
+            const data = calculateForeignTravelEngine(astroData);
+            fallbackText = `${name} Beta, videsh yatra potential: ${data.foreignTravelPotential}. Settlement potential: ${data.settlementPotential}. Timing: ${data.travelWindows.join(', ')}.`;
+          } else if (questionTopic === 'children') {
+            const data = calculateChildrenEngine(astroData);
+            fallbackText = `${name} Beta, santan potential: ${data.childrenPotential}. Family growth: ${data.familyGrowth}. Timing: ${data.childWindows.join(', ')}.`;
+          } else if (questionTopic === 'family') {
+            fallbackText = `${name} Beta, parivar me sukh shanti ke liye aapas me sanyam rakhna zaroori hai. Aaj shanti ke upay karein.`;
+          } else if (questionTopic === 'future') {
+            fallbackText = `${name} Beta, kismat aur future ke liye grah badalte rehte hain. Mehnat aur upay se anukul yog banenge.`;
+          } else {
+            const guidanceMap = {
+              future: "Grah badalte rehte hain, mehnat aur upay se kismat banati hai",
+              family: "Parivar me sukh shanti ke liye aapas me sanyam rakhna zaroori hai"
+            };
+            const genericGuidance = guidanceMap[questionTopic] || "samanya grah sthiti badalti rehti hai";
+            fallbackText = `${name} Beta, ${questionTopic} ke liye vistaar se kundli dekhni padti hai.\n\nFilhal samanya grah sthiti ke anusaar ${genericGuidance}.\n\nAaj ${dayOfWeek} hai, isliye ${weekdayRemedy}.\n\nKya aap career ya vivah ke baare me jaanna chahenge? Uske liye yog ki ganana uplabdh hai.`;
+          }
+        } else {
+          if (questionTopic === 'dreams') {
+            const data = getDreamMeaning(questionText);
+            fallbackText = `${name} Beta, aapke sapne me dekha gaya ${data.symbol} ka matlab hai: ${data.meaning}. Iska arth: ${data.description}`;
+          } else if (['nazar', 'spiritual', 'lucky'].includes(questionTopic)) {
+            const data = getSpiritualGuidance(questionText, astroData?.lagna);
+            fallbackText = `${name} Beta, spiritual guidance ke anusaar: Mantra: ${data.mantra} Daan: ${data.daan} Pooja: ${data.pooja} Dhyan: ${data.dhyan}.`;
+            if (data.ishtDev) {
+              fallbackText += ` Aapke isht dev: ${data.ishtDev}.`;
+            }
+          } else {
+            const principleMap = {
+              general: "Jeevan ke har sankat me dhairya aur ishwar par vishwas sabse bada sahara hai."
+            };
+            const remedyMap = {
+              general: "Pratidin subah dhyan lagayein aur sakaratmak sochein."
+            };
+            const generalSpiritualPrinciple = principleMap[questionTopic] || principleMap.general;
+            const safeRemedyOnly = remedyMap[questionTopic] || remedyMap.general;
+
+            fallbackText = `${name} Beta, ${questionTopic} ke vishay me shastra me kaha gaya hai...\n\n${generalSpiritualPrinciple}\n\nUpay: ${safeRemedyOnly}\n\nMann shant rakhein. Kya career ya vivah sambandhi prashn hai?`;
+          }
+        }
+
         aiText = fallbackText;
         jsonResponse = {
           text: await injectSecretAndScore(fallbackText, uid, userData, progress, getSecretCategory(detectedIntent))
