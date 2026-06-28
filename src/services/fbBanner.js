@@ -33,7 +33,13 @@ export const preloadBanner = async (placementId) => {
 /**
  * Shows the preloaded banner ad
  */
-export const showBanner = async () => {
+export const showBanner = async (user = null) => {
+  if (user?.premium) {
+    console.log("Premium user: Hiding/Skipping banner ad.");
+    await hideBanner();
+    return false;
+  }
+
   if (!isFBInstant() || !bannerAd || !isReady) {
     console.warn('FAN: Banner not ready for show');
     return false;

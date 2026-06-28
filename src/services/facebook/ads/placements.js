@@ -8,6 +8,13 @@ export const Placements = {
       cooldownMs: 30000,
       rewardCoins: 0, // Unlocks reading directly
       purpose: 'tarot-unlock'
+    },
+    COIN_PAYOUT: {
+      id: adConfig.REWARDED_COIN_PAYOUT_ID || 'PASTE_REWARDED_ID_HERE_COIN',
+      dailyLimit: 5,
+      cooldownMs: 30000,
+      rewardCoins: 50,
+      purpose: 'coin-payout'
     }
   },
   INTERSTITIAL: {

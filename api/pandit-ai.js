@@ -1438,6 +1438,64 @@ export default async function handler(req, res) {
   if (mode === 'chat' || mode === 'personal') {
     const questionTextNormalized = (userData.question || '').trim().toLowerCase();
 
+    // Early return for greetings and vague messages to prevent LLM token waste
+    const isGreeting = isGreetingMessage(userData.question);
+    const isVague = isVagueMessage(userData.question);
+
+    if (isGreeting || isVague) {
+      const currentLang = userData.currentLanguage || 'English';
+      let friendlyResponse = "";
+
+      if (isGreeting) {
+        if (currentLang === 'Hindi') {
+          friendlyResponse = `🔮 Prediction:
+नमस्ते! कैसे हैं आप? (Namaste! Kaise hain aap?) मैं आपका एस्ट्रोतारोट पंडित हूँ। आज आपका दिन शुभ रहेगा और ग्रहों की स्थिति अनुकूल है।
+
+📿 Astrological Reasoning:
+वर्तमान गोचर आपके जीवन में नई ऊर्जा और सकारात्मक ऊर्जा का संचार कर रहा है।
+
+🪔 Guidance:
+ईश्वर का ध्यान करें और अपने कर्म पथ पर आगे बढ़ें। आज आप अपने जीवन, करियर, या विवाह के बारे में क्या जानना चाहते हैं?`;
+        } else {
+          friendlyResponse = `🔮 Prediction:
+Namaste! Kaise hain aap? I am your AstroTarot Pandit. Today brings positive energy and the alignment of planets is favorable.
+
+📿 Astrological Reasoning:
+Cosmic transits are encouraging personal balance and spiritual clarity.
+
+🪔 Guidance:
+Keep focused on your path and practice mindfulness. What would you like to know about your life, career, or marriage today?`;
+        }
+      } else {
+        if (currentLang === 'Hindi') {
+          friendlyResponse = `🔮 Prediction:
+हाँ बेटा, सुन रहा हूँ। (Haan Beta, sun raha hun) कृपया अपना प्रश्न अधिक स्पष्ट रूप से पूछें।
+
+📿 Astrological Reasoning:
+अधिक स्पष्ट जानकारी होने से ग्रहों का सटीक विश्लेषण हो सकेगा।
+
+🪔 Guidance:
+जैसे: 'मेरी नौकरी कब लगेगी?' या 'मेरा विवाह कब होगा?' ताकि मैं सटीक मार्गदर्शन कर सकूँ।`;
+        } else {
+          friendlyResponse = `🔮 Prediction:
+Haan Beta, sun raha hun. Please ask your question more clearly so I can analyze it accurately.
+
+📿 Astrological Reasoning:
+Specific questions enable more precise astronomical readings.
+
+🪔 Guidance:
+For example: 'When will I get a job?' or 'When will I get married?'.`;
+        }
+      }
+
+      // Inject secret and score parameters dynamically
+      const completedResponse = await injectSecretAndScore(friendlyResponse, uid, userData, progress, 'General');
+
+      return res.status(200).json({
+        text: completedResponse
+      });
+    }
+
     // Check for AI identity questions: "tuje kisne banaya" (Step 3)
     if (questionTextNormalized.includes("tuje kisne banaya") ||
       questionTextNormalized.includes("tujhe kisne banaya") ||
@@ -2082,7 +2140,14 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   let success = false;
   let lastError = null;
 
-  const useOfflineFallback = !BEDROCK_API_KEY || !BEDROCK_BASE_URL;
+  const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY;
+  const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
+  const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT;
+
+  const hasAzureConfig = !!(AZURE_OPENAI_API_KEY && AZURE_OPENAI_ENDPOINT && AZURE_OPENAI_DEPLOYMENT);
+  const hasBedrockConfig = !!(BEDROCK_API_KEY && BEDROCK_BASE_URL);
+
+  const useOfflineFallback = !hasAzureConfig && !hasBedrockConfig;
 
   let responseSource = "AI";
 

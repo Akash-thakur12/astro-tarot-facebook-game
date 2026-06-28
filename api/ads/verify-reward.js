@@ -37,11 +37,12 @@ export default async function handler(req, res) {
 
   // Allow mock signature for local dev context
   if (
-    (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'development') &&
+    process.env.NODE_ENV === 'development' &&
+    !process.env.VERCEL_ENV &&
     signature === 'mock.signature'
   ) {
     isMock = true;
-    console.warn('[Verify Reward] Using mock signature for development');
+    console.warn('[Verify Reward] Using mock signature for local development only');
   }
 
   if (!isMock) {
@@ -122,12 +123,20 @@ export default async function handler(req, res) {
       }
 
       // Update User Profile autoritatively
-      t.update(userRef, {
-        dailyTarotUsed: false,
-        lastTarotUnlockDate: FieldValue.serverTimestamp(),
+      const isCoinPayout = placementId.includes('coin') || placementId === 'coin-payout' || placementId.includes('COIN');
+      const userUpdates = {
         adsWatchedToday: adsWatchedToday + 1,
         lastAdRewardDate: FieldValue.serverTimestamp()
-      });
+      };
+
+      if (isCoinPayout) {
+        userUpdates.coins = FieldValue.increment(50);
+      } else {
+        userUpdates.dailyTarotUsed = false;
+        userUpdates.lastTarotUnlockDate = FieldValue.serverTimestamp();
+      }
+
+      t.update(userRef, userUpdates);
 
       // Write claims log to prevent replay attacks
       t.set(claimRef, {
@@ -139,7 +148,8 @@ export default async function handler(req, res) {
 
       return {
         success: true,
-        adsWatchedToday: adsWatchedToday + 1
+        adsWatchedToday: adsWatchedToday + 1,
+        rewardCoins: isCoinPayout ? 50 : 0
       };
     });
 

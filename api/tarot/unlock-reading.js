@@ -104,7 +104,10 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests.' });
   }
 
-  const { method } = req.body;
+  if (method !== 'coins') {
+    return res.status(400).json({ error: "Invalid method. Ad unlocks must be verified securely via /api/ads/verify-reward." });
+  }
+
   const userRef = db.collection('users').doc(uid);
 
   try {
@@ -115,22 +118,14 @@ export default async function handler(req, res) {
       
       const userData = userDoc.data();
 
-      if (method === 'coins') {
-        if ((userData.coins || 0) < 40) {
-          return { success: false, error: "INSUFFICIENT_COINS" };
-        }
-        t.update(userRef, { 
-          coins: FieldValue.increment(-40),
-          dailyTarotUsed: false,
-          lastTarotUnlockDate: FieldValue.serverTimestamp()
-        });
-      } else {
-        // Default to 'ad' method
-        t.update(userRef, {
-          dailyTarotUsed: false,
-          lastTarotUnlockDate: FieldValue.serverTimestamp()
-        });
+      if ((userData.coins || 0) < 40) {
+        return { success: false, error: "INSUFFICIENT_COINS" };
       }
+      t.update(userRef, { 
+        coins: FieldValue.increment(-40),
+        dailyTarotUsed: false,
+        lastTarotUnlockDate: FieldValue.serverTimestamp()
+      });
 
       return { success: true };
     });

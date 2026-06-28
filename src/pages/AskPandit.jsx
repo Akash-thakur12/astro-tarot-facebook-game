@@ -674,7 +674,7 @@ const AskPandit = () => {
       // Sync global user state to reflect coin deduction immediately
       await refreshUser();
       
-      showInterstitial();
+      showInterstitial(user);
     } catch (error) {
       console.error("AI Error:", error);
       setErrorMsg("Pandit AI is currently meditating. Please try again.");

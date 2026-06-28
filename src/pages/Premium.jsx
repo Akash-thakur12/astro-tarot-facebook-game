@@ -4,10 +4,11 @@ import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import Button from '../components/ui/Button';
 import { initializePayments, purchasePremium, restorePurchases } from '../services/fbPayments';
+import { isPaymentsSupported } from '../services/fbinstant';
 
 const Premium = () => {
   const navigate = useNavigate();
-  const { refreshUser, getToken } = useAuth();
+  const { user, refreshUser, getToken } = useAuth();
   const { currentLanguage } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -59,6 +60,96 @@ const Premium = () => {
     setError(null);
 
     try {
+      if (!isPaymentsSupported()) {
+        console.log("Facebook payments not supported. Redirecting to Razorpay checkout.");
+        const loadScript = () => {
+          return new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+          });
+        };
+        const scriptLoaded = await loadScript();
+        if (!scriptLoaded) {
+          throw new Error("Razorpay SDK failed to load. Please check your internet connection.");
+        }
+
+        const idToken = await getToken();
+        const orderRes = await fetch('/api/payments/create-order', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!orderRes.ok) {
+          const errData = await orderRes.json();
+          throw new Error(errData.error || "Failed to create order");
+        }
+        const orderData = await orderRes.json();
+
+        return new Promise((resolve, reject) => {
+          const options = {
+            key: orderData.key,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            name: "AstroTarot Premium",
+            description: "Divine Seeker Premium Status",
+            order_id: orderData.id,
+            prefill: {
+              name: user?.displayName || '',
+              email: user?.email || ''
+            },
+            theme: {
+              color: "#fbbf24"
+            },
+            handler: async function (response) {
+              try {
+                setLoading(true);
+                const verifyRes = await fetch('/api/payments/verify-purchase', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${idToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    provider: 'razorpay',
+                    payload: response
+                  })
+                });
+                if (!verifyRes.ok) {
+                  const verifyErr = await verifyRes.json();
+                  throw new Error(verifyErr.error || "Payment verification failed");
+                }
+                const verifyResult = await verifyRes.json();
+                if (verifyResult && verifyResult.success) {
+                  setSuccess(true);
+                  await refreshUser();
+                  resolve(true);
+                } else {
+                  throw new Error("Verification failed on server");
+                }
+              } catch (verifyError) {
+                setLoading(false);
+                setError(verifyError.message);
+                reject(verifyError);
+              }
+            },
+            modal: {
+              ondismiss: function () {
+                setLoading(false);
+                setError("Payment was cancelled by user.");
+                reject(new Error("Payment was cancelled by user."));
+              }
+            }
+          };
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        });
+      }
+
       await initializePayments();
       const verifyResult = await purchasePremium(getToken);
 

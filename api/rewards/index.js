@@ -124,7 +124,7 @@ export default async function handler(req, res) {
     case 'challenges':
       return handleChallenges(uid, res);
     case 'ad-payout':
-      return handleAdPayout(uid, res);
+      return res.status(400).json({ error: 'Deprecated: Ad payouts must be verified securely via /api/ads/verify-reward.' });
     case 'claim-reward':
       return handleClaimReward(uid, res);
     case 'daily-streak':

@@ -147,7 +147,7 @@ const FortuneWheel = () => {
           playCoinSound();
           setShowShower(true);
         }
-        showInterstitial();
+        showInterstitial(user);
       }, 5000);
 
     } catch (error) {

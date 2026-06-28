@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../context/useAuth';
 import { useLanguage } from '../context/useLanguage';
 import { auth } from '../services/firebase';
+import { showRewardedAd } from '../services/fbAds';
+import { Placements } from '../services/facebook/ads/placements';
 
 const RewardCenter = () => {
   const { user, refreshUser, getToken } = useAuth();
@@ -17,34 +19,15 @@ const RewardCenter = () => {
     
     setIsWatching(true);
     
-    // Simulate Ad watching duration
-    setTimeout(async () => {
-      try {
-        const idToken = await getToken();
-        const response = await fetch('/api/rewards', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${idToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ action: 'ad-payout' })
-        });
-
-        const contentType = response.headers.get("content-type");
-        if (!response.ok || !contentType || !contentType.includes("application/json")) {
-          const errorData = contentType && contentType.includes("application/json") ? await response.json() : {};
-          throw new Error(errorData.error || `Server error: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        await refreshUser();
-      } catch (error) {
-        console.error("Ad Reward Error:", error.message);
-      } finally {
-        setIsWatching(false);
-      }
-    }, 2000);
+    try {
+      // Trigger actual Facebook SDK rewarded ad with server-side validation
+      await showRewardedAd(Placements.REWARDED.COIN_PAYOUT.id);
+      await refreshUser();
+    } catch (error) {
+      console.error("Ad Reward Error:", error.message);
+    } finally {
+      setIsWatching(false);
+    }
   };
 
   const isHindi = currentLanguage === 'Hindi';

@@ -5,7 +5,6 @@ import { AudioProvider } from './context/AudioContext';
 import Layout from './components/layout/Layout';
 import Home from './pages/Home';
 import Tarot from './pages/Tarot';
-import Kundali from './pages/Kundali';
 import Premium from './pages/Premium';
 import AskPandit from './pages/AskPandit';
 import FortuneWheel from './pages/FortuneWheel';
@@ -38,11 +37,6 @@ function App() {
             <Route path="/tarot" element={
               <ProtectedRoute allowAnonymous={true}>
                 <Tarot />
-              </ProtectedRoute>
-            } />
-            <Route path="/kundali" element={
-              <ProtectedRoute allowAnonymous={true}>
-                <Kundali />
               </ProtectedRoute>
             } />
             <Route path="/premium" element={

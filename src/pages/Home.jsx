@@ -98,11 +98,11 @@ const Home = () => {
 
   useEffect(() => {
     preloadBanner(BANNER_HOME_ID);
-    showBanner();
+    showBanner(user);
     return () => {
       hideBanner();
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const initializeHome = async () => {

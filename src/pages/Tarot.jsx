@@ -157,8 +157,8 @@ const Tarot = () => {
           setShowGlowBurst(false);
           setIsFlipping(false);
           setIsMovingToCenter(false);
-          showInterstitial();
-          showBanner();
+          showInterstitial(user);
+          showBanner(user);
         }, 350); // Reveal Wait (350ms)
       }, 450); // Flip (450ms)
     }, 350); // Move (350ms)
@@ -170,41 +170,36 @@ const Tarot = () => {
     setError(null);
 
     try {
-      let adSuccess = true;
-
-      // Real Ad flow for FB Instant Games
-      if (method === 'ad' && window.FBInstant) {
-        adSuccess = await showRewardedAd();
+      if (method === 'ad') {
+        const adSuccess = await showRewardedAd(REWARDED_TAROT_UNLOCK_ID);
         if (!adSuccess) {
-           throw new Error('Ad was not completed or failed to load.');
+          throw new Error('Ad was not completed or failed to load.');
         }
-      } else if (method === 'ad') {
-        // Fallback simulated delay for Web mode
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        await refreshUser();
+      } else if (method === 'coins') {
+        const idToken = await getToken();
+        const response = await fetch('/api/tarot/unlock-reading', {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ method: 'coins' })
+        });
+
+        const contentType = response.headers.get("content-type");
+        if (!response.ok || !contentType || !contentType.includes("application/json")) {
+          const errorData = contentType && contentType.includes("application/json") ? await response.json() : {};
+          throw new Error(errorData.error || `Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to unlock reading');
+        }
+        await refreshUser();
       }
 
-      const idToken = await getToken();
-      const response = await fetch('/api/tarot/unlock-reading', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ method })
-      });
-
-      const contentType = response.headers.get("content-type");
-      if (!response.ok || !contentType || !contentType.includes("application/json")) {
-        const errorData = contentType && contentType.includes("application/json") ? await response.json() : {};
-        throw new Error(errorData.error || `Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to unlock reading');
-      }
-
-      await refreshUser();
       setIsUnlockedByAd(true);
       setSelectedCard(null);
       setShowResult(false);

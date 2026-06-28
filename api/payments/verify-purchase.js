@@ -76,11 +76,12 @@ export default async function handler(req, res) {
     // Dev bypass for local testing
     let isMock = false;
     if (
-      (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'development') &&
+      process.env.NODE_ENV === 'development' &&
+      !process.env.VERCEL_ENV &&
       payload.signedRequest === 'mock.signature_payload'
     ) {
       isMock = true;
-      console.warn("verify-purchase: Using mock signature for development");
+      console.warn("verify-purchase: Using mock signature for local development only");
     }
 
     if (isMock) {
