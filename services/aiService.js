@@ -18,13 +18,21 @@ async function getAzureClient() {
     
     if (endpoint.includes('services.ai.azure.com')) {
       // Azure AI Foundry Project Endpoint
+      let cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
+      if (cleanEndpoint.endsWith('/chat/completions')) {
+        cleanEndpoint = cleanEndpoint.substring(0, cleanEndpoint.length - 17).replace(/\/+$/, '');
+      }
+      const baseURL = cleanEndpoint.endsWith('/v1') ? cleanEndpoint : `${cleanEndpoint}/v1`;
+      console.log("INSTRUMENTATION - Endpoint Type: Foundry");
+      console.log("INSTRUMENTATION - Final baseURL:", baseURL);
       azureClient = new OpenAIClass({
         apiKey,
-        baseURL: endpoint.endsWith('/v1') ? endpoint : `${endpoint}/v1`,
-        defaultQuery: { 'api-version': '2024-06-01' }
+        baseURL
       });
     } else {
       // Azure OpenAI Resource Endpoint
+      console.log("INSTRUMENTATION - Endpoint Type: Azure OpenAI");
+      console.log("INSTRUMENTATION - Final baseURL (Resource API Base URL):", endpoint);
       const AzureOpenAIClass = OpenAIModule.AzureOpenAI || OpenAIModule.default?.AzureOpenAI || OpenAIClass;
       azureClient = new AzureOpenAIClass({
         apiKey,
