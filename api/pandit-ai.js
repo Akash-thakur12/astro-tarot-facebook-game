@@ -621,7 +621,7 @@ const KEYWORD_REGEXES = {
   health: /health|bimari|stress|mental|recovery|surgery|fitness|swasthya|swasth|anxiety/i,
   family: /family|ghar|parents|bhai|behen|property dispute/i,
   foreign: /videsh|foreign|visa|\bpr\b|abroad/i,
-  children: /bachcha|bachche|santan|pregnancy|ivf|beta|beti|family growth/i,
+  children: /bachcha|bachche|baccha|bacche|bcha|bche|bache|santan|child|children|baby|family planning|offspring|pregnancy|ivf|beta|beti|family growth/i,
   future: /agla saal|6 mahine|kismat|turning point|success|future/i,
   dreams: /sapne|sapna|dream|saanp|paani|mandir|shivling/i,
   spiritual: /isht dev|mantra|vrat|pooja|gemstone|daan|bhagya|dosh/i,
@@ -737,6 +737,26 @@ export function detectMultiSemanticIntent(question) {
 }
 
 export function getTopicAndSubType(question) {
+  const result = _getTopicAndSubType(question);
+  
+  // Calculate matched keywords
+  const q = (question || '').toLowerCase();
+  const matchedKeywords = [];
+  for (const [key, regex] of Object.entries(KEYWORD_REGEXES)) {
+    if (regex.test(q)) {
+      matchedKeywords.push(key);
+    }
+  }
+  
+  console.log(`[INTENT] Question: "${question}"`);
+  console.log(`[INTENT] Intent: "${result.topic}"`);
+  console.log(`[INTENT] Matched Keywords: ${JSON.stringify(matchedKeywords)}`);
+  console.log(`[INTENT] Route Selected: Tier ${result.tier}, Topic: "${result.topic}"`);
+  
+  return result;
+}
+
+function _getTopicAndSubType(question) {
   const q = question.toLowerCase();
 
   if (isNonAstrologyQuestion(question)) {
@@ -790,7 +810,7 @@ export function getTopicAndSubType(question) {
   if (/videsh|foreign|visa|\bpr\b|abroad/i.test(q))
     return { tier: 2, topic: 'foreign' };
 
-  if (/bachcha|bachche|santan|pregnancy|ivf|beta|beti|family growth/i.test(q))
+  if (/bachcha|bachche|baccha|bacche|bcha|bche|bache|santan|child|children|baby|family planning|offspring|pregnancy|ivf|beta|beti|family growth/i.test(q))
     return { tier: 2, topic: 'children' };
 
   if (/family|ghar|parents|bhai|behen|property dispute/i.test(q))
@@ -2223,97 +2243,19 @@ export default async function handler(req, res) {
   }
 
   if (mode === 'chat' || mode === 'personal') {
-    let isGreeting = false;
-    let isVague = isVagueMessage(userData.question);
-
-    const greetingExtraction = detectGreetingIntent(userData.question);
-    if (greetingExtraction.greetingDetected) {
-      if (greetingExtraction.remainingQuestion === "") {
-        isGreeting = true;
-      } else {
-        userData.question = greetingExtraction.remainingQuestion;
-      }
-    }
-
-    let questionTextNormalized = (userData.question || '').trim().toLowerCase();
-
-    if (isGreeting || isVague) {
+    const questionTextRaw = userData.question || '';
+    if (!questionTextRaw.trim()) {
       const currentLang = userData.currentLanguage || 'English';
-      let friendlyResponse = "";
-
-      if (isGreeting) {
-        if (currentLang === 'Hindi') {
-          friendlyResponse = `🔮 Prediction:
-नमस्ते! कैसे हैं आप? (Namaste! Kaise hain aap?) मैं आपका एस्ट्रोतारोट पंडित हूँ। आज आपका दिन शुभ रहेगा और ग्रहों की स्थिति अनुकूल है।
-
-📿 Astrological Reasoning:
-वर्तमान गोचर आपके जीवन में नई ऊर्जा और सकारात्मक ऊर्जा का संचार कर रहा है।
-
-🪔 Guidance:
-ईश्वर का ध्यान करें और अपने कर्म पथ पर आगे बढ़ें। आज आप अपने जीवन, करियर, या विवाह के बारे में क्या जानना चाहते हैं?`;
-        } else {
-          friendlyResponse = `🔮 Prediction:
-Namaste! Kaise hain aap? I am your AstroTarot Pandit. Today brings positive energy and the alignment of planets is favorable.
-
-📿 Astrological Reasoning:
-Cosmic transits are encouraging personal balance and spiritual clarity.
-
-🪔 Guidance:
-Keep focused on your path and practice mindfulness. What would you like to know about your life, career, or marriage today?`;
-        }
-      } else {
-        if (currentLang === 'Hindi') {
-          friendlyResponse = `🔮 Prediction:
-हाँ बेटा, सुन रहा हूँ। (Haan Beta, sun raha hun) कृपया अपना प्रश्न अधिक स्पष्ट रूप से पूछें।
-
-📿 Astrological Reasoning:
-अधिक स्पष्ट जानकारी होने से ग्रहों का सटीक विश्लेषण हो सकेगा।
-
-🪔 Guidance:
-जैसे: 'मेरी नौकरी कब लगेगी?' या 'मेरा विवाह कब होगा?' ताकि मैं सटीक मार्गदर्शन कर सकूँ।`;
-        } else {
-          friendlyResponse = `🔮 Prediction:
-Haan Beta, sun raha hun. Please ask your question more clearly so I can analyze it accurately.
-
-📿 Astrological Reasoning:
-Specific questions enable more precise astronomical readings.
-
-🪔 Guidance:
-For example: 'When will I get a job?' or 'When will I get married?'.`;
-        }
-      }
-
-      // Inject secret and score parameters dynamically
-      let completedResponse = await injectSecretAndScore(friendlyResponse, uid, userData, progress, 'General');
-
-      // Strip headers for greetings and vague messages to return clean conversational response
-      completedResponse = completedResponse
-        .replace(/🔮\s*Prediction:\s*/gi, "")
-        .replace(/📿\s*Astrological\s*Reasoning:\s*/gi, "")
-        .replace(/📿\s*Reasoning:\s*/gi, "")
-        .replace(/🪔\s*Guidance:\s*/gi, "")
-        .replace(/🪔\s*Upay:\s*/gi, "")
-        .trim();
-
-      return res.status(200).json({
-        text: completedResponse
-      });
+      const emptyText = currentLang === 'Hindi'
+        ? "कृपया अपना प्रश्न पूछें। (Please ask your question.)"
+        : "Please ask your question.";
+      return res.status(200).json({ text: emptyText });
     }
 
-    // Check for AI identity questions: "tuje kisne banaya" (Step 3)
-    if (questionTextNormalized.includes("tuje kisne banaya") ||
-      questionTextNormalized.includes("tujhe kisne banaya") ||
-      questionTextNormalized.includes("tumhe kisne banaya") ||
-      /who\s+(created|made|built)\s+you/i.test(questionTextNormalized) ||
-      (questionTextNormalized.includes("kisne") && questionTextNormalized.includes("banaya"))) {
+    const selfHarmKeywords = /\b(suicide|self-harm|kill myself|harm myself|end my life|die|zehar|zeher|atmahatya|mar jau|mar jaunga)\b/i;
+    if (selfHarmKeywords.test(questionTextRaw)) {
       return res.status(200).json({
-        text: "Main AstroTarot AI hoon. Mujhe AI models aur AstroTarot system ne banaya hai."
-      });
-    }
-
-    if (questionTextNormalized.includes("tum galat yaad kar rahe ho")) {
-      return res.status(200).json({
-        text: "Ho sakta hai maine pehle ki baaton ko galat samjha ho."
+        text: "I cannot answer queries related to self-harm or suicide. Please contact a helpline for support (AASRA: 91-9820466726)."
       });
     }
   }
@@ -2353,6 +2295,31 @@ For example: 'When will I get a job?' or 'When will I get married?'.`;
 
   if (!userDataDoc) {
     return res.status(500).json({ error: 'User profile not found' });
+  }
+
+  // Handle system commands (coins, premium, account)
+  if (mode === 'chat' || mode === 'personal') {
+    const questionTextRaw = userData.question || '';
+    const normalizedCmd = questionTextRaw.toLowerCase().trim();
+    if (normalizedCmd === '/coins' || normalizedCmd === 'coins') {
+      const coinsCount = userDataDoc.coins || 0;
+      return res.status(200).json({
+        text: `Total Coins: ${coinsCount}. You need 40 coins for each AI consultation. You can watch ads or purchase more coins to unlock them.`
+      });
+    }
+    if (normalizedCmd === '/premium' || normalizedCmd === 'premium') {
+      const isPremiumLatest = !!userDataDoc.premium;
+      return res.status(200).json({
+        text: isPremiumLatest 
+          ? "You are a Divine Seeker Premium member. Enjoy unlimited Pandit AI, tarot readings, and ad-free experience!" 
+          : "Upgrade to Seeker Status to unlock unlimited consultations, daily tarot readings, and ad-free experience. Visit the Premium tab to upgrade!"
+      });
+    }
+    if (normalizedCmd === '/account' || normalizedCmd === 'account') {
+      return res.status(200).json({
+        text: `Account ID: ${uid}\nStatus: ${userDataDoc.premium ? 'Premium' : 'Free'}\nCoins: ${userDataDoc.coins || 0}`
+      });
+    }
   }
 
   const isPremium = !!userDataDoc.premium;
@@ -3069,8 +3036,18 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 
       if (mode === 'chat' || mode === 'personal') {
         const deduplicatedText = removeDuplicateSentences(aiText);
+        let completedResponse = await injectSecretAndScore(deduplicatedText, uid, userData, progress, getSecretCategory(detectedIntent));
+        if (isGreeting || isVague) {
+          completedResponse = completedResponse
+            .replace(/🔮\s*Prediction:\s*/gi, "")
+            .replace(/📿\s*Astrological\s*Reasoning:\s*/gi, "")
+            .replace(/📿\s*Reasoning:\s*/gi, "")
+            .replace(/🪔\s*Guidance:\s*/gi, "")
+            .replace(/🪔\s*Upay:\s*/gi, "")
+            .trim();
+        }
         jsonResponse = {
-          text: await injectSecretAndScore(deduplicatedText, uid, userData, progress, getSecretCategory(detectedIntent))
+          text: completedResponse
         };
       } else {
         const parsedData = parseModelResponse(aiText);
@@ -3089,134 +3066,8 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   }
 
   if (!success) {
-    console.log("3-TIER OFFLINE FALLBACK TRIGGERED");
-    responseSource = "OFFLINE";
-    if (mode === 'chat' || mode === 'personal') {
-      try {
-        let fallbackText = "";
-
-        const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const todayFormatted = currentDate.toLocaleDateString('hi-IN');
-        const dayOfWeek = currentDate.toLocaleDateString('hi-IN', { weekday: 'long' });
-
-        const classification = getTopicAndSubType(questionText);
-        const tierType = classification.tier;
-        const questionTopic = classification.topic;
-
-        let weekdayRemedy = "Om ka jaap karein";
-        if (dayOfWeek.includes('रवि') || dayOfWeek.toLowerCase().includes('sun')) weekdayRemedy = 'Surya dev ko jal arpit karein';
-        else if (dayOfWeek.includes('सोम') || dayOfWeek.toLowerCase().includes('mon')) weekdayRemedy = 'Shivling par jal chadhayein';
-        else if (dayOfWeek.includes('मंगल') || dayOfWeek.toLowerCase().includes('tue')) weekdayRemedy = 'Hanuman Chalisa ka path karein';
-        else if (dayOfWeek.includes('बुध') || dayOfWeek.toLowerCase().includes('wed')) weekdayRemedy = 'Ganesh ji ko doorva chadhayein';
-        else if (dayOfWeek.includes('गुरु') || dayOfWeek.includes('बृहस्पति') || dayOfWeek.toLowerCase().includes('thu')) weekdayRemedy = 'Vishnu ji ki puja karein aur peela tilak lagayein';
-        else if (dayOfWeek.includes('शुक्र') || dayOfWeek.toLowerCase().includes('fri')) weekdayRemedy = 'Gareeb ko doodh ya safed mithai daan karein';
-        else if (dayOfWeek.includes('शनि') || dayOfWeek.toLowerCase().includes('sat')) weekdayRemedy = 'Shani dev ke mandir me tel ka diya jalayein';
-
-        if (tierType === 1) {
-          const tier1Data = calculateTier1Data(questionTopic, astroData) || { score: 50, date: "2026-11" };
-          const scoreText = convertScore(tier1Data.score);
-          const timingText = convertDateWindow(tier1Data.date);
-
-          const summary = `${name} Beta, aapki kundli ke hisaab se ${questionTopic === 'career' ? 'career/naukri' : 'vivah/marriage'} ke liye ${scoreText}.`;
-          const timing = `${questionTopic === 'career' ? 'Naukri' : 'Shaadi'} ke yog aapko ${timingText} milne ke bante hain.`;
-          const reason = `Kyunki aapki kundli me ${astroData?.mahadasha || 'Sun'} ki mahadasha aur ${astroData?.antardasha || 'Moon'} ki antardasha chal rahi hai.`;
-          const upay = `Upay: Roz subah surya dev ko jal arpit karein.`;
-          const question = `Kya aap is vishay me aur gehrai se jaanna chahenge?`;
-
-          fallbackText = `${summary}\n\n${timing}\n\n${reason}\n\n${upay}\n\n${question}`;
-        } else if (tierType === 2) {
-          const qTextLower = (questionText || '').toLowerCase();
-          if (questionTopic === 'love') {
-            const data = calculateLoveEngine(astroData);
-            let specificGuidance = `Rishte ki sthiti: ${data.relationshipStrength}.`;
-            if (/ex|wapas|patch|reunion/i.test(qTextLower)) {
-              specificGuidance = `Reunion hone ke yog: ${data.reunionPotential}.`;
-            } else if (/soulmate|sachcha|sacha|true/i.test(qTextLower)) {
-              specificGuidance = `Soulmate potential: ${data.soulmatePotential}.`;
-            } else if (/crush|pasand|loyal|dhokha/i.test(qTextLower)) {
-              specificGuidance = `Rishte me vishwas aur sthiti: ${data.relationshipStrength}.`;
-            }
-            fallbackText = `${name} Beta, aapki kundli ke hisaab se prem yog ki anukoolta ${convertScore(data.loveScore)} hai. ${specificGuidance} Timing: ${data.loveWindows.join(', ')}.`;
-          } else if (questionTopic === 'money') {
-            const data = calculateMoneyEngine(astroData);
-            let specificGuidance = `Aamdani potential: ${data.incomePotential}.`;
-            if (/karz|debt|loan/i.test(qTextLower)) {
-              specificGuidance = `Karz se chhutkara aur bachat: ${data.savingsPotential}.`;
-            } else if (/invest|stock|crypto|share/i.test(qTextLower)) {
-              specificGuidance = `Nivesh aur dhansanchay: ${data.savingsPotential}.`;
-            }
-            fallbackText = `${name} Beta, aapki kundli me dhan yog ki anukoolta ${convertScore(data.wealthScore)} hai. ${specificGuidance} Timing: ${data.wealthWindows.join(', ')}.`;
-          } else if (questionTopic === 'daily') {
-            const data = calculateDailyTransitEngine(astroData, dayOfWeek);
-            let specificGuidance = `Mood: ${data.mood}. Kaam: ${data.work}.`;
-            if (/color|rang/i.test(qTextLower)) {
-              specificGuidance = `Aaj ka din anukul rahega aur mood ${data.mood} rahega.`;
-            } else if (/number|ank/i.test(qTextLower)) {
-              specificGuidance = `Dhan sthiti ${data.money} rahegi.`;
-            } else if (/savdhani|caution/i.test(qTextLower)) {
-              specificGuidance = `Savdhani: ${data.caution}.`;
-            }
-            fallbackText = `${name} Beta, aaj aapka bhagya pratishat ${convertScore(data.todayScore)} hai. ${specificGuidance} Rishte: ${data.relationships}.`;
-          } else if (questionTopic === 'health') {
-            const data = calculateHealthEngine(astroData);
-            let specificGuidance = `Stress level: ${data.stressLevel}.`;
-            if (/stress|mental|anxiety/i.test(qTextLower)) {
-              specificGuidance = `Stress aur chinta se recovery: ${data.recoveryPotential}.`;
-            }
-            fallbackText = `${name} Beta, swasthya vitality level ${convertScore(data.vitalityScore)} hai. ${specificGuidance} Guidance: ${data.healthGuidance}.`;
-          } else if (questionTopic === 'foreign') {
-            const data = calculateForeignTravelEngine(astroData);
-            fallbackText = `${name} Beta, videsh yatra potential: ${data.foreignTravelPotential}. Settlement potential: ${data.settlementPotential}. Timing: ${data.travelWindows.join(', ')}.`;
-          } else if (questionTopic === 'children') {
-            const data = calculateChildrenEngine(astroData);
-            fallbackText = `${name} Beta, santan potential: ${data.childrenPotential}. Family growth: ${data.familyGrowth}. Timing: ${data.childWindows.join(', ')}.`;
-          } else if (questionTopic === 'family') {
-            fallbackText = `${name} Beta, parivar me sukh shanti ke liye aapas me sanyam rakhna zaroori hai. Aaj shanti ke upay karein.`;
-          } else if (questionTopic === 'future') {
-            fallbackText = `${name} Beta, kismat aur future ke liye grah badalte rehte hain. Mehnat aur upay se anukul yog banenge.`;
-          } else {
-            const guidanceMap = {
-              future: "Grah badalte rehte hain, mehnat aur upay se kismat banati hai",
-              family: "Parivar me sukh shanti ke liye aapas me sanyam rakhna zaroori hai"
-            };
-            const genericGuidance = guidanceMap[questionTopic] || "samanya grah sthiti badalti rehti hai";
-            fallbackText = `${name} Beta, ${questionTopic} ke liye vistaar se kundli dekhni padti hai.\n\nFilhal samanya grah sthiti ke anusaar ${genericGuidance}.\n\nAaj ${dayOfWeek} hai, isliye ${weekdayRemedy}.\n\nKya aap career ya vivah ke baare me jaanna chahenge? Uske liye yog ki ganana uplabdh hai.`;
-          }
-        } else {
-          if (questionTopic === 'dreams') {
-            const data = getDreamMeaning(questionText);
-            fallbackText = `${name} Beta, aapke sapne me dekha gaya ${data.symbol} ka matlab hai: ${data.meaning}. Iska arth: ${data.description}`;
-          } else if (['nazar', 'spiritual', 'lucky'].includes(questionTopic)) {
-            const data = getSpiritualGuidance(questionText, astroData?.lagna);
-            fallbackText = `${name} Beta, spiritual guidance ke anusaar: Mantra: ${data.mantra} Daan: ${data.daan} Pooja: ${data.pooja} Dhyan: ${data.dhyan}.`;
-            if (data.ishtDev) {
-              fallbackText += ` Aapke isht dev: ${data.ishtDev}.`;
-            }
-          } else {
-            const principleMap = {
-              general: "Jeevan ke har sankat me dhairya aur ishwar par vishwas sabse bada sahara hai."
-            };
-            const remedyMap = {
-              general: "Pratidin subah dhyan lagayein aur sakaratmak sochein."
-            };
-            const generalSpiritualPrinciple = principleMap[questionTopic] || principleMap.general;
-            const safeRemedyOnly = remedyMap[questionTopic] || remedyMap.general;
-
-            fallbackText = `${name} Beta, ${questionTopic} ke vishay me shastra me kaha gaya hai...\n\n${generalSpiritualPrinciple}\n\nUpay: ${safeRemedyOnly}\n\nMann shant rakhein. Kya career ya vivah sambandhi prashn hai?`;
-          }
-        }
-
-        aiText = fallbackText;
-        jsonResponse = {
-          text: await injectSecretAndScore(fallbackText, uid, userData, progress, getSecretCategory(detectedIntent))
-        };
-        success = true;
-      } catch (fallbackError) {
-        console.error("Offline fallback failed:", fallbackError);
-        lastError = fallbackError;
-      }
-    }
+    console.error("AI Generation failed:", lastError?.message || lastError || "Unknown error");
+    return res.status(500).json({ error: "Failed to generate prediction. Connection to the sacred gateway is temporarily interrupted, please try again." });
   }
 
   if (success && jsonResponse) {

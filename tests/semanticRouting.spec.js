@@ -71,6 +71,16 @@ describe('Pandit AI Semantic Intent Detection Tests', () => {
       expect(res).toEqual({ tier: 1, topic: 'marriage' });
     });
 
+    it('should correctly classify "mere bche kb honge" to children intent', () => {
+      const res = getTopicAndSubType('mere bche kb honge');
+      expect(res).toEqual({ tier: 2, topic: 'children' });
+    });
+
+    it('should correctly classify "ram ram ji mere bche kb honge" to children intent', () => {
+      const res = getTopicAndSubType('ram ram ji mere bche kb honge');
+      expect(res).toEqual({ tier: 2, topic: 'children' });
+    });
+
     it('should correctly classify non-astrology query first before semantic intent', () => {
       const res = getTopicAndSubType('how to write javascript quicksort code?');
       expect(res).toEqual({ tier: 4, topic: 'non-astrology' });
