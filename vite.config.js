@@ -27,7 +27,9 @@ export default defineConfig({
       'tests/semanticMemory.spec.js',
       'tests/threeTierResponse.spec.js',
       'tests/validationSuite.spec.js',
-      'tests/specialtyEngines.spec.js'
+      'tests/specialtyEngines.spec.js',
+      'tests/semanticRouting.spec.js',
+      'tests/multiIntent.spec.js'
     ],
   },
 })

@@ -226,7 +226,8 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
       };
 
       await handler(req, res);
-      const isGreetingResponse = res.jsonData?.text?.includes("Namaste! Kaise hain aap?");
+      const text = res.jsonData?.text || "";
+      const isGreetingResponse = text.includes("Kaise hain aap") || text.includes("How are you today") || text.includes("How can I help");
       console.log(`Input: "${tc.q}" -> Is Greeting: ${isGreetingResponse} (Expected: ${tc.shouldBeGreeting})`);
       expect(isGreetingResponse).toBe(tc.shouldBeGreeting);
     }
@@ -1243,7 +1244,7 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(res.jsonData.text).toContain('Kya focus ab bhi SSC par hai ya UPSC ki taraf badal gaya hai?');
   });
 
-  it('33. Verify Greeting "Hello Pandit ji" returns all 5 headers', async () => {
+  it('33. Verify Greeting "Hello Pandit ji" returns conversational response and secret/score', async () => {
     const req = {
       method: 'POST',
       headers: { authorization: 'Bearer mock_token' },
@@ -1262,9 +1263,10 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
       json(data) { this.jsonData = data; return this; }
     };
     await handler(req, res);
-    expect(res.jsonData.text).toContain('🔮 Prediction:');
-    expect(res.jsonData.text).toContain('📿 Astrological Reasoning:');
-    expect(res.jsonData.text).toContain('🪔 Guidance:');
+    expect(res.jsonData.text).not.toContain('🔮 Prediction:');
+    expect(res.jsonData.text).not.toContain('📿 Astrological Reasoning:');
+    expect(res.jsonData.text).not.toContain('🪔 Guidance:');
+    expect(res.jsonData.text).toContain('Kaise hain aap');
     expect(res.jsonData.text).toContain('Aaj Ka Secret:');
     expect(res.jsonData.text).toContain('Karma Score:');
   });

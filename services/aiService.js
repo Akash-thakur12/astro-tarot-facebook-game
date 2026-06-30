@@ -1,13 +1,9 @@
-import OpenAIModule from 'openai';
-
-// Defensive check to handle mocked environments in tests
-const OpenAI = OpenAIModule.default || OpenAIModule;
-const AzureOpenAIClass = OpenAIModule.AzureOpenAI || OpenAI;
+import OpenAI from 'openai';
 
 let azureClient = null;
 let bedrockClient = null;
 
-function getAzureClient() {
+async function getAzureClient() {
   const apiKey = process.env.AZURE_OPENAI_API_KEY;
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
@@ -17,12 +13,26 @@ function getAzureClient() {
   }
 
   if (!azureClient) {
-    azureClient = new AzureOpenAIClass({
-      apiKey,
-      endpoint,
-      deployment,
-      apiVersion: '2024-02-15-preview',
-    });
+    const OpenAIModule = await import('openai');
+    const OpenAIClass = OpenAIModule.OpenAI || OpenAIModule.default;
+    
+    if (endpoint.includes('services.ai.azure.com')) {
+      // Azure AI Foundry Project Endpoint
+      azureClient = new OpenAIClass({
+        apiKey,
+        baseURL: endpoint.endsWith('/v1') ? endpoint : `${endpoint}/v1`,
+        defaultQuery: { 'api-version': '2024-02-15-preview' }
+      });
+    } else {
+      // Azure OpenAI Resource Endpoint
+      const AzureOpenAIClass = OpenAIModule.AzureOpenAI || OpenAIModule.default?.AzureOpenAI || OpenAIClass;
+      azureClient = new AzureOpenAIClass({
+        apiKey,
+        endpoint,
+        deployment,
+        apiVersion: '2024-02-15-preview',
+      });
+    }
   }
 
   return azureClient;
@@ -54,7 +64,7 @@ function getBedrockClient() {
  */
 export async function generateAIResponse(prompt, options = {}) {
   // 1. Try Azure OpenAI first
-  const azure = getAzureClient();
+  const azure = await getAzureClient();
   if (azure) {
     try {
       console.log("Trying primary provider: Azure OpenAI...");
@@ -67,6 +77,21 @@ export async function generateAIResponse(prompt, options = {}) {
       if (options.jsonMode) {
         bodyParams.response_format = { type: 'json_object' };
       }
+
+      // Instrumentation Logs (Phase 25J)
+      try {
+        const finalUrl = typeof azure.buildURL === 'function' 
+          ? azure.buildURL('/chat/completions') 
+          : `${azure.baseURL}/chat/completions`;
+        console.log("INSTRUMENTATION - Final Request URL:", finalUrl);
+        console.log("INSTRUMENTATION - Final Hostname:", new URL(finalUrl).hostname);
+        console.log("INSTRUMENTATION - Constructor Name:", azure.constructor.name);
+        console.log("INSTRUMENTATION - Endpoint Env Hostname:", process.env.AZURE_OPENAI_ENDPOINT ? new URL(process.env.AZURE_OPENAI_ENDPOINT).hostname : "N/A");
+        console.log("INSTRUMENTATION - Deployment Name:", deploymentName);
+      } catch (logErr) {
+        console.warn("Instrumentation logging failed:", logErr.message);
+      }
+
       const response = await azure.chat.completions.create(
         bodyParams,
         {
