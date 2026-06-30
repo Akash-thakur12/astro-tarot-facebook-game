@@ -21,7 +21,7 @@ async function getAzureClient() {
       azureClient = new OpenAIClass({
         apiKey,
         baseURL: endpoint.endsWith('/v1') ? endpoint : `${endpoint}/v1`,
-        defaultQuery: { 'api-version': '2024-02-15-preview' }
+        defaultQuery: { 'api-version': '2024-06-01' }
       });
     } else {
       // Azure OpenAI Resource Endpoint
@@ -30,7 +30,7 @@ async function getAzureClient() {
         apiKey,
         endpoint,
         deployment,
-        apiVersion: '2024-02-15-preview',
+        apiVersion: '2024-06-01',
       });
     }
   }
