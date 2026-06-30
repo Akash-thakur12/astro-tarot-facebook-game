@@ -27,7 +27,8 @@ async function getAzureClient() {
       console.log("INSTRUMENTATION - Final baseURL:", baseURL);
       azureClient = new OpenAIClass({
         apiKey,
-        baseURL
+        baseURL,
+        defaultQuery: { 'api-version': 'v1' }
       });
     } else {
       // Azure OpenAI Resource Endpoint
@@ -88,9 +89,14 @@ export async function generateAIResponse(prompt, options = {}) {
 
       // Instrumentation Logs (Phase 25J)
       try {
-        const finalUrl = typeof azure.buildURL === 'function' 
+        let finalUrl = typeof azure.buildURL === 'function' 
           ? azure.buildURL('/chat/completions') 
           : `${azure.baseURL}/chat/completions`;
+        const qParams = azure.defaultQuery || azure._options?.defaultQuery;
+        if (qParams && Object.keys(qParams).length > 0) {
+          const params = new URLSearchParams(qParams).toString();
+          finalUrl = finalUrl.includes('?') ? `${finalUrl}&${params}` : `${finalUrl}?${params}`;
+        }
         console.log("INSTRUMENTATION - Final Request URL:", finalUrl);
         console.log("INSTRUMENTATION - Final Hostname:", new URL(finalUrl).hostname);
         console.log("INSTRUMENTATION - Constructor Name:", azure.constructor.name);
