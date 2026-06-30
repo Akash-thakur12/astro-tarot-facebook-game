@@ -56,10 +56,12 @@ const Premium = () => {
   const tp = t[currentLanguage] || t.English;
 
   const handleUpgrade = async () => {
+    console.log("[PREMIUM] Step 1 Button Click");
     setLoading(true);
     setError(null);
 
     try {
+      console.log("[PREMIUM] Step 2 Purchase Started");
       if (!isPaymentsSupported()) {
         console.log("Facebook payments not supported. Redirecting to Razorpay checkout.");
         const loadScript = () => {
@@ -106,8 +108,10 @@ const Premium = () => {
               color: "#fbbf24"
             },
             handler: async function (response) {
+              console.log("[PREMIUM] Step 4 Payment Success");
               try {
                 setLoading(true);
+                console.log("[PREMIUM] Step 5 Verification Started");
                 const verifyRes = await fetch('/api/payments/verify-purchase', {
                   method: 'POST',
                   headers: {
@@ -125,6 +129,8 @@ const Premium = () => {
                 }
                 const verifyResult = await verifyRes.json();
                 if (verifyResult && verifyResult.success) {
+                  console.log("[PREMIUM] Step 6 Verification Success");
+                  console.log("[PREMIUM] Step 7 Premium Activated");
                   setSuccess(true);
                   await refreshUser();
                   resolve(true);
@@ -132,6 +138,7 @@ const Premium = () => {
                   throw new Error("Verification failed on server");
                 }
               } catch (verifyError) {
+                console.log("[PREMIUM] Step 8 Loading False");
                 setLoading(false);
                 setError(verifyError.message);
                 reject(verifyError);
@@ -139,12 +146,14 @@ const Premium = () => {
             },
             modal: {
               ondismiss: function () {
+                console.log("[PREMIUM] Step 8 Loading False");
                 setLoading(false);
                 setError("Payment was cancelled by user.");
                 reject(new Error("Payment was cancelled by user."));
               }
             }
           };
+          console.log("[PREMIUM] Step 3 Razorpay Opened");
           const rzp = new window.Razorpay(options);
           rzp.open();
         });
@@ -154,6 +163,8 @@ const Premium = () => {
       const verifyResult = await purchasePremium(getToken);
 
       if (verifyResult && verifyResult.success) {
+        console.log("[PREMIUM] Step 6 Verification Success");
+        console.log("[PREMIUM] Step 7 Premium Activated");
         setSuccess(true);
         await refreshUser();
       } else {
@@ -163,6 +174,7 @@ const Premium = () => {
       console.error("Upgrade Flow Error:", err);
       setError(err.message || "Upgrade failed. Please try again.");
     } finally {
+      console.log("[PREMIUM] Step 8 Loading False");
       setLoading(false);
     }
   };

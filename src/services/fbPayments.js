@@ -5,6 +5,7 @@ import { verifyPurchaseOnServer } from './facebook/payments/verify';
 import { logPaymentEvent } from './facebook/payments/analytics';
 import { saveCachedStatus, getCachedStatus } from './facebook/payments/cache';
 import { ProductIds, PaymentErrors } from './facebook/payments/types';
+import { isFBInstant } from './fbinstant';
 
 export { ProductIds, PaymentErrors };
 
@@ -14,7 +15,7 @@ export { ProductIds, PaymentErrors };
 export const initializePayments = async () => {
   return new Promise((resolve) => {
     // In Instant Games, check window.FBInstant.payments.onReady
-    if (typeof window !== 'undefined' && window.FBInstant && window.FBInstant.payments) {
+    if (typeof window !== 'undefined' && isFBInstant() && window.FBInstant.payments) {
       window.FBInstant.payments.onReady(() => {
         logPaymentEvent('payments_initialized');
         resolve(true);

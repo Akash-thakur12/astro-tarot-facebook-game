@@ -59,7 +59,7 @@ export const getFBPlayer = () => {
 };
 
 export const isPaymentsSupported = () => {
-  return typeof window !== 'undefined' && !!window.FBInstant && !!window.FBInstant.payments;
+  return isFBInstant() && !!window.FBInstant.payments;
 };
 
 export const getPaymentsInstance = () => {
