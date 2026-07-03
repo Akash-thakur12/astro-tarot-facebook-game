@@ -60,6 +60,9 @@ vi.mock('../services/aiService.js', () => ({
 📿 Reasoning: Aapka prashna Mera lucky number kya hai? kundali par aadharit nahi hai. Jyotish me bhav aur grah dekha jata hai.
 🪔 Guidance: Agar aap kundali alternative jaanna chahte hain to puch sakte hain.`;
     }
+    if (prompt.includes("VAGUE MODE RULES")) {
+      return `🔮 Prediction: Namaste Beta! Aap kya puchna chahte hain? Kripya apna prashna clear likhein.`;
+    }
     return `🔮 Prediction: Aapka career safal hoga.
 📿 Reasoning: Lagna Vrishchik hai aur Dasha achhi hai.
 🪔 Guidance: Mangal grah ke mantra ka jaap karein.`;
@@ -173,6 +176,55 @@ describe('Pandit AI - Addiction & Progress Engine', () => {
     expect(res.jsonData.text).toContain('Mai jyotish se sambandhit prashna ka hi uttar de sakta hun.');
     expect(res.jsonData.text).toContain('🎲 Aaj Ka Secret:');
     expect(res.jsonData.text).toContain('📊 Karma Score:');
+  });
+
+  it('should route "muje ek bat puchni hai" to vague mode and not contain astrology parameters', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer mock-token'
+      },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_vague_user',
+          dobDay: 31,
+          dobMonth: 8,
+          dobYear: 1999,
+          tobHour: 12,
+          tobMinute: 50,
+          tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'muje ek bat puchni hai'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    process.env.BEDROCK_API_KEY = "mock-key";
+    process.env.BEDROCK_BASE_URL = "mock-url";
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData).not.toBeNull();
+    const text = res.jsonData.text;
+    expect(text).toContain('Aap kya puchna chahte hain');
+    expect(text).not.toContain('Nakshatra');
+    expect(text).not.toContain('Mahadasha');
+    expect(text).not.toContain('Antardasha');
+    expect(text).not.toContain('Lagna');
   });
 
   it('should validate dasha presence using validateAstroResponse', async () => {

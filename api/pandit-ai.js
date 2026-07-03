@@ -2780,10 +2780,14 @@ Marital Status: ${maritalStatus}`;
 
     promptSections.push(astrologyProfileBlock);
 
-    promptSections.push(buildCompactContext(userData, astroData, updatedFacts));
+    promptSections.push(buildCompactContext(userData, isVague ? null : astroData, updatedFacts));
 
     // Inject calculated astroData (Step 8)
-    promptSections.push(buildAstrologyBlock(astroData));
+    if (!isVague) {
+      promptSections.push(buildAstrologyBlock(astroData));
+    } else {
+      promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
+    }
 
     // Recent Conversation (Recent 3 turns)
     const allHistoryMsgs = Array.isArray(history) ? history : [];
@@ -2929,6 +2933,16 @@ GREETING MODE RULES:
 - Do NOT mention dasha, planets, houses, government jobs, birthplace, or any birth chart details.
 - Give a short, warm welcome message (e.g., "Namaste Beta! Kaise hain aap?").
 - Ask them clearly what they want to know about their career, marriage, health, or finance today.
+`;
+    } else if (isVague) {
+      systemInstruction = `
+You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+
+VAGUE MODE RULES:
+- The user wants to begin a conversation but has not yet asked a specific astrology question.
+- Encourage them warmly to continue and ask their specific question about career, marriage, health, finance, or family.
+- Do NOT generate any predictions, dasha details, planet positions, lagna, or nakshatra.
+- Keep the reply welcoming and invite them to ask their question.
 `;
     } else if (tierType === 1) {
       systemInstruction = `
