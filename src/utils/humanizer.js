@@ -27,6 +27,14 @@ function limitPlanetsAndHouses(text) {
       if (match.includes("भाव") || match.includes("ेश")) {
         return "स्थिति";
       } else {
+        const planets = [
+          "बृहस्पति", "शुक्र", "शनि", "राहु", "केतु", "मंगल", "बुध", "चंद्रमा", "सूर्य",
+          "surya", "chandra", "mangal", "budh", "guru", "shukra", "shani", "rahu", "ketu",
+          "jupiter", "venus", "saturn", "mars", "mercury", "sun", "moon"
+        ];
+        if (planets.includes(match.toLowerCase())) {
+          return match;
+        }
         return "समय";
       }
     }

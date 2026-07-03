@@ -174,4 +174,27 @@ describe('Pandit AI - Addiction & Progress Engine', () => {
     expect(res.jsonData.text).toContain('🎲 Aaj Ka Secret:');
     expect(res.jsonData.text).toContain('📊 Karma Score:');
   });
+
+  it('should validate dasha presence using validateAstroResponse', async () => {
+    const { validateAstroResponse } = await import('../api/pandit-ai.js');
+    const astroData = {
+      mahadasha: 'Sun',
+      antardasha: 'Mercury'
+    };
+    
+    // Set TEST_DASHA_PRESERVATION env var to true
+    process.env.TEST_DASHA_PRESERVATION = 'true';
+    try {
+      // Valid response with both Surya and Budh
+      expect(validateAstroResponse('Aapki Surya dasha chal rahi hai aur Budh bhava me hai. Secret: 1. Score: 5', astroData)).toBe(true);
+      
+      // Invalid response with only Surya
+      expect(validateAstroResponse('Aapki Surya dasha chal rahi hai. Secret: 1. Score: 5', astroData)).toBe(false);
+      
+      // Invalid response with neither
+      expect(validateAstroResponse('Kuch nahi chal raha. Secret: 1. Score: 5', astroData)).toBe(false);
+    } finally {
+      delete process.env.TEST_DASHA_PRESERVATION;
+    }
+  });
 });
