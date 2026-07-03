@@ -61,7 +61,35 @@ vi.mock('../services/aiService.js', () => ({
 🪔 Guidance: Agar aap kundali alternative jaanna chahte hain to puch sakte hain.`;
     }
     if (prompt.includes("VAGUE MODE RULES")) {
-      return `🔮 Prediction: Namaste Beta! Aap kya puchna chahte hain? Kripya apna prashna clear likhein.`;
+      const leaks = [];
+      const forbidden = ['vrishchik', 'ashwini', 'himachal pradesh', 'wifealive', 'childrencount', 'financialstatus', 'government service', 'spouse', 'deceased', 'debt', 'pob'];
+      for (const word of forbidden) {
+        if (prompt.toLowerCase().includes(word)) {
+          leaks.push(word);
+        }
+      }
+      if (leaks.length > 0) {
+        return `🔮 Prediction: Leaked: ${leaks.join(', ')}`;
+      }
+      return `🔮 Prediction: Ji beta, poochiye. Main aapka sawal sunne ke liye taiyar hoon.`;
+    }
+    if (prompt.includes("GREETING MODE RULES")) {
+      const leaks = [];
+      const forbidden = ['vrishchik', 'ashwini', 'himachal pradesh', 'wifealive', 'childrencount', 'financialstatus'];
+      for (const word of forbidden) {
+        if (prompt.toLowerCase().includes(word)) {
+          leaks.push(word);
+        }
+      }
+      if (leaks.length > 0) {
+        return `🔮 Prediction: Leaked: ${leaks.join(', ')}`;
+      }
+      return `🔮 Prediction: Namaste! Kaise hain aap? Aaj aap kya puchna chahte hain?`;
+    }
+    if (prompt.toLowerCase().includes("shaadi") || prompt.toLowerCase().includes("shadi")) {
+      return `🔮 Prediction: Vivah ke yog 2026 ke baad majboot dikh rahe hain.
+📿 Reasoning: Lagna Vrishchik hai aur Dasha achhi hai.
+🪔 Guidance: Mangal grah ke mantra ka jaap karein.`;
     }
     return `🔮 Prediction: Aapka career safal hoga.
 📿 Reasoning: Lagna Vrishchik hai aur Dasha achhi hai.
@@ -220,11 +248,196 @@ describe('Pandit AI - Addiction & Progress Engine', () => {
     expect(res.statusCode).toBe(200);
     expect(res.jsonData).not.toBeNull();
     const text = res.jsonData.text;
-    expect(text).toContain('Aap kya puchna chahte hain');
+    expect(text).toContain('sawal sunne ke liye taiyar hoon');
     expect(text).not.toContain('Nakshatra');
     expect(text).not.toContain('Mahadasha');
     expect(text).not.toContain('Antardasha');
     expect(text).not.toContain('Lagna');
+  });
+
+  it('should isolate greeting mode and not leak any astrology/profile data', async () => {
+    const inputs = ['hi', 'hii', 'hiii', 'hello', 'helo', 'hlo', 'ram ram ji'];
+    for (const input of inputs) {
+      const req = {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer mock-token'
+        },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_greeting_user',
+            dobDay: 31,
+            dobMonth: 8,
+            dobYear: 1999,
+            tobHour: 12,
+            tobMinute: 50,
+            tobPeriod: 'PM',
+            pob: 'Hamirpur Himachal Pradesh',
+            question: input
+          },
+          history: []
+        }
+      };
+
+      const res = {
+        statusCode: 200,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonData).not.toBeNull();
+      const text = res.jsonData.text.toLowerCase();
+      expect(text).not.toContain('mahadasha');
+      expect(text).not.toContain('nakshatra');
+      expect(text).not.toContain('lagna');
+      expect(text).not.toContain('government job');
+      expect(text).not.toContain('wife');
+      expect(text).not.toContain('family');
+      expect(text).not.toContain('finance');
+      expect(text).not.toContain('leaked');
+    }
+  });
+
+  it('should route "ek bat puchni thi apse" to vague mode and not contain profile/astrology parameters', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer mock-token'
+      },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_vague_user_2',
+          dobDay: 31,
+          dobMonth: 8,
+          dobYear: 1999,
+          tobHour: 12,
+          tobMinute: 50,
+          tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'ek bat puchni thi apse'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData).not.toBeNull();
+    const text = res.jsonData.text.toLowerCase();
+    expect(text).toContain('sawal sunne ke liye taiyar hoon');
+    expect(text).not.toContain('government');
+    expect(text).not.toContain('wife');
+    expect(text).not.toContain('family');
+    expect(text).not.toContain('finance');
+    expect(text).not.toContain('child');
+    expect(text).not.toContain('hamirpur');
+    expect(text).not.toContain('leaked');
+  });
+
+  it('should route "meri shaadi kab hogi" and not start with standard greeting', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer mock-token'
+      },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_marriage_user',
+          dobDay: 31,
+          dobMonth: 8,
+          dobYear: 1999,
+          tobHour: 12,
+          tobMinute: 50,
+          tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'meri shaadi kab hogi'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData).not.toBeNull();
+    const text = res.jsonData.text;
+    expect(text).not.toMatch(/^(Ram Ram beta|Namaste beta|Pranam beta)/i);
+  });
+
+  it('should route "ram ram ji" as greeting', async () => {
+    const req = {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer mock-token'
+      },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_greeting_ji_user',
+          dobDay: 31,
+          dobMonth: 8,
+          dobYear: 1999,
+          tobHour: 12,
+          tobMinute: 50,
+          tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'ram ram ji'
+        },
+        history: []
+      }
+    };
+
+    const res = {
+      statusCode: 200,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData).not.toBeNull();
+    const text = res.jsonData.text.toLowerCase();
+    expect(text).toContain('namaste');
   });
 
   it('should validate dasha presence using validateAstroResponse', async () => {

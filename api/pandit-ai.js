@@ -1913,7 +1913,7 @@ export function detectGreetingIntent(question) {
 
   const normalized = normalizeText(question);
 
-  const GREETING_PATTERN_REGEX = /^(?:hi|hello|hey|hii|hlo|helo|namaste|namaskar|pranam|pranaam|charan\s*sparsh|vanakkam|adab|assalamualaikum|sat\s*sri\s*akal|good\s*(?:morning|evening|night|afternoon)|ram\s*ram|ramram|radhe\s*radhe|radheradhe|guruji|pandit\s*ji|panditji|pandi\s*ji|pandiji|baba|guru\s*ji|bholenath|bhole\s*nath|har\s*har\s*mahadev|jai\s*shiv\s*shankar|jai\s*mata\s*di|radhe\s*krishna|jai\s*shree\s*ram|jai\s*bholenath|jay\s*shree\s*ram|om\s*namah\s*shivaya?|waheguru|जय\s*श्री\s*राम|राधे\s*राधे|नमस्ते|राम\s*राम|प्रणाम|guru\s*ji|guru\s*ji|गुरु\s*जी|गुरुजी|पंडित\s*जी|पंडितजी|बाबा|हर\s*हर\s*महादेव|जय\s*माता\s*दी|राधे\s*कृष्ण|सत\s*श्री\s*अकाल|अस्सलाम\s*अलैकुम|शुभ\s*प्रभात|शुभ\s*रात्रि|(?:jai|jay|har\s+har|om|shree|sri|shri|radhe|radhey|hare|bol|bolo)\s+(?:ram|shyam|krishna|shiva|shiv|shankar|mahadev|bholenath|bhole\s+nath|mata\s+di|durga|laxmi|ganesh|hanuman|sai|radha|radhe|krishna|gurudev|guru|waheguru|shiv\s+shankar|shiv\s+shambhu|mahabali|sita\s+ram)(?:\s+ki\s+jai)?|ji|ji\s+pranam|ji\s+namaste)/i;
+  const GREETING_PATTERN_REGEX = /^(?:hiii|hii|hi|hello|hey|hlo|helo|namaste|namaskar|pranam|pranaam|charan\s*sparsh|vanakkam|adab|assalamualaikum|sat\s*sri\s*akal|good\s*(?:morning|evening|night|afternoon)|ram\s*ram|ramram|radhe\s*radhe|radheradhe|guruji|pandit\s*ji|panditji|pandi\s*ji|pandiji|baba|guru\s*ji|bholenath|bhole\s*nath|har\s*har\s*mahadev|jai\s*shiv\s*shankar|jai\s*mata\s*di|radhe\s*krishna|jai\s*shree\s*ram|jai\s*bholenath|jay\s*shree\s*ram|om\s*namah\s*shivaya?|waheguru|जय\s*श्री\s*राम|राधे\s*राधे|नमस्ते|राम\s*राम|प्रणाम|guru\s*ji|guru\s*ji|गुरु\s*जी|गुरुजी|पंडित\s*जी|पंडितजी|बाबा|हर\s*हर\s*महादेव|जय\s*माता\s*दी|राधे\s*कृष्ण|सत\s*श्री\s*अकाल|अस्सलाम\s*अलैकुम|शुभ\s*प्रभात|शुभ\s*रात्रि|(?:jai|jay|har\s+har|om|shree|sri|shri|radhe|radhey|hare|bol|bolo)\s+(?:ram|shyam|krishna|shiva|shiv|shankar|mahadev|bholenath|bhole\s+nath|mata\s+di|durga|laxmi|ganesh|hanuman|sai|radha|radhe|krishna|gurudev|guru|waheguru|shiv\s+shankar|shiv\s+shambhu|mahabali|sita\s+ram)(?:\s+ki\s+jai)?|ji|ji\s+pranam|ji\s+namaste)/i;
 
   let currentText = normalized;
   let accumulatedGreeting = [];
@@ -2766,10 +2766,9 @@ Current Season: ${season}`;
     const language = resolvedLanguage;
     factMemoryBlock += `Language Preference: ${language}`;
 
-    promptSections.push(factMemoryBlock.trim());
-
-    // Inject User Astrology Profile before user question (Step 2)
-    let astrologyProfileBlock = `User Astrology Profile:
+    if (!isGreeting && !isVague) {
+      promptSections.push(factMemoryBlock.trim());
+      let astrologyProfileBlock = `User Astrology Profile:
 Name: ${name}
 Gender: ${gender}
 DOB: ${dob}
@@ -2777,15 +2776,15 @@ Age: ${ageDisplay}
 Time: ${tob}
 Place: ${pob}
 Marital Status: ${maritalStatus}`;
-
-    promptSections.push(astrologyProfileBlock);
-
-    promptSections.push(buildCompactContext(userData, isVague ? null : astroData, updatedFacts));
-
-    // Inject calculated astroData (Step 8)
-    if (!isVague) {
-      promptSections.push(buildAstrologyBlock(astroData));
+      promptSections.push(astrologyProfileBlock);
+      promptSections.push(buildCompactContext(userData, isVague ? null : astroData, updatedFacts));
+      if (!isVague) {
+        promptSections.push(buildAstrologyBlock(astroData));
+      } else {
+        promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
+      }
     } else {
+      promptSections.push("USER PROFILE\nDATA UNAVAILABLE");
       promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
     }
 
@@ -2949,14 +2948,14 @@ VAGUE MODE RULES:
 You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
 
 RESPONSE FORMAT - YOU MUST FOLLOW THIS EXACTLY:
-Summary: Start with a direct answer to the user's specific question (e.g., "${name} Beta, ..."). Focus entirely on answering the user's current question as the primary objective.
+Summary: Start directly with a clear and concise answer to the user's specific question. Do NOT prepend greeting phrases or address the user by name/beta at the very beginning. Focus entirely on answering the user's current question as the primary objective.
 Timing: timing or predicted time window relevant to their question.
 Reason: Explain the astrological reasoning (dasha, placements) only if it directly supports the answer. Do NOT repeat birthplace, age, occupation, or dasha details (such as Mahadasha or Antardasha name, Government Job, Hamirpur, etc.) unless they are directly relevant to the question.
 Upay: Relevant remedy (Upay) if applicable.
 Question: End with a question asking if they want to know more.
 
 Example of correct response style:
-Amisha Beta, aapki kundli ke hisaab se Guru-Rahu chandal yog bana hua hai, jo buddhi ko sankochit karta hai aur dhyan bhatkata hai.
+Aapki kundli ke hisaab se Guru-Rahu chandal yog bana hua hai, jo buddhi ko sankochit karta hai aur dhyan bhatkata hai.
 Naukri me tarakki aapko February 2027 se April 2027 ke beech mil sakti hai.
 Kyunki dashmesh bhav par guru grah ki dristi pad rahi hai.
 Upay: Roz subah surya dev ko jal dein aur peele phool chadhayein.
@@ -2999,6 +2998,7 @@ TIER 3 RESPONSE RULES:
     const priorityRulesBlock = `
 === PRIORITY & CONTEXT RULES ===
 - The current question has the highest priority. Focus entirely on answering the user's specific question as the primary objective.
+- GREETING & NAME BANS: Unless the user is only greeting you (isGreeting=true), you must NOT start your response with any greeting phrases (like "Ram Ram", "Namaste", "Pranam", "Kalyan ho") or address the user by name/beta at the very beginning of the response (e.g. do NOT start with "Ram Ram beta Akash" or "Akash Beta, ..."). Start the response directly with the answer/prediction.
 - Do NOT repeat the user's chart summary (such as Sun Mahadasha, Mercury Antardasha, Government Job, Hamirpur, age, or birthplace) unless it is directly relevant to the specific question asked. Birth chart context should SUPPORT the answer, not replace it.
 - FOLLOW-UP DETECTION: If the user asks a short follow-up query (e.g., "kab", "kis year", "kitne saal", "uska kya hoga", "phir", "aur", "when", "then", "what about", etc.), you MUST read the "Recent Conversation" history to understand the subject they are asking about, and answer using that context.
 `;
