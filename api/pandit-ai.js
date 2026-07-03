@@ -759,6 +759,16 @@ export function getTopicAndSubType(question) {
 function _getTopicAndSubType(question) {
   const q = question.toLowerCase();
 
+  if (isProfileAcknowledgementMessage(question)) {
+    console.log("FINAL_TOPIC", "profile_acknowledgement");
+    return { tier: 5, topic: 'profile_acknowledgement' };
+  }
+
+  if (isMemoryRecallMessage(question)) {
+    console.log("FINAL_TOPIC", "memory_recall");
+    return { tier: 6, topic: 'memory_recall' };
+  }
+
   if (isNonAstrologyQuestion(question)) {
     console.log("FINAL_TOPIC", "non-astrology");
     return { tier: 4, topic: 'non-astrology' };
@@ -1901,6 +1911,118 @@ function normalizeText(text) {
   return normalized.trim();
 }
 
+export function isProfileAcknowledgementMessage(text) {
+  if (!text) return false;
+  const normalized = normalizeText(text);
+
+  const ackPhrases = [
+    'apko pata hai', 'apko pta hai', 'yaad hai', 'do you know', 'remember',
+    'maine bataya tha', 'tumhe yaad hai', 'kya tum jante ho', 'tumhe pata hai', 'tumhe pta hai'
+  ];
+
+  const profileKeywords = [
+    'shadi', 'shaadi', 'married', 'job', 'naukri', 'sarkari', 'work', 'occupation',
+    'janm', 'birth', 'dob', 'place', 'sthan', 'time', 'samay', 'financial', 'loan',
+    'karz', 'karza', 'children', 'bachcha', 'baccha', 'child', 'gender', 'name'
+  ];
+
+  const hasAck = ackPhrases.some(phrase => normalized.includes(phrase));
+  const hasProfile = profileKeywords.some(keyword => normalized.includes(keyword));
+
+  const directConfirms = [
+    'shaadi ho chuki hai na', 'shadi ho chuki hai na', 'vivahit hu na', 'married hu na'
+  ];
+  const hasDirectConfirm = directConfirms.some(pattern => normalized.includes(pattern));
+
+  return (hasAck && hasProfile) || hasDirectConfirm;
+}
+
+export function detectDirectRecallKey(text) {
+  if (!text) return null;
+  const normalized = normalizeText(text);
+
+  if (normalized.includes('mera naam') || normalized.includes('my name')) return 'name';
+  
+  if (normalized.includes('mera dob') || normalized.includes('my dob') || normalized.includes('meri dob') || 
+      normalized.includes('birth date') || normalized.includes('janm tithi') || normalized.includes('janam tithi')) return 'dob';
+      
+  if (normalized.includes('janm sthan') || normalized.includes('janam sthan') || 
+      normalized.includes('birthplace') || normalized.includes('birth place') || normalized.includes('pob')) return 'pob';
+      
+  if (normalized.includes('meri age') || normalized.includes('my age') || 
+      normalized.includes('umar kitni') || normalized.includes('umar kya')) return 'age';
+      
+  if (normalized.includes('mai kya kaam') || normalized.includes('mai kya kam') || 
+      normalized.includes('mera occupation') || normalized.includes('my occupation') || 
+      normalized.includes('meri occupation') || normalized.includes('meri naukri') || 
+      normalized.includes('my job') || normalized.includes('mera job')) return 'occupation';
+      
+  if (normalized.includes('kitne bachche') || normalized.includes('kitne bacche') || 
+      normalized.includes('kitne child') || normalized.includes('how many kids') || 
+      normalized.includes('how many children')) return 'children';
+
+  return null;
+}
+
+export function formatDirectRecallResponse(key, value, langPreference, isDevanagari) {
+  const isUnknown = !value || value === 'Unknown' || value === 'Unknown-0' || value === '0';
+  
+  let displayValue = value;
+  if (key === 'occupation' && !isUnknown) {
+    const valLower = value.toLowerCase();
+    if (valLower.includes('government') || valLower.includes('sarkari')) {
+      displayValue = isDevanagari ? 'सरकारी नौकरी' : (langPreference === 'English' ? 'government job' : 'sarkari naukri');
+    } else if (valLower.includes('private')) {
+      displayValue = isDevanagari ? 'प्राइवेट नौकरी' : (langPreference === 'English' ? 'private job' : 'private naukri');
+    } else if (valLower.includes('business') || valLower.includes('vyapar')) {
+      displayValue = isDevanagari ? 'व्यापार' : (langPreference === 'English' ? 'business' : 'business');
+    } else if (valLower.includes('student') || valLower.includes('padhai')) {
+      displayValue = isDevanagari ? 'विद्यार्थी' : (langPreference === 'English' ? 'student' : 'student');
+    }
+  }
+
+  if (langPreference === 'English') {
+    if (isUnknown) return "I don't have this information yet. Would you like to share?";
+    if (key === 'name') return `Your name is ${displayValue}.`;
+    if (key === 'dob') return `Your date of birth is ${displayValue}.`;
+    if (key === 'pob') return `Your birthplace is ${displayValue}.`;
+    if (key === 'age') return `Your age is ${displayValue}.`;
+    if (key === 'occupation') return `You work in a ${displayValue}.`;
+    if (key === 'children') return `You have ${displayValue} child/children.`;
+  } else if (isDevanagari) {
+    if (isUnknown) return "मुझे इसकी जानकारी नहीं है। क्या आप बताना चाहेंगे?";
+    if (key === 'name') return `आपका नाम ${displayValue} है।`;
+    if (key === 'dob') return `आपकी जन्म तिथि ${displayValue} है।`;
+    if (key === 'pob') return `आपका जन्म स्थान ${displayValue} है।`;
+    if (key === 'age') return `आपकी उम्र ${displayValue} वर्ष है।`;
+    if (key === 'occupation') return `आप ${displayValue} करते हैं।`;
+    if (key === 'children') return `आपके ${displayValue} बच्चे हैं।`;
+  } else {
+    // Hinglish (Default)
+    if (isUnknown) return "Mujhe iski jaankari nahi hai. Kya aap batana chahenge?";
+    if (key === 'name') return `Aapka naam ${displayValue} hai.`;
+    if (key === 'dob') return `Aapki birth date ${displayValue} hai.`;
+    if (key === 'pob') return `Aapka birthplace ${displayValue} hai.`;
+    if (key === 'age') return `Aapki age ${displayValue} saal hai.`;
+    if (key === 'occupation') return `Aap ${displayValue} karte hain.`;
+    if (key === 'children') return `Aapke ${displayValue} bachche hain.`;
+  }
+  return "";
+}
+
+export function isMemoryRecallMessage(text) {
+  if (!text) return false;
+  const normalized = normalizeText(text);
+
+  const patterns = [
+    'mere baare me', 'mere bare me',
+    'kya bataya tha', 'maine bataya',
+    'profile summarize', 'mujhe yaad dilao'
+  ];
+
+  return patterns.some(pattern => normalized.includes(pattern));
+}
+
 export function detectGreetingIntent(question) {
   if (!question) {
     return {
@@ -2547,7 +2669,9 @@ Current Season: ${season}`;
   }
 
   const isGreeting = isGreetingMessage(questionText);
-  const isVague = isVagueMessage(questionText);
+  const isProfileAck = isProfileAcknowledgementMessage(questionText);
+  const isMemoryRecall = isMemoryRecallMessage(questionText);
+  const isVague = !isProfileAck && !isMemoryRecall && isVagueMessage(questionText);
 
 
 
@@ -2682,6 +2806,27 @@ Current Season: ${season}`;
         pob = 'Unknown';
       }
     }
+
+    const directRecallKey = detectDirectRecallKey(questionText);
+    if (directRecallKey && !isProfileAck) {
+      let value = 'Unknown';
+      if (directRecallKey === 'name') value = name;
+      else if (directRecallKey === 'dob') {
+        if (dob && dob !== 'Unknown') {
+          const parts = dob.split('-');
+          value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        } else {
+          value = 'Unknown';
+        }
+      }
+      else if (directRecallKey === 'pob') value = pob;
+      else if (directRecallKey === 'age') value = ageDisplay;
+      else if (directRecallKey === 'occupation') value = profile?.occupation || userData?.occupation || getFact(factMemory, 'career.occupation') || 'Unknown';
+      else if (directRecallKey === 'children') value = getFact(factMemory, 'family.childrenCount') || userData?.childrenCount || profile?.childrenCount || 'Unknown';
+
+      const reply = formatDirectRecallResponse(directRecallKey, value, resolvedLanguage, isDevanagari);
+      return res.status(200).json({ text: `🔮 Prediction: ${reply}` });
+    }
   }
 
   const skipDashaPreservation = isGreeting || isVague || !hasBirthDetails || isNonAstrologyQuestion(questionText);
@@ -2777,9 +2922,13 @@ Time: ${tob}
 Place: ${pob}
 Marital Status: ${maritalStatus}`;
       promptSections.push(astrologyProfileBlock);
-      promptSections.push(buildCompactContext(userData, isVague ? null : astroData, updatedFacts));
-      if (!isVague) {
-        promptSections.push(buildAstrologyBlock(astroData));
+      if (!isProfileAck && !isMemoryRecall) {
+        promptSections.push(buildCompactContext(userData, isVague ? null : astroData, updatedFacts));
+        if (!isVague) {
+          promptSections.push(buildAstrologyBlock(astroData));
+        } else {
+          promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
+        }
       } else {
         promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
       }
@@ -2942,6 +3091,30 @@ VAGUE MODE RULES:
 - Encourage them warmly to continue and ask their specific question about career, marriage, health, finance, or family.
 - Do NOT generate any predictions, dasha details, planet positions, lagna, or nakshatra.
 - Keep the reply welcoming and invite them to ask their question.
+`;
+    } else if (tierType === 5 || questionTopic === 'profile_acknowledgement') {
+      systemInstruction = `
+You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+
+PROFILE ACKNOWLEDGEMENT MODE RULES:
+- The user is asking if you know, remember, or possess their profile details (e.g. name, marriage status, occupation, birth details).
+- Simply confirm their known profile facts based on the USER PROFILE and Fact Memory provided.
+- Do NOT generate any predictions, dasha analysis, timing, or Upay.
+- If some detail is not in the USER PROFILE or Fact Memory, politely say that you do not have that specific detail yet.
+- Keep the response short, warm, and natural.
+`;
+    } else if (tierType === 6 || questionTopic === 'memory_recall') {
+      systemInstruction = `
+You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+
+MEMORY RECALL MODE RULES:
+- The user is asking you to retrieve or disclose their stored profile details (e.g. name, date of birth, age, birthplace, occupation, married status, children count).
+- Answer the query directly using the USER PROFILE and Fact Memory details provided below.
+- Do NOT generate any predictions, dasha analysis, timing, or Upay.
+- Do NOT invent or calculate any astrology parameters (like Lagna, Nakshatra, houses).
+- If the user asks general recall ("mere baare me kya yaad hai" or similar), list all known details in a clean, bulleted list.
+- If a queried detail is not in the USER PROFILE or Fact Memory, politely state that you do not have that specific information yet.
+- Keep the response direct, warm, and natural.
 `;
     } else if (tierType === 1) {
       systemInstruction = `

@@ -60,6 +60,38 @@ vi.mock('../services/aiService.js', () => ({
 📿 Reasoning: Aapka prashna Mera lucky number kya hai? kundali par aadharit nahi hai. Jyotish me bhav aur grah dekha jata hai.
 🪔 Guidance: Agar aap kundali alternative jaanna chahte hain to puch sakte hain.`;
     }
+    if (prompt.includes("PROFILE ACKNOWLEDGEMENT MODE RULES")) {
+      const leaks = [];
+      const forbidden = ['vrishchik', 'ashwini', 'government service', 'spouse', 'deceased', 'debt'];
+      for (const word of forbidden) {
+        if (prompt.toLowerCase().includes(word)) {
+          leaks.push(word);
+        }
+      }
+      if (leaks.length > 0) {
+        return `🔮 Prediction: Leaked: ${leaks.join(', ')}`;
+      }
+      if (prompt.includes("Married: Yes")) {
+        return `🔮 Prediction: Ji haan, aapke profile ke anusaar aap vivahit hain.`;
+      }
+      if (prompt.includes("Occupation: Government Job")) {
+        return `🔮 Prediction: Ji haan, aapke profile ke anusaar aap sarkari naukri me hain.`;
+      }
+      return `🔮 Prediction: Ji haan, mujhe aapke details ke baare me pata hai.`;
+    }
+    if (prompt.includes("MEMORY RECALL MODE RULES")) {
+      const leaks = [];
+      const forbidden = ['vrishchik', 'ashwini', 'government service', 'spouse', 'deceased', 'debt'];
+      for (const word of forbidden) {
+        if (prompt.toLowerCase().includes(word)) {
+          leaks.push(word);
+        }
+      }
+      if (leaks.length > 0) {
+        return `🔮 Prediction: Leaked: ${leaks.join(', ')}`;
+      }
+      return `🔮 Prediction: Mujhe aapke baare me ye details yaad hain:\n- Naam: Akash\n- Janm Sthan: Hamirpur Himachal Pradesh`;
+    }
     if (prompt.includes("VAGUE MODE RULES")) {
       const leaks = [];
       const forbidden = ['vrishchik', 'ashwini', 'himachal pradesh', 'wifealive', 'childrencount', 'financialstatus', 'government service', 'spouse', 'deceased', 'debt', 'pob'];
@@ -438,6 +470,221 @@ describe('Pandit AI - Addiction & Progress Engine', () => {
     expect(res.jsonData).not.toBeNull();
     const text = res.jsonData.text.toLowerCase();
     expect(text).toContain('namaste');
+  });
+
+  it('should route profile acknowledgement inputs and verify no leaks', async () => {
+    const cases = [
+      { q: 'apko pta hai mai shadi shuda hu', expected: 'vivahit hain', maritalStatus: 'Married', occupation: 'Unknown' },
+      { q: 'apko pta hai mai sarkari naukri me hu', expected: 'sarkari naukri', maritalStatus: 'Unknown', occupation: 'Government Job' },
+      { q: 'apko mera janm sthan yaad hai', expected: 'details ke baare me pata hai', maritalStatus: 'Unknown', occupation: 'Unknown' }
+    ];
+
+    for (const c of cases) {
+      const req = {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer mock-token'
+        },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_ack_user_' + Math.random().toString(36).substring(7),
+            dobDay: 31,
+            dobMonth: 8,
+            dobYear: 1999,
+            tobHour: 12,
+            tobMinute: 50,
+            tobPeriod: 'PM',
+            pob: 'Hamirpur Himachal Pradesh',
+            maritalStatus: c.maritalStatus,
+            occupation: c.occupation,
+            question: c.q
+          },
+          history: []
+        }
+      };
+
+      const res = {
+        statusCode: 200,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonData).not.toBeNull();
+      const text = res.jsonData.text.toLowerCase();
+      expect(text).toContain(c.expected);
+      expect(text).not.toContain('leaked');
+    }
+  });
+
+  it('should handle direct recall queries without LLM and preserve user language script preference', async () => {
+    const cases = [
+      { q: 'mera naam kya hai', expected: 'akash' },
+      { q: 'mera DOB kya hai', expected: '31-08-1999' },
+      { q: 'mera janm sthan kya hai', expected: 'hamirpur' },
+      { q: 'meri age kitni hai', expected: '26 saal' },
+      { q: 'mai kya kaam karta hu', expected: 'sarkari naukri' },
+      { q: 'mere kitne bachche hain', expected: '1 bachche' }
+    ];
+
+    for (const c of cases) {
+      const req = {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer mock-token'
+        },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_direct_recall_user',
+            name: 'Akash',
+            dobDay: 31,
+            dobMonth: 8,
+            dobYear: 1999,
+            tobHour: 12,
+            tobMinute: 50,
+            tobPeriod: 'PM',
+            pob: 'Hamirpur Himachal Pradesh',
+            maritalStatus: 'Married',
+            occupation: 'Government Job',
+            childrenCount: 1,
+            question: c.q
+          },
+          history: []
+        }
+      };
+
+      const res = {
+        statusCode: 200,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonData).not.toBeNull();
+      const text = res.jsonData.text.toLowerCase();
+      expect(text).toContain(c.expected);
+      expect(text).not.toContain('leaked');
+    }
+  });
+
+  it('should route general recall queries to Tier 6 (LLM Memory Recall) and verify no leaks', async () => {
+    const cases = [
+      { q: 'mere baare me kya yaad hai', expected: 'naam: akash' },
+      { q: 'maine tumhe kya bataya tha', expected: 'hamirpur' }
+    ];
+
+    for (const c of cases) {
+      const req = {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer mock-token'
+        },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_llm_recall_user',
+            dobDay: 31,
+            dobMonth: 8,
+            dobYear: 1999,
+            tobHour: 12,
+            tobMinute: 50,
+            tobPeriod: 'PM',
+            pob: 'Hamirpur Himachal Pradesh',
+            maritalStatus: 'Married',
+            occupation: 'Government Job',
+            question: c.q
+          },
+          history: []
+        }
+      };
+
+      const res = {
+        statusCode: 200,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonData).not.toBeNull();
+      const text = res.jsonData.text.toLowerCase();
+      expect(text).toContain(c.expected);
+      expect(text).not.toContain('leaked');
+    }
+  });
+
+  it('should route profile acknowledgement direct confirmation patterns to Tier 5', async () => {
+    const cases = [
+      { q: 'meri shaadi ho chuki hai na', expected: 'vivahit hain' },
+      { q: 'vivahit hu na', expected: 'vivahit hain' }
+    ];
+
+    for (const c of cases) {
+      const req = {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer mock-token'
+        },
+        body: {
+          mode: 'chat',
+          userData: {
+            uid: 'test_ack_direct_user',
+            dobDay: 31,
+            dobMonth: 8,
+            dobYear: 1999,
+            tobHour: 12,
+            tobMinute: 50,
+            tobPeriod: 'PM',
+            pob: 'Hamirpur Himachal Pradesh',
+            maritalStatus: 'Married',
+            occupation: 'Government Job',
+            question: c.q
+          },
+          history: []
+        }
+      };
+
+      const res = {
+        statusCode: 200,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonData).not.toBeNull();
+      const text = res.jsonData.text.toLowerCase();
+      expect(text).toContain(c.expected);
+      expect(text).not.toContain('leaked');
+    }
   });
 
   it('should validate dasha presence using validateAstroResponse', async () => {
