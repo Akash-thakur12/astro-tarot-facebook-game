@@ -3,7 +3,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getProgress, updateProgress, getDailySecret } from '../src/utils/progressEngine.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { buildResponse } from '../src/utils/responseBuilder.js';
+
 import { detectIntent } from '../src/utils/intentDetector.js';
 import { normalizeFacts } from '../src/utils/memoryEngine.js';
 import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
@@ -2853,7 +2853,14 @@ Current Season: ${season}`;
     }
   }
 
-  const skipDashaPreservation = isGreeting || isVague || !hasBirthDetails || isNonAstrologyQuestion(questionText);
+  const qClean = (questionText || '').toLowerCase().trim();
+  const timingKeywords = ['kab', 'kb', 'when', 'saal', 'month', 'year', 'timing', 'samay', 'tithi', 'date', 'time', 'period', 'window'];
+  const hasTimingKeyword = timingKeywords.some(keyword => qClean.includes(keyword));
+  const isGratitude = qClean.includes('thank') || qClean.includes('shukriya') || qClean.includes('dhanyavad') || qClean.includes('dhanyabahad');
+  const isRemedy = qClean.includes('upay') || qClean.includes('upaya') || qClean.includes('remedy') || qClean.includes('nivaran');
+  const isTimingQuery = hasTimingKeyword && !isGreeting && !isProfileAck && !isMemoryRecall && !isVague && !isGratitude && !isRemedy && !wasAwaitingClarification;
+
+  const skipDashaPreservation = isGreeting || isVague || !hasBirthDetails || isNonAstrologyQuestion(questionText) || !isTimingQuery;
 
   const astroData = (mode === 'chat' || mode === 'personal')
     ? await getAstrologyData({ dob, tob, pob })
@@ -3149,19 +3156,16 @@ MEMORY RECALL MODE RULES:
       systemInstruction = `
 You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
 
-RESPONSE FORMAT - YOU MUST FOLLOW THIS EXACTLY:
-Summary: Start directly with a clear and concise answer to the user's specific question. Do NOT prepend greeting phrases or address the user by name/beta at the very beginning. Focus entirely on answering the user's current question as the primary objective.
-Timing: timing or predicted time window relevant to their question.
-Reason: Explain the astrological reasoning (dasha, placements) only if it directly supports the answer. Do NOT repeat birthplace, age, occupation, or dasha details (such as Mahadasha or Antardasha name, Government Job, Hamirpur, etc.) unless they are directly relevant to the question.
-Upay: Relevant remedy (Upay) if applicable.
-Question: End with a question asking if they want to know more.
+RESPONSE STYLE & CONTENT RULES:
+- Write your response as warm, natural conversational paragraphs. Do NOT use rigid headers (like Summary:, Timing:, Reason:, Upay:, Question:).
+- Start directly with a clear and concise answer to the user's specific question. Do NOT prepend greeting phrases (like "Ram Ram", "Namaste") or address the user by name/beta at the very beginning. Focus entirely on answering the user's current question as the primary objective.
+- Integrate the predicted timing or time window naturally into your paragraph.
+- Weave in the astrological reasoning (dasha, planetary transits/placements) organically to support your prediction. Do NOT repeat birth details (birthplace, age, dasha names, occupation) unless they are directly relevant.
+- Offer a practical remedy (Upay) naturally within the flow of the conversation.
+- End naturally with a follow-up question asking if they want to know more.
 
 Example of correct response style:
-Aapki kundli ke hisaab se Guru-Rahu chandal yog bana hua hai, jo buddhi ko sankochit karta hai aur dhyan bhatkata hai.
-Naukri me tarakki aapko February 2027 se April 2027 ke beech mil sakti hai.
-Kyunki dashmesh bhav par guru grah ki dristi pad rahi hai.
-Upay: Roz subah surya dev ko jal dein aur peele phool chadhayein.
-Kya aap jaanna chahengi ki kaunsa din tarakki ke patra ke liye sabse shubh rahega?
+Aapki kundli ke hisaab se Guru-Rahu chandal yog bana hua hai, jo buddhi ko sankochit karta hai aur dhyan bhatkata hai. Is vajah se naukri me tarakki aapko February 2027 se April 2027 ke beech mil sakti hai, kyunki dashmesh bhav par guru grah ki dristi pad rahi hai. Upay ke roop me aap roz subah surya dev ko jal arpit karein aur peele phool chadhayein. Kya aap jaanna chahenge ki kaunsa din tarakki ke liye sabse shubh rahega?
 
 Use engine data only. Never invent astrology. Do not use English words like Career, Promotion, Job, salary, marriage. Use simple Hindi/Hinglish words.
 `;
@@ -3193,7 +3197,7 @@ TIER 3 RESPONSE RULES:
     const forbiddenRulesBlock = `
 === FORBIDDEN RULES ===
 - Do NOT output: "Data not available", "score" (except in "Karma Score:"), "window", exact dates without engine calculations, "khatra", "maut", "barbaad".
-- For Tier 2 and Tier 3, you must NEVER output: "Aapki Shani dasha...", "Budh 10th ghar me...", "March me shaadi...", any specific astrology calculation, or any specific prediction.
+- For Tier 2 and Tier 3, you should naturally and conversationally reference relevant astrological factors (planets, transits, houses, dasha, nakshatra) based ONLY on the provided USER PROFILE and Astrology Data. The explanation must flow naturally as part of the guidance and reasoning, and you must NEVER output raw data dumps or overly technical chart lists.
 `;
     promptSections.push(forbiddenRulesBlock.trim());
 
