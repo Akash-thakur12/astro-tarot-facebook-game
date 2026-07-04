@@ -77,6 +77,13 @@ export function detectIntent(question) {
     q.includes('ex back') ||
     q.includes('ex wapas') ||
     q.includes('ex vapas') ||
+    q.includes('wapis') ||
+    q.includes('bapis') ||
+    q.includes('wapis aegi') ||
+    q.includes('bapis aegi') ||
+    q.includes('patchup') ||
+    q.includes('patch-up') ||
+    q.includes('patch up') ||
     q.includes('purana pyar') ||
     q.includes('ex boyfriend') ||
     q.includes('ex girlfriend') ||

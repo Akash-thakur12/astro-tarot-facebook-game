@@ -821,6 +821,186 @@ describe('CRITICAL BUGFIX Verification Tests', () => {
     expect(res2.jsonData.text).toContain('patch-up');
   });
 
+  it('19b. Verify Clarification Resolution - Test 1: hnn patchup ke bare mai puch ra', async () => {
+    mockFactMemoryData = null;
+    const req1 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_1',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'breakup ho gaya',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res1 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req1, res1);
+
+    const req2 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_1',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'kya meri girlfriend vapas aayegi',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res2 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req2, res2);
+    expect(res2.jsonData.text).toContain('patch-up');
+
+    const req3 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_1',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'hnn patchup ke bare mai puch ra',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res3 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req3, res3);
+    expect(res3.jsonData.text).toContain('Prediction');
+
+    const req4 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_1',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'kya meri girlfriend vapas aayegi',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res4 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req4, res4);
+    expect(res4.jsonData.text).toContain('Prediction');
+    expect(res4.jsonData.text).not.toContain('patch-up');
+  });
+
+  it('19c. Verify Clarification Resolution - Test 2: hnn ex girlfriend ke bare mai', async () => {
+    mockFactMemoryData = { awaitingClarification: true, clarificationType: 'relationship_return', girlfriendStatus: 'breakup' };
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_2',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'hnn ex girlfriend ke bare mai',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req, res);
+    expect(res.jsonData.text).toContain('Prediction');
+  });
+
+  it('19d. Verify Clarification Resolution - Test 3: wahi ladki', async () => {
+    mockFactMemoryData = { awaitingClarification: true, clarificationType: 'relationship_return', girlfriendStatus: 'breakup' };
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_3',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'wahi ladki',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req, res);
+    expect(res.jsonData.text).toContain('Prediction');
+  });
+
+  it('19e. Verify Clarification Resolution - Test 4: usi ke baare me', async () => {
+    mockFactMemoryData = { awaitingClarification: true, clarificationType: 'relationship_return', girlfriendStatus: 'breakup' };
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_user_clarify_4',
+          dobDay: 31, dobMonth: 8, dobYear: 1990,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          question: 'usi ke baare me',
+          maritalStatus: 'Single'
+        },
+        history: []
+      }
+    };
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+    await handler(req, res);
+    expect(res.jsonData.text).toContain('Prediction');
+  });
+
   it('20. Verify Phase 2.5.1 - Test 1: Married check with empty factMemory and userData.maritalStatus=Married', async () => {
     mockFactMemoryData = null;
     const req = {

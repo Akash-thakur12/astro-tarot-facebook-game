@@ -15,7 +15,9 @@ export const FACT_PATH_MAP = {
   age: 'career.age',
   financialStatus: 'finance.status',
   healthIssues: 'health.issues',
-  healthConcerns: 'health.concerns'
+  healthConcerns: 'health.concerns',
+  awaitingClarification: 'relationship.awaitingClarification',
+  clarificationType: 'relationship.clarificationType'
 };
 
 /**
@@ -115,6 +117,8 @@ export function migrateFactMemory(docData) {
     relationshipStatus: docData.relationshipStatus || null,
     girlfriendStatus: docData.girlfriendStatus || null,
     spouseName: docData.spouseName || null,
+    awaitingClarification: docData.awaitingClarification !== undefined ? docData.awaitingClarification : null,
+    clarificationType: docData.clarificationType || null,
     ...(docData.relationship || {}),
     ...(migrated.facts.relationship || {})
   };
@@ -183,6 +187,8 @@ export function migrateFactMemory(docData) {
   migrated.relationshipStatus = relationship.relationshipStatus;
   migrated.girlfriendStatus = relationship.girlfriendStatus;
   migrated.spouseName = relationship.spouseName;
+  migrated.awaitingClarification = relationship.awaitingClarification;
+  migrated.clarificationType = relationship.clarificationType;
   migrated.childrenCount = family.childrenCount;
   migrated.childrenNames = family.childrenNames;
   migrated.occupation = career.occupation;
@@ -415,7 +421,9 @@ export function sanitizeFactMemory(facts) {
     'healthConcerns',
     'spouseStatus',
     'age',
-    'city'
+    'city',
+    'awaitingClarification',
+    'clarificationType'
   ]);
 
   const approvedCategories = new Set([

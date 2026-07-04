@@ -135,6 +135,12 @@ export const SEMANTIC_CATEGORIES = {
       { phrase: "partner love", isStrong: true },
       { phrase: "breakup", isStrong: true },
       { phrase: "patch up", isStrong: true },
+      { phrase: "patchup", isStrong: true },
+      { phrase: "patch-up", isStrong: true },
+      { phrase: "ex gf", isStrong: true },
+      { phrase: "ex girlfriend", isStrong: true },
+      { phrase: "wapis", isStrong: false },
+      { phrase: "bapis", isStrong: false },
       { phrase: "dhokha", isStrong: true },
       { phrase: "relationship status", isStrong: true },
       { phrase: "crush like me", isStrong: true },
@@ -2118,7 +2124,8 @@ function isVagueMessage(text) {
     'family', 'mummy', 'papa', 'parents', 'brother', 'sister', 'dost', 'friend', 'shatru', 'enemy',
     'नौकरी', 'शादी', 'विवाह', 'करियर', 'बिजनेस', 'पैसा', 'स्वास्थ्य', 'बच्चा', 'विदेश', 'दशा', 'घर',
     'राशि', 'नक्षत्र', 'लग्न', 'प्यार', 'पति', 'पत्नी', 'परिवार', 'दुश्मन', 'lucky', 'luck', 'bhagya',
-    'fortune', 'destiny', 'remedy', 'upay', 'upae', 'mantra', 'gemstone', 'stone'
+    'fortune', 'destiny', 'remedy', 'upay', 'upae', 'mantra', 'gemstone', 'stone',
+    'patchup', 'patch-up', 'patch up', 'ex', 'ex gf', 'ex girlfriend', 'breakup', 'wapis', 'bapis'
   ];
 
   const hasSpecificKeyword = specificKeywords.some(keyword => normalized.includes(keyword));
@@ -2597,10 +2604,27 @@ export default async function handler(req, res) {
 
   let relationshipLoss = false;
   const factMemory = (mode === 'chat' || mode === 'personal') ? await getFactMemory(uid) : {};
+  const wasAwaitingClarification = (mode === 'chat' || mode === 'personal')
+    ? (getFact(factMemory, 'awaitingClarification') === true)
+    : false;
 
   // Intent detection and contradiction routing
   if (mode === 'chat' || mode === 'personal') {
     const questionTextNormalized = (userData.question || '').trim().toLowerCase();
+
+    // Resolve clarification state if user answers
+    const awaitingClarification = getFact(factMemory, 'awaitingClarification');
+    const clarificationType = getFact(factMemory, 'clarificationType');
+    if (awaitingClarification && clarificationType === 'relationship_return') {
+      const resolutionKeywords = ['patchup', 'patch up', 'ex', 'meri ex', 'wahi ladki', 'usi ke baare me'];
+      if (resolutionKeywords.some(keyword => questionTextNormalized.includes(keyword))) {
+        setFact(factMemory, 'relationship.girlfriendStatus', 'patchup');
+        setFact(factMemory, 'relationship.relationshipStatus', 'patchup');
+        setFact(factMemory, 'awaitingClarification', false);
+        setFact(factMemory, 'clarificationType', null);
+      }
+    }
+
     const detectedLoss = DECEASED_PATTERNS.some(pattern => pattern.test(questionTextNormalized)) || getFact(factMemory, 'relationship.spouseStatus') === 'deceased';
 
     let currentMarital = 'Unknown';
@@ -2671,7 +2695,7 @@ Current Season: ${season}`;
   const isGreeting = isGreetingMessage(questionText);
   const isProfileAck = isProfileAcknowledgementMessage(questionText);
   const isMemoryRecall = isMemoryRecallMessage(questionText);
-  const isVague = !isProfileAck && !isMemoryRecall && isVagueMessage(questionText);
+  const isVague = !isProfileAck && !isMemoryRecall && !wasAwaitingClarification && isVagueMessage(questionText);
 
 
 
@@ -2881,6 +2905,11 @@ Current Season: ${season}`;
     const contradiction = (!isGreeting && !isVague)
       ? detectSmartContradiction(questionText, updatedFacts, userData, history)
       : null;
+
+    if (contradiction && contradiction.type === 'relationship_breakup') {
+      setFact(updatedFacts, 'awaitingClarification', true);
+      setFact(updatedFacts, 'clarificationType', 'relationship_return');
+    }
 
     await updateFactMemory(
       uid,
