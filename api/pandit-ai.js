@@ -2719,6 +2719,8 @@ Current Season: ${season}`;
     resolvedLanguage = detectQuestionLanguage(questionText);
   }
 
+  const isDevanagari = /[\u0900-\u097F]/.test(questionText);
+
   let languagePreference = "";
   if (resolvedLanguage === 'English') {
     languagePreference = "English (Latin/Roman script). Write the entire response in English.";
@@ -3198,6 +3200,7 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
     const loveData = astroData ? calculateLoveEngine(astroData) : null;
     const moneyData = astroData ? calculateMoneyEngine(astroData) : null;
     const healthData = astroData ? calculateHealthEngine(astroData) : null;
+    const travelData = astroData ? calculateForeignTravelEngine(astroData) : null;
     const tarotData = userData?.tarotData || userData?.tarot || null;
     const profileData = {
       name,
@@ -3218,18 +3221,47 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
     const includePartnerData = isRelationshipTopic || isExplicitRelationshipQuery;
     const partnerData = includePartnerData ? (userData?.p2 || userData?.partner || null) : null;
 
-    const aiContext = {
+    // Topic-Based Context Routing
+    let filteredContext = {
       primaryTopic,
-      kundliData,
-      loveData,
-      moneyData,
-      healthData,
-      tarotData,
       userMemory,
       profileData,
       conversationHistory,
       partnerData
     };
+
+    const lowerQuery = questionText.toLowerCase();
+    const isRelationship = ['love', 'compatibility', 'relationship_return', 'partner_loyal'].includes(questionTopic) ||
+                           /girlfriend|boyfriend|gf|bf|partner|relation|love|pyar|pyaar|cheat|affair|loyalty/i.test(lowerQuery);
+    const isMarriage = ['marriage'].includes(questionTopic) ||
+                       /shadi|shaadi|marriage|vivaah|vivah|spouse|husband|wife/i.test(lowerQuery);
+    const isCareer = ['career', 'job', 'wealth', 'money', 'business'].includes(questionTopic) ||
+                     /job|career|business|money|paisa|wealth|finance|salary|developing|developer|app/i.test(lowerQuery);
+    const isHealth = ['health'].includes(questionTopic) ||
+                     /health|bimari|swasthya|illness|disease/i.test(lowerQuery);
+    const isTravel = ['travel', 'foreign_travel'].includes(questionTopic) ||
+                     /travel|foreign|videsh|yatra/i.test(lowerQuery);
+
+    if (isRelationship) {
+      filteredContext.loveData = loveData;
+    } else if (isMarriage) {
+      filteredContext.loveData = loveData; // loveData contains marriage indicators
+    } else if (isCareer) {
+      filteredContext.moneyData = moneyData;
+      filteredContext.careerData = moneyData;
+    } else if (isHealth) {
+      filteredContext.healthData = healthData;
+    } else if (isTravel) {
+      filteredContext.travelData = travelData;
+    } else {
+      filteredContext.kundliData = kundliData;
+    }
+
+    if (tarotData) {
+      filteredContext.tarotData = tarotData;
+    }
+
+    const aiContext = filteredContext;
 
     let tier1Data = null;
     if (tierType === 1) {
