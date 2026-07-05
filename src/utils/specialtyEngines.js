@@ -55,12 +55,35 @@ export function calculateLoveEngine(astroData) {
     }
   }
 
+  const lagna = astroData?.lagna || "Mesh";
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Venus").charCodeAt(0)) % 10;
+  
+  const marriageLayers = {
+    layer1: `Timing: ${formatDateNatural(dateWindow)}`,
+    layer2: `Name Initial: Partner's name likely starts with ${["S", "A", "V", "R", "N", "M", "K", "D", "P", "T"][seed]}`,
+    layer3: `Surname + Age Gap: Partner will be ${seed % 2 === 0 ? "older by 1-3 years" : "younger by 1-2 years"}, surname might start with ${["S", "G", "C", "P", "K", "M", "R", "D", "B", "T"][(seed + 3) % 10]}`,
+    layer4: `Arranged vs Love: Higher indications of ${score >= 65 ? "Love-Marriage (Anukool Prem Vivah)" : "Arranged-Love marriage (Parivarik Sahmati)"}`,
+    layer5: `City + Profession: Partner likely from ${seed % 2 === 0 ? "North/West region" : "East/South region"} and working in ${["IT/Software/Engineering", "Finance/Banking", "Creative/Marketing", "Medical/Healthcare", "Business/Trading", "Government sector", "Education", "Real Estate", "Consulting", "Media"][(seed + 5) % 10]}`
+  };
+
+  const loveLayers = {
+    layer1: `Timing: ${formatDateNatural(dateWindow)}`,
+    layer2: `Partner Traits: Emotionally ${seed % 2 === 0 ? "sensitive and caring" : "practical and ambitious"}`,
+    layer3: `Compatibility Score: ${score}% (Deep karmic link)`,
+    layer4: `Next Phase: Transitioning into ${seed % 3 === 0 ? "reunion and alignment" : "understanding and healing"}`,
+    layer5: `Key Warning: Avoid ${seed % 2 === 0 ? "ego clashes and overthinking" : "miscommunications and distance"}`
+  };
+
   return {
     loveScore: score,
     relationshipStrength,
     reunionPotential,
     soulmatePotential,
-    loveWindows: [formatDateNatural(dateWindow)]
+    loveWindows: [formatDateNatural(dateWindow)],
+    layers: {
+      marriage: marriageLayers,
+      love: loveLayers
+    }
   };
 }
 
@@ -110,11 +133,34 @@ export function calculateMoneyEngine(astroData) {
     }
   }
 
+  const lagna = astroData?.lagna || "Mesh";
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0)) % 10;
+  
+  const careerLayers = {
+    layer1: `Timing: ${formatDateNatural(dateWindow)}`,
+    layer2: `Best Profession: Highly suited for ${["Technology/Software", "Trading/Finance", "Consulting/Management", "Real Estate/Construction", "Business/Entrepreneurship", "Government/Public Service", "Education/Writing", "Media/Entertainment", "Healthcare/Pharmaceuticals", "Manufacturing/Export"][(seed + 2) % 10]}`,
+    layer3: `Financial Growth Stage: Wealth accumulation starts accelerating after age ${25 + (seed % 5) * 2}`,
+    layer4: `Key Wealth Source: Profit through ${seed % 2 === 0 ? "independent business or freelancing" : "salary growth and long-term investments"}`,
+    layer5: `Vulnerable Period: High expenses or budget leak expected in ${["next 45 days", "mid of next quarter", "late this year", "during upcoming transit change", "next winter"][(seed % 5)]}`
+  };
+
+  const moneyLayers = {
+    layer1: `Timing: ${formatDateNatural(dateWindow)}`,
+    layer2: `Income Potential: ${incomePotential}`,
+    layer3: `Savings Potential: ${savingsPotential}`,
+    layer4: `Debt/Investment Window: Best time to clear debt or invest is ${seed % 2 === 0 ? "next 60 days" : "after current transit ends"}`,
+    layer5: `Lucky wealth days: Days matching the ${seed % 2 === 0 ? "Moon and Mercury" : "Jupiter and Venus"} positions`
+  };
+
   return {
     wealthScore: score,
     incomePotential,
     savingsPotential,
-    wealthWindows: [formatDateNatural(dateWindow)]
+    wealthWindows: [formatDateNatural(dateWindow)],
+    layers: {
+      career: careerLayers,
+      money: moneyLayers
+    }
   };
 }
 
@@ -144,13 +190,24 @@ export function calculateDailyTransitEngine(astroData, dayOfWeekStr) {
   if (dayOfWeek.includes("शनि") || dayOfWeek.toLowerCase().includes("sat")) caution = "Vahan chalate samay savdhani rakhein";
   else if (dayOfWeek.includes("मंगल") || dayOfWeek.toLowerCase().includes("tue")) caution = "Gusse aur jaldbazi se bachein";
 
+  const dailyLayers = {
+    layer1: `Today's Outlook: ${mood}`,
+    layer2: `Lucky Number & Color: Lucky number is ${((seed + 3) % 9) + 1}, lucky color is ${["Yellow", "Crimson", "Royal Blue", "Golden", "Emerald Green", "White", "Orange", "Sky Blue", "Maroon", "Silver"][seed % 10]}`,
+    layer3: `Work Potential: ${work}`,
+    layer4: `Financial Flow: ${money}`,
+    layer5: `Precautions: ${caution}`
+  };
+
   return {
     todayScore: score,
     mood,
     work,
     money,
     relationships,
-    caution
+    caution,
+    layers: {
+      daily: dailyLayers
+    }
   };
 }
 
@@ -183,11 +240,25 @@ export function calculateHealthEngine(astroData) {
   let recoveryPotential = "Achha swasthya laabh";
   if (score < 65) recoveryPotential = "Dheere-dheere sudhaar";
 
+  const lagna = astroData?.lagna || "Mesh";
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Saturn").charCodeAt(0)) % 10;
+
+  const healthLayers = {
+    layer1: `Vitality Score: ${score}%`,
+    layer2: `Stress Assessment: ${stressLevel}`,
+    layer3: `Physical Weakness Area: Pay attention to ${["digestive system/stomach", "lower back/spine", "neck/shoulders", "eyes/headache", "legs/joints", "energy levels/fatigue", "sleep quality", "chest/respiratory", "skin/allergies", "nervous system"][(seed + 1) % 10]}`,
+    layer4: `Recovery & Strength: ${recoveryPotential}`,
+    layer5: `Daily Remedial Habit: Pratidin yoga aur dhyan karein. Santulit aahar lein aur physician ki salah anusar chalein.`
+  };
+
   return {
     vitalityScore: score,
     stressLevel,
     recoveryPotential,
-    healthGuidance: "Pratidin yoga aur dhyan karein. Santulit aahar lein aur physician ki salah anusar chalein."
+    healthGuidance: "Pratidin yoga aur dhyan karein. Santulit aahar lein aur physician ki salah anusar chalein.",
+    layers: {
+      health: healthLayers
+    }
   };
 }
 
@@ -224,10 +295,24 @@ export function calculateForeignTravelEngine(astroData) {
     }
   }
 
+  const lagna = astroData?.lagna || "Mesh";
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Rahu").charCodeAt(0)) % 10;
+
+  const travelLayers = {
+    layer1: `Travel Window: ${formatDateNatural(dateWindow)}`,
+    layer2: `Travel Chance: ${travelChance}%`,
+    layer3: `Destination Region: High chance of travel/settlement in ${["Far East/South-East Asia", "Europe/UK", "Middle East/Gulf Countries", "North America (USA/Canada)", "Australia/New Zealand", "North-East direction countries", "Western countries", "Central Asia", "Southern hemisphere countries", "East-Asia region"][(seed + 4) % 10]}`,
+    layer4: `Travel Purpose: Relocation driven by ${seed % 2 === 0 ? "career progression and job search" : "higher education or business expansion"}`,
+    layer5: `Visa/Documentation Success: High probability of approval in ${["next 90-120 days", "upcoming major Jupiter transit", "the third month from now", "coming season", "next 60 days"][seed % 5]}`
+  };
+
   return {
     foreignTravelPotential,
     settlementPotential,
-    travelWindows: [formatDateNatural(dateWindow)]
+    travelWindows: [formatDateNatural(dateWindow)],
+    layers: {
+      travel: travelLayers
+    }
   };
 }
 
@@ -258,10 +343,24 @@ export function calculateChildrenEngine(astroData) {
     }
   }
 
+  const lagna = astroData?.lagna || "Mesh";
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0)) % 10;
+
+  const childrenLayers = {
+    layer1: `Timing: ${formatDateNatural(dateWindow)}`,
+    layer2: `Children Potential: ${childrenPotential}`,
+    layer3: `Family Growth Prospect: ${familyGrowth}`,
+    layer4: `Children Career Indicator: Future child highly inclined towards ${["Creative arts/Media", "Science/Research", "Business/Entrepreneurship", "Management/Finance", "Public Sector/Service", "Engineering/IT", "Sports/Fitness", "Law/Consulting", "Teaching/Writing", "Medicine/Healthcare"][(seed + 6) % 10]}`,
+    layer5: `Remedial Guidance for Delay: Daan to children or chanting ${seed % 2 === 0 ? "Santana Gopala Mantra" : "Guru Beej Mantra"} will help`
+  };
+
   return {
     childrenPotential,
     familyGrowth,
-    childWindows: [formatDateNatural(dateWindow)]
+    childWindows: [formatDateNatural(dateWindow)],
+    layers: {
+      children: childrenLayers
+    }
   };
 }
 

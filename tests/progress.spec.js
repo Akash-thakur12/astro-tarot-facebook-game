@@ -24,28 +24,30 @@ vi.mock('firebase-admin/firestore', () => {
   const mockSet = vi.fn(async () => {});
   const mockUpdate = vi.fn(async () => {});
   
-  return {
-    getFirestore: vi.fn(() => ({
-      collection: vi.fn(() => ({
-        doc: vi.fn(() => ({
-          get: mockGet,
-          set: mockSet,
-          update: mockUpdate,
-          collection: vi.fn(() => ({
-            doc: vi.fn(() => ({
-              get: vi.fn(async () => ({ exists: false })),
-              set: vi.fn(async () => {})
-            }))
+  const mockDb = {
+    collection: vi.fn(() => ({
+      doc: vi.fn(() => ({
+        get: mockGet,
+        set: mockSet,
+        update: mockUpdate,
+        collection: vi.fn(() => ({
+          doc: vi.fn(() => ({
+            get: vi.fn(async () => ({ exists: false })),
+            set: vi.fn(async () => {})
           }))
         }))
-      })),
-      runTransaction: vi.fn(async (cb) => {
-        return cb({
-          get: mockGet,
-          update: mockUpdate
-        });
-      })
+      }))
     })),
+    runTransaction: vi.fn(async (cb) => {
+      return cb({
+        get: mockGet,
+        update: mockUpdate
+      });
+    })
+  };
+  
+  return {
+    getFirestore: vi.fn(() => mockDb),
     FieldValue: {
       serverTimestamp: vi.fn(() => 'mock-timestamp')
     }
@@ -708,5 +710,173 @@ describe('Pandit AI - Addiction & Progress Engine', () => {
     } finally {
       delete process.env.TEST_DASHA_PRESERVATION;
     }
+  });
+
+  it('should verify persistent topic progression and cliffhanger tracking across subsequent turns', async () => {
+    const { getAuth } = await import('firebase-admin/auth');
+    const auth = getAuth();
+    vi.spyOn(auth, 'verifyIdToken').mockResolvedValue({ uid: 'test_progress_user' });
+
+    const { getFirestore } = await import('firebase-admin/firestore');
+    const db = getFirestore();
+    const docRef = db.collection('users').doc('test_progress_user');
+    const mockGet = docRef.get;
+    const mockUpdate = docRef.update;
+
+    let userStore = {
+      coins: 1000,
+      premium: true,
+      name: 'Akash',
+      dob: '1999-08-31',
+      topicProgress: {
+        marriage: 1, love: 1, career: 1, money: 1, health: 1, travel: 1, children: 1, daily: 1
+      },
+      lastCliffhangers: [],
+      lastActiveTopic: null
+    };
+
+    mockGet.mockImplementation(async () => ({
+      exists: true,
+      data: () => userStore
+    }));
+
+    mockUpdate.mockImplementation(async (updates) => {
+      userStore = { ...userStore, ...updates };
+    });
+
+    // Mock db.runTransaction so that it performs actual updates in the userStore
+    db.runTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: async () => ({
+          exists: true,
+          data: () => userStore
+        }),
+        update: (ref, updates) => {
+          userStore = { ...userStore, ...updates };
+        }
+      };
+      return cb(tx);
+    });
+
+    // Mock generateAIResponse to return a response with CLIFFHANGER: tag
+    const { generateAIResponse } = await import('../services/aiService.js');
+    vi.mocked(generateAIResponse).mockResolvedValue(`🔮 Prediction: Aapka career safal hoga.
+📿 Reasoning: Lagna Mesh hai.
+🪔 Guidance: Puja karein.
+🚨 **The Cliffhanger (Open Loop)**
+Kya aap sarkari naukri lagne ka samay jaanna chahte hain?
+
+CLIFFHANGER: Kya aap sarkari naukri lagne ka samay jaanna chahte hain?`);
+
+    // Turn 1: Initial query on Career
+    const req1 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_progress_user',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          maritalStatus: 'Married',
+          occupation: 'Government Job',
+          question: 'Career kaisa rahega?'
+        },
+        history: []
+      }
+    };
+    const res1 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    await handler(req1, res1);
+    expect(res1.statusCode).toBe(200);
+    expect(userStore.lastActiveTopic).toBe('career');
+    expect(userStore.topicProgress.career).toBe(1); // Turn 1 should not advance, starts at 1
+    expect(userStore.lastCliffhangers).toContain('Kya aap sarkari naukri lagne ka samay jaanna chahte hain?');
+    // The CLIFFHANGER tag must be removed from the returned text
+    expect(res1.jsonData.text).not.toContain('CLIFFHANGER:');
+
+    // Turn 2: Follow-up query "aur batao"
+    const req2 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_progress_user',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          maritalStatus: 'Married',
+          occupation: 'Government Job',
+          question: 'aur batao'
+        },
+        history: [
+          { role: 'user', content: 'Career kaisa rahega?' },
+          { role: 'assistant', content: res1.jsonData.text }
+        ]
+      }
+    };
+    const res2 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    // Modify generateAIResponse to return a different cliffhanger
+    vi.mocked(generateAIResponse).mockResolvedValue(`🔮 Prediction: Agla varsh behtar hoga.
+📿 Reasoning: Dasha achhi hai.
+🪔 Guidance: Suryadev ko arghya dein.
+🚨 **The Cliffhanger (Open Loop)**
+Kya aap shubh gemstone jaanna chahte hain?
+
+CLIFFHANGER: Kya aap shubh gemstone jaanna chahte hain?`);
+
+    await handler(req2, res2);
+    expect(res2.statusCode).toBe(200);
+    expect(userStore.lastActiveTopic).toBe('career');
+    expect(userStore.topicProgress.career).toBe(2); // Turn 2 follow-up should advance to 2
+    expect(userStore.lastCliffhangers).toContain('Kya aap shubh gemstone jaanna chahte hain?');
+
+    // Turn 3: Same question again (repetition check)
+    const req3 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_progress_user',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          maritalStatus: 'Married',
+          occupation: 'Government Job',
+          question: 'aur batao'
+        },
+        history: [
+          { role: 'user', content: 'Career kaisa rahega?' },
+          { role: 'assistant', content: res1.jsonData.text },
+          { role: 'user', content: 'aur batao' },
+          { role: 'assistant', content: res2.jsonData.text }
+        ]
+      }
+    };
+    const res3 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    vi.mocked(generateAIResponse).mockResolvedValue(`🔮 Prediction: Dhan labh hoga.
+CLIFFHANGER: Dhan labh kab hoga?`);
+
+    await handler(req3, res3);
+    expect(res3.statusCode).toBe(200);
+    expect(userStore.topicProgress.career).toBe(3); // Should advance to 3
+    expect(userStore.lastCliffhangers.length).toBeLessThanOrEqual(3);
   });
 });

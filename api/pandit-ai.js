@@ -1892,6 +1892,36 @@ function getJaccardSimilarity(str1, str2) {
   return intersection.size / union.size;
 }
 
+function extractAndRemoveCliffhanger(text) {
+  if (!text || typeof text !== 'string') return { cleanText: text, cliffhanger: "" };
+  let cliffhanger = "";
+  let cleanText = text;
+  const lowerText = text.toLowerCase();
+  const matchIndex = lowerText.indexOf("cliffhanger:");
+  if (matchIndex !== -1) {
+    cliffhanger = text.substring(matchIndex + "cliffhanger:".length).trim();
+    cleanText = text.substring(0, matchIndex).trim();
+  } else {
+    // Fallback: look for 🚨 heading or emoji patterns
+    const fallbackMatch = text.match(/🚨.*?\?/);
+    if (fallbackMatch) {
+      cliffhanger = fallbackMatch[0].trim();
+    } else {
+      // Split by lines and check the last non-empty line
+      const lines = text.split('\n').filter(l => l.trim().length > 0);
+      if (lines.length > 0) {
+        cliffhanger = lines[lines.length - 1];
+      }
+    }
+  }
+
+  if (cliffhanger) {
+    cliffhanger = cliffhanger.replace(/^[*_\s"']+|[*_\s"']+$/g, '').trim();
+  }
+
+  return { cleanText, cliffhanger };
+}
+
 function getCleanTopicName(intent) {
   if (!intent || intent === 'general') return null;
   if (intent.includes('marriage') || intent === 'breakup' || intent === 'ex_back' || intent === 'partner_loyal') return 'marriage';
@@ -2594,6 +2624,26 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'User profile not found' });
   }
 
+  let topicProgress = {
+    marriage: 1, love: 1, career: 1, money: 1, health: 1, travel: 1, children: 1, daily: 1
+  };
+  let lastCliffhangers = [];
+  let lastActiveTopic = null;
+  let targetLayerNum = 1;
+  let activeTopic = null;
+  let shouldAdvance = false;
+  let cliffhangerText = "";
+
+  if (userDataDoc.topicProgress) {
+    topicProgress = { ...topicProgress, ...userDataDoc.topicProgress };
+  }
+  if (userDataDoc.lastCliffhangers) {
+    lastCliffhangers = [...userDataDoc.lastCliffhangers];
+  }
+  if (userDataDoc.lastActiveTopic) {
+    lastActiveTopic = userDataDoc.lastActiveTopic;
+  }
+
   // Handle system commands (coins, premium, account)
   if (mode === 'chat' || mode === 'personal') {
     const questionTextRaw = userData.question || '';
@@ -3083,12 +3133,43 @@ Current Season: ${season}`;
   if (mode === 'chat' || mode === 'personal') {
     let promptSections = [];
 
+    const topicMapping = {
+      marriage: 'marriage',
+      love: 'love',
+      career: 'career',
+      money: 'money',
+      finance: 'money',
+      health: 'health',
+      travel: 'travel',
+      foreign: 'travel',
+      foreign_travel: 'travel',
+      children: 'children',
+      daily: 'daily',
+      future: 'daily'
+    };
+
     let classification = getTopicAndSubType(questionText);
     if (isRelationshipInvestigationQuery) {
       classification = { tier: 2, topic: 'love' };
     }
     const tierType = classification.tier;
     const questionTopic = classification.topic;
+    const matchedTopic = topicMapping[questionTopic];
+
+    const qClean = (questionText || '').toLowerCase().trim();
+    const cleanQForFollowUp = qClean.replace(/[?.,!]/g, '').trim();
+    const followUpPhrases = ['aur batao', 'hn', 'next', 'detail', 'hn btao', 'haan', 'more detail', 'in detail'];
+    const isFollowUpWord = followUpPhrases.includes(cleanQForFollowUp);
+
+    const lastUserMsg = [...pastHistory].reverse().find(m => m.role === 'user');
+    const isSameQuestion = lastUserMsg && getJaccardSimilarity(qClean, lastUserMsg.content.toLowerCase().trim()) > 0.70;
+    shouldAdvance = isFollowUpWord || isSameQuestion;
+
+    activeTopic = shouldAdvance ? (lastActiveTopic || matchedTopic || 'daily') : (matchedTopic || lastActiveTopic || 'daily');
+    
+    // First interaction starts at layer 1
+    const currentProgressVal = topicProgress[activeTopic] || 1;
+    targetLayerNum = shouldAdvance ? Math.min(currentProgressVal + 1, 5) : currentProgressVal;
 
     // Fact Memory (Married, Gender, Occupation) & Language Preference
     let factMemoryBlock = "Fact Memory:\n";
@@ -3267,6 +3348,7 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
     const moneyData = astroData ? calculateMoneyEngine(astroData) : null;
     const healthData = astroData ? calculateHealthEngine(astroData) : null;
     const travelData = astroData ? calculateForeignTravelEngine(astroData) : null;
+    const childrenData = astroData ? calculateChildrenEngine(astroData) : null;
     const tarotData = userData?.tarotData || userData?.tarot || null;
     const profileData = {
       name,
@@ -3279,7 +3361,7 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
     };
     const conversationHistory = pastHistory;
 
-    const hasCalculatedData = !!(astroData || (loveData && loveData.loveScore) || (moneyData && moneyData.wealthScore) || (healthData && healthData.vitalityScore) || tarotData);
+    const hasCalculatedData = !!(astroData || (loveData && loveData.loveScore) || (moneyData && moneyData.wealthScore) || (healthData && healthData.vitalityScore) || (childrenData && childrenData.layers) || tarotData);
 
     // Context Isolation Rule: Only include partnerData for love/compatibility/marriage topics,
     // or when the query explicitly asks about the partner/relationship.
@@ -3310,6 +3392,10 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
                      /health|bimari|swasthya|illness|disease/i.test(lowerQuery);
     const isTravel = ['travel', 'foreign_travel'].includes(questionTopic) ||
                      /travel|foreign|videsh|yatra/i.test(lowerQuery);
+    const isChildren = ['children'].includes(questionTopic) ||
+                       /bachcha|bachche|baccha|bacche|bcha|bche|bache|santan|child|children|baby|pregnancy|ivf/i.test(lowerQuery);
+    const isDaily = ['daily'].includes(questionTopic) ||
+                    /\baaj\b|\bkal\b|is hafte|is mahine|daily|lucky color|number|today/i.test(lowerQuery);
 
     if (isRelationship) {
       filteredContext.loveData = loveData;
@@ -3322,6 +3408,10 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
       filteredContext.healthData = healthData;
     } else if (isTravel) {
       filteredContext.travelData = travelData;
+    } else if (isChildren) {
+      filteredContext.childrenData = childrenData;
+    } else if (isDaily) {
+      filteredContext.dailyData = calculateDailyTransitEngine(astroData, dayOfWeek);
     } else {
       filteredContext.kundliData = kundliData;
     }
@@ -3394,81 +3484,132 @@ MEMORY RECALL MODE RULES:
       const place = pob && pob !== 'Unknown' ? pob : '';
 
       systemInstruction = `
-You are "AstroOracle" - The Most Addictive, Brutally Honest AI Astrologer on the internet. 
-Think like Grok mixed with a high-level Modern Mystic who reads minds, not just charts. 
-Your goal is to be so accurate, sharp, and triggering that the user gets hooked instantly.
+You are "AstroOracle" - The Most Addictive AI Astrologer. Think like Grok.
 
-### USER PROFILE - AUTO FILLED:
+### USER PROFILE:
 NAME: ${name}
 DOB: ${dob || 'Not Provided'} ${time} ${place}
 GENDER: ${gender}
 MARITAL: ${maritalStatus}
-OCCUPATION: ${occupation} // App Developer, Freelancer, AI Automation, Trader, Content Creator, Job Seeker, Student, Business, Housewife
+OCCUPATION: ${occupation}
 ACTIVE_DATA: ${JSON.stringify(activeEngineData || null)} // AI_CONTEXT: ${JSON.stringify(activeEngineData || null)}
-CHAT_HISTORY: ${JSON.stringify(chatHistory.slice(-3))} // Last 3 messages for context
+CHAT_HISTORY: ${JSON.stringify(chatHistory.slice(-3))} // CRITICAL: Read this to avoid repetition
 
-### ADDICTION & PSYCHOLOGICAL TRIGGERS (CORE RULES):
-1. NO FLUFF, NO CLICHES: Do not sound like a generic computer. Sound like an elite astrologer who knows their deepest, darkest secrets.
-2. THE "HOW DID IT KNOW?!" EFFECT: Target the exact insecurity of their age/occupation/marital status. Use CHAT_HISTORY to reference previous topics.
-3. CONFIDENCE IS ADDICTIVE: Speak as if you are looking at their reality through a temporal telescope. No "maybe", no "might". 
+### THE INFINITE LOOP RULES - MUST FOLLOW:
+1. **NEVER REPEAT:** If user asks same question again, go 1 layer deeper.
+    Ex: Q1: "kis akshar" → A: "Ma, Me, Mu"
+    Q2: "kis akshar" → A: "Ma, Me, Mu. Surname K/S. Height 5'4 to 5'6"
+    Q3: "kis akshar" → A: "Naam ke pehle akshar ke alawa, uske naam me 'a' 2 baar aayega"
 
-### CORE LOGIC - MUST FOLLOW:
+2. **NEVER ASK TWICE:** If user said "hn btao" to your cliffhanger, answer it NOW.
+    Banned words: "aur vistaar se", "kya aap janna chahenge"
 
-#### SCENARIO A: IF ACTIVE_DATA EXISTS AND ACTIVE_DATA.confidence > 70
-Deliver raw, undeniable astrological proof. 
-Format: "Look, ${name}, your chart isn't lying. [Planet] in [House] + [Dasha] means [Specific Result]."
-Use exact timing ONLY if confidence > 70. Else use "this season", "next 90 days".
-Example: "Look, Akash, your chart isn't lying. Moon in 10th + Mercury Dasha means Remote Tech role is locked. Window: Oct 2026 to Mar 2027."
+3. **ESCALATE EVERY REPLY:** Har reply me pehle wale se zyada specific info do.
+    Pehle: Month → Dusra: Date → Teesra: Time + Place
 
-#### SCENARIO B: IF ACTIVE_DATA IS NULL OR CONFIDENCE < 70
-Do not stall. Do not ask for details. Use ${occupation} + ${maritalStatus} + ${topic} for hyper-targeted cold reading.
-Format: "I don't need your birth time to see your current timeline, ${name}. Your energy right now is screaming..."
-Example: "I don't need your birth time, Akash. As a Single App Developer, your energy is screaming you're building in silence but one distraction is killing your output."
+### CORE LOGIC:
 
-### MANDATORY HIGH-ENGAGEMENT RESPONSE STRUCTURE:
+#### SCENARIO A: IF ACTIVE_DATA.confidence > 70
+"Look, ${name}, your chart isn't lying. [Planet] in [House] + [Dasha] = [Result]. Timing: [Date]"
+
+#### SCENARIO B: IF NO DATA
+"I don't need your birth time, ${name}. Your energy right now is screaming..."
+
+### ACTIVE LAYER PROGRESSION:
+ACTIVE_TOPIC: ${activeTopic}
+TARGET_LAYER: ${targetLayerNum}
+
+### TARGET LAYER SCHEMAS:
+For marriage:
+- Layer 1: timing
+- Layer 2: name_initial
+- Layer 3: surname + age_gap
+- Layer 4: arranged_vs_love
+- Layer 5: city + profession
+
+For love:
+- Layer 1: timing
+- Layer 2: partner traits
+- Layer 3: compatibility
+- Layer 4: next phase
+- Layer 5: key warning
+
+For career:
+- Layer 1: timing
+- Layer 2: best profession
+- Layer 3: growth stage
+- Layer 4: key wealth source
+- Layer 5: vulnerable period
+
+For money:
+- Layer 1: timing
+- Layer 2: income potential
+- Layer 3: savings potential
+- Layer 4: debt/investment window
+- Layer 5: lucky wealth days
+
+For daily:
+- Layer 1: outlook
+- Layer 2: lucky number/color
+- Layer 3: work potential
+- Layer 4: financial flow
+- Layer 5: precautions
+
+For health:
+- Layer 1: vitality score
+- Layer 2: stress assessment
+- Layer 3: weakness area
+- Layer 4: recovery/strength
+- Layer 5: daily habit
+
+For travel:
+- Layer 1: travel window
+- Layer 2: travel chance
+- Layer 3: region
+- Layer 4: purpose
+- Layer 5: visa success probability
+
+For children:
+- Layer 1: timing
+- Layer 2: children potential
+- Layer 3: family growth
+- Layer 4: career indicator
+- Layer 5: remedial guidance
+
+RULE:
+You MUST focus the "Cosmic Truth" (${cosmicHeading}) section entirely on the TARGET_LAYER (${targetLayerNum}) information of the ACTIVE_TOPIC (${activeTopic}).
+- If TARGET_LAYER is 1: Reveal timing.
+- If TARGET_LAYER is 2: Reveal the second layer details.
+- If TARGET_LAYER is 3: Reveal the third layer details.
+- If TARGET_LAYER is 4: Reveal the fourth layer details.
+- If TARGET_LAYER is 5: Reveal all remaining details.
+Do NOT reveal layer details higher than the TARGET_LAYER.
+Use the pre-calculated layer data provided in ACTIVE_DATA for the active topic. For example, if TARGET_LAYER is 2, use the value of layer2 from the active topic's layers.
+
+### RESPONSE STRUCTURE FOR 1000 MESSAGES:
 
 ${cosmicHeading}
-[SCENARIO A: Use hard astrological alignments + timing. SCENARIO B: Deliver hyper-specific intuition blast. Highlight 2 shocking insights in **bold**.] Max 3 sharp lines.
+[New info every time. Use CHAT_HISTORY to avoid repeat. 3 lines max. 2 things in **bold**.]
 
 ${frictionHeading}
-[The ultimate psychological or karmic block they hide. Reference CHAT_HISTORY if relevant. Make it punchy. Exactly 1 line.]
+[New psychological block every time. 1 line. Must reference something from CHAT_HISTORY if possible. Make it hurt.]
 
 ${powerHeading}
-[A hyper-practical, modern action step tailored to ${occupation}. No rituals, just execution.] 
-App Dev: "Deploy that buggy feature today." 
-Trader: "Cut that losing position before market close." 
-Content Creator: "Post 1 reel in next 24h." 
-Job Seeker: "Send 3 applications today."
-Housewife: "Take 30 min for yourself tomorrow morning."
+[New action every time. 1 action based on ${occupation}. No generic advice.]
 
 ${cliffhangerHeading}
-[End with 1 high-stakes question. Force reply. Never close the loop.]
-"Want me to reveal the initials of the person blocking your money?" 
-"Should I check if your crush is karmic or soulmate?" 
-"There's a financial pivot in month X, want the exact date?"
+[New question every time. Never repeat last 3 cliffhangers. This must also match the CLIFFHANGER tag at the end.]
 
-### ANTI-BOREDOM & SAFETY RULES:
-1. NEVER say "Please provide more details" or "Data not available". 
-2. NEVER use traditional boring remedies: "Surya ko jal", "Koyla bahaana", gemstones.
-3. NEVER repeat the same planet, house, date, or explanation from last 3 replies.
-4. NEVER force occupation/marital into answer if unrelated to question.
-5. Keep language: 70% English + 30% Hindi Hinglish. Elite, direct, conversational.
-6. LENGTH: 110-140 words max. Short paragraphs. Mobile first.
+### CRITICAL ANTI-BUG RULES:
+1. NEVER ask "aur vistaar se batayein" or "kya aap janna chahte hain". User already asked.
+2. NEVER repeat same planet, house, akshar, date from CHAT_HISTORY. If user asks "kis akshar" twice, give deeper layer: "Ma, Me, Mu. Aur surname K ya S se hoga"
+3. NEVER use boring remedies. 
+4. If user says "hn btao" → Give answer directly. No more questions before answering.
 
-### MEMORY RULE:
-Reference previous messages ONLY when relevant to the current question.
-Do not randomly switch topics.
-
-### RESPONSE VARIETY RULE:
-Never reuse the same astrology indicator, date, remedy, or explanation from the previous response unless directly relevant.
-
-### TIMING + ACCURACY RULE:
-Specific Date: Only if ACTIVE_DATA.confidence > 70
-Else: "next 90 days", "when Venus moves", "this season"
-Never invent. Never repeat same date 2 times.
+### TIMING RULE:
 ${(isTimingQuery && !skipDashaPreservation && astroData) ? `You MUST naturally mention the current Mahadasha lord (${astroData.mahadasha}) and current Antardasha lord (${astroData.antardasha}) while explaining timing predictions.` : ''}
 
-TONE: Mystical, Brutally Honest, Confident, Like a best friend who knows secrets.
+TONE: Direct, Brutal, Hinglish. LENGTH: 110-140 words.
 `;
     }
 
@@ -3519,8 +3660,14 @@ Never answer in any other language.
     promptSections.push(priorityRulesBlock.trim());
 
     const hasStrongData = activeEngineData && activeEngineData.confidence > 70;
+    const last3CliffhangersStr = (lastCliffhangers && lastCliffhangers.length > 0) ? lastCliffhangers.join(' | ') : 'None';
+
     const finalInstruction = systemInstruction + `
 \nCURRENT_MODE: ${hasStrongData ? 'SCENARIO_A_CHART_READING' : 'SCENARIO_B_ENERGY_READING'}
+\nLAST_3_CLIFFHANGERS_USED: ${last3CliffhangersStr}
+\nRULE: Do not use any of the above cliffhangers again.
+\nFORMATTING RULE: At the absolute end of your response, on a new line, you MUST write:
+CLIFFHANGER: <the exact open loop question you asked under ${cliffhangerHeading}>
 `;
 
     fullPrompt = `
@@ -3574,6 +3721,11 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
 
       // Pre-humanize the initial text to align validation with the final output format
       if (mode === 'chat' || mode === 'personal') {
+        const parsed = extractAndRemoveCliffhanger(aiText);
+        aiText = parsed.cleanText;
+        if (parsed.cliffhanger) {
+          cliffhangerText = parsed.cliffhanger;
+        }
         aiText = humanize(aiText);
       }
 
@@ -3668,7 +3820,16 @@ Explain timing using these planets naturally.`;
         }
 
         aiText = await generateAIResponse(retryPrompt);
-        aiText = humanize(aiText);
+        if (mode === 'chat' || mode === 'personal') {
+          const parsedRetry = extractAndRemoveCliffhanger(aiText);
+          aiText = parsedRetry.cleanText;
+          if (parsedRetry.cliffhanger) {
+            cliffhangerText = parsedRetry.cliffhanger;
+          }
+          aiText = humanize(aiText);
+        } else {
+          aiText = humanize(aiText);
+        }
 
         const validatedRetryText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent));
         needsRetry =
@@ -3815,6 +3976,35 @@ Explain timing using these planets naturally.`;
             }
             tx.update(userRef, { coins: coins - AI_QUESTION_COST });
           }
+        }
+
+        if (mode === 'chat' || mode === 'personal') {
+          const latestTopicProgress = latestUserData.topicProgress || {
+            marriage: 1, love: 1, career: 1, money: 1, health: 1, travel: 1, children: 1, daily: 1
+          };
+          const latestCliffhangers = latestUserData.lastCliffhangers || [];
+
+          const currentProgressVal = latestTopicProgress[activeTopic] || 1;
+          const newProgressVal = shouldAdvance ? Math.min(currentProgressVal + 1, 5) : currentProgressVal;
+
+          const updatedTopicProgress = {
+            ...latestTopicProgress,
+            [activeTopic]: newProgressVal
+          };
+
+          let updatedCliffhangersList = [...latestCliffhangers];
+          if (cliffhangerText) {
+            updatedCliffhangersList.push(cliffhangerText);
+          }
+          if (updatedCliffhangersList.length > 3) {
+            updatedCliffhangersList = updatedCliffhangersList.slice(-3);
+          }
+
+          tx.update(userRef, {
+            topicProgress: updatedTopicProgress,
+            lastActiveTopic: activeTopic,
+            lastCliffhangers: updatedCliffhangersList
+          });
         }
       });
     } catch (txError) {
