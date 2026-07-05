@@ -1340,13 +1340,68 @@ Kya focus ab bhi SSC par hai ya UPSC ki taraf badal gaya hai?`
 
 
 
-function buildAstrologyBlock(astroData) {
+function buildAstrologyBlock(astroData, questionTopic = '', questionText = '') {
   if (!astroData) {
     return `PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE`;
   }
 
-  const planetPos = astroData.planets
-    ? Object.entries(astroData.planets).map(([p, sign]) => `${p} in ${sign}`).join(", ")
+  const lowerQuery = (questionText || '').toLowerCase();
+  const qTopic = questionTopic || '';
+
+  const isRelationship = ['love', 'compatibility', 'relationship_return', 'partner_loyal'].includes(qTopic) ||
+                         /girlfriend|boyfriend|gf|bf|partner|relation|love|pyar|pyaar|cheat|affair|loyalty/i.test(lowerQuery);
+  const isMarriage = ['marriage'].includes(qTopic) ||
+                     /shadi|shaadi|marriage|vivaah|vivah|spouse|husband|wife/i.test(lowerQuery);
+  const isCareer = ['career', 'job', 'wealth', 'money', 'business'].includes(qTopic) ||
+                   /job|career|business|money|paisa|wealth|finance|salary|developing|developer|app/i.test(lowerQuery);
+  const isHealth = ['health'].includes(qTopic) ||
+                   /health|bimari|swasthya|illness|disease/i.test(lowerQuery);
+  const isTravel = ['travel', 'foreign_travel'].includes(qTopic) ||
+                   /travel|foreign|videsh|yatra/i.test(lowerQuery);
+
+  let filteredHouses = {};
+  let filteredPlanets = {};
+
+  if (isMarriage) {
+    // 7th house, Venus, Jupiter
+    if (astroData.houses?.Venus) filteredHouses.Venus = astroData.houses.Venus;
+    if (astroData.houses?.Jupiter) filteredHouses.Jupiter = astroData.houses.Jupiter;
+    if (astroData.houses) {
+      Object.entries(astroData.houses).forEach(([p, h]) => {
+        if (h === 7 || h === 8 || h === 2) filteredHouses[p] = h;
+      });
+    }
+    if (astroData.planets?.Venus) filteredPlanets.Venus = astroData.planets.Venus;
+    if (astroData.planets?.Jupiter) filteredPlanets.Jupiter = astroData.planets.Jupiter;
+  } else if (isRelationship) {
+    // Venus, Moon
+    if (astroData.houses?.Venus) filteredHouses.Venus = astroData.houses.Venus;
+    if (astroData.houses?.Moon) filteredHouses.Moon = astroData.houses.Moon;
+    if (astroData.planets?.Venus) filteredPlanets.Venus = astroData.planets.Venus;
+    if (astroData.planets?.Moon) filteredPlanets.Moon = astroData.planets.Moon;
+  } else if (isCareer) {
+    // 10th house, Mercury, Saturn
+    if (astroData.houses?.Mercury) filteredHouses.Mercury = astroData.houses.Mercury;
+    if (astroData.houses?.Saturn) filteredHouses.Saturn = astroData.houses.Saturn;
+    if (astroData.houses) {
+      Object.entries(astroData.houses).forEach(([p, h]) => {
+        if (h === 10) filteredHouses[p] = h;
+      });
+    }
+    if (astroData.planets?.Mercury) filteredPlanets.Mercury = astroData.planets.Mercury;
+    if (astroData.planets?.Saturn) filteredPlanets.Saturn = astroData.planets.Saturn;
+  } else {
+    // General or other: allow all
+    filteredHouses = astroData.houses || {};
+    filteredPlanets = astroData.planets || {};
+  }
+
+  const planetPos = Object.keys(filteredPlanets).length > 0
+    ? Object.entries(filteredPlanets).map(([p, sign]) => `${p} in ${sign}`).join(", ")
+    : "DATA UNAVAILABLE";
+
+  const houseStr = Object.keys(filteredHouses).length > 0
+    ? Object.entries(filteredHouses).map(([p, h]) => `${p}: ${h}th`).join(', ')
     : "DATA UNAVAILABLE";
 
   return `PROVIDED ASTROLOGY DATA
@@ -1359,7 +1414,7 @@ Planet Positions: ${planetPos}
 Gochar: ${astroData.gochar || "DATA UNAVAILABLE"}
 Dhaiya: ${astroData.dhaiya ? "Yes" : "No"}
 Sadesati: ${astroData.sadesati ? "Yes" : "No"}
-Houses: ${Object.entries(astroData.houses || {}).map(([p, h]) => `${p}: ${h}th`).join(', ')}`;
+Houses: ${houseStr}`;
 }
 
 const NAKSHATRAS = [
@@ -3019,6 +3074,13 @@ Current Season: ${season}`;
   if (mode === 'chat' || mode === 'personal') {
     let promptSections = [];
 
+    let classification = getTopicAndSubType(questionText);
+    if (isRelationshipInvestigationQuery) {
+      classification = { tier: 2, topic: 'love' };
+    }
+    const tierType = classification.tier;
+    const questionTopic = classification.topic;
+
     // Fact Memory (Married, Gender, Occupation) & Language Preference
     let factMemoryBlock = "Fact Memory:\n";
 
@@ -3046,7 +3108,7 @@ Marital Status: ${maritalStatus}`;
       if (!isProfileAck && !isMemoryRecall) {
         promptSections.push(buildCompactContext(userData, isVague ? null : astroData, updatedFacts));
         if (!isVague) {
-          promptSections.push(buildAstrologyBlock(astroData));
+          promptSections.push(buildAstrologyBlock(astroData, questionTopic, questionText));
         } else {
           promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
         }
@@ -3136,12 +3198,7 @@ The user has provided full birth details (DOB, Time of Birth, Place of Birth).
     const todayFormatted = currentDate.toLocaleDateString('hi-IN');
     const dayOfWeek = currentDate.toLocaleDateString('hi-IN', { weekday: 'long' });
 
-    let classification = getTopicAndSubType(questionText);
-    if (isRelationshipInvestigationQuery) {
-      classification = { tier: 2, topic: 'love' };
-    }
-    const tierType = classification.tier;
-    const questionTopic = classification.topic;
+
 
     let tier1DataStr = "N/A";
     let weekdayRemedy = "Om ka jaap karein";
@@ -3441,6 +3498,8 @@ TONE: Warm, Mystical, Confident, Human. 100-180 words.
 - Do NOT mention the same year/date/window repeatedly unless directly supported by the strongest topic-specific evidence.
 - Prioritize question-specific evidence over general chart signals (e.g. if the user asks a Career question, do not focus on Saturn/remedies if the money/career data shows success).
 - Never reuse the previous response structure wording. Avoid repeating the same phrases or templates used in the last 5 responses. Generate fresh insights from the current context.
+- Use maximum 2 astrology indicators per answer.
+- Do not repeat the same indicator used in the previous response unless directly relevant.
 
 === TOPIC-SPECIFIC RESPONSES ===
 - Career / Job / Business: Focus on concrete skills, professional aptitude, market opportunities, and active career paths.
