@@ -2495,6 +2495,8 @@ export default async function handler(req, res) {
 
   const BEDROCK_API_KEY = process.env.BEDROCK_API_KEY;
   const BEDROCK_BASE_URL = process.env.BEDROCK_BASE_URL;
+  const GROK_API_KEY = process.env.GROK_API_KEY;
+  const GROK_BASE_URL = process.env.GROK_BASE_URL;
 
   const userRef = db.collection('users').doc(uid);
   let userDoc;
@@ -3416,14 +3418,10 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   let success = false;
   let lastError = null;
 
-  const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY;
-  const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
-  const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT;
-
-  const hasAzureConfig = !!(AZURE_OPENAI_API_KEY && AZURE_OPENAI_ENDPOINT && AZURE_OPENAI_DEPLOYMENT);
+  const hasGrokConfig = !!(GROK_API_KEY && GROK_BASE_URL);
   const hasBedrockConfig = !!(BEDROCK_API_KEY && BEDROCK_BASE_URL);
 
-  const useOfflineFallback = !hasAzureConfig && !hasBedrockConfig;
+  const useOfflineFallback = !hasGrokConfig && !hasBedrockConfig;
 
   let responseSource = "AI";
 

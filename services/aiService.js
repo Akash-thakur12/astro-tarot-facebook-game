@@ -1,50 +1,24 @@
 import OpenAI from 'openai';
 
-let azureClient = null;
+let grokClient = null;
 let bedrockClient = null;
 
-async function getAzureClient() {
-  const apiKey = process.env.AZURE_OPENAI_API_KEY;
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+function getGrokClient() {
+  const apiKey = process.env.GROK_API_KEY;
+  const baseURL = process.env.GROK_BASE_URL;
 
-  if (!apiKey || !endpoint || !deployment) {
+  if (!apiKey || !baseURL) {
     return null;
   }
 
-  if (!azureClient) {
-    const OpenAIModule = await import('openai');
-    const OpenAIClass = OpenAIModule.OpenAI || OpenAIModule.default;
-    
-    if (endpoint.includes('services.ai.azure.com')) {
-      // Azure AI Foundry Project Endpoint
-      let cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
-      if (cleanEndpoint.endsWith('/chat/completions')) {
-        cleanEndpoint = cleanEndpoint.substring(0, cleanEndpoint.length - 17).replace(/\/+$/, '');
-      }
-      const baseURL = cleanEndpoint.endsWith('/v1') ? cleanEndpoint : `${cleanEndpoint}/v1`;
-      console.log("INSTRUMENTATION - Endpoint Type: Foundry");
-      console.log("INSTRUMENTATION - Final baseURL:", baseURL);
-      azureClient = new OpenAIClass({
-        apiKey,
-        baseURL,
-        defaultQuery: { 'api-version': 'v1' }
-      });
-    } else {
-      // Azure OpenAI Resource Endpoint
-      console.log("INSTRUMENTATION - Endpoint Type: Azure OpenAI");
-      console.log("INSTRUMENTATION - Final baseURL (Resource API Base URL):", endpoint);
-      const AzureOpenAIClass = OpenAIModule.AzureOpenAI || OpenAIModule.default?.AzureOpenAI || OpenAIClass;
-      azureClient = new AzureOpenAIClass({
-        apiKey,
-        endpoint,
-        deployment,
-        apiVersion: '2024-06-01',
-      });
-    }
+  if (!grokClient) {
+    grokClient = new OpenAI({
+      apiKey,
+      baseURL,
+    });
   }
 
-  return azureClient;
+  return grokClient;
 }
 
 function getBedrockClient() {
@@ -66,107 +40,92 @@ function getBedrockClient() {
 }
 
 /**
- * Generates an AI response from Azure OpenAI (Primary) or Bedrock model fallback chain.
+ * Generates an AI response from Grok (Primary) or Qwen fallback chain.
  * 
  * @param {string} prompt - The prompt to send to the models.
  * @returns {Promise<string>} The generated text.
  */
 export async function generateAIResponse(prompt, options = {}) {
-  // 1. Try Azure OpenAI first
-  const azure = await getAzureClient();
-  if (azure) {
-    try {
-      console.log("Trying primary provider: Azure OpenAI...");
-      const deploymentName = process.env.AZURE_OPENAI_DEPLOYMENT || 'o4-mini';
-      const bodyParams = {
-        model: deploymentName,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-      };
-      if (options.jsonMode) {
-        bodyParams.response_format = { type: 'json_object' };
-      }
-
-      // Instrumentation Logs (Phase 25J)
-      try {
-        let finalUrl = typeof azure.buildURL === 'function' 
-          ? azure.buildURL('/chat/completions') 
-          : `${azure.baseURL}/chat/completions`;
-        const qParams = azure.defaultQuery || azure._options?.defaultQuery;
-        if (qParams && Object.keys(qParams).length > 0) {
-          const params = new URLSearchParams(qParams).toString();
-          finalUrl = finalUrl.includes('?') ? `${finalUrl}&${params}` : `${finalUrl}?${params}`;
-        }
-        console.log("INSTRUMENTATION - Final Request URL:", finalUrl);
-        console.log("INSTRUMENTATION - Final Hostname:", new URL(finalUrl).hostname);
-        console.log("INSTRUMENTATION - Constructor Name:", azure.constructor.name);
-        console.log("INSTRUMENTATION - Endpoint Env Hostname:", process.env.AZURE_OPENAI_ENDPOINT ? new URL(process.env.AZURE_OPENAI_ENDPOINT).hostname : "N/A");
-        console.log("INSTRUMENTATION - Deployment Name:", deploymentName);
-      } catch (logErr) {
-        console.warn("Instrumentation logging failed:", logErr.message);
-      }
-
-      const response = await azure.chat.completions.create(
-        bodyParams,
-        {
-          timeout: 5000,
-        }
-      );
-
-      const content = response.choices?.[0]?.message?.content;
-      if (content && content.trim()) {
-        console.log("Azure OpenAI succeeded.");
-        return content.trim();
-      }
-      throw new Error('Azure OpenAI returned an empty response body');
-    } catch (azureErr) {
-      console.error("Azure OpenAI primary failed:", azureErr.message || azureErr);
-    }
-  }
-
-  // 2. Fallback to Bedrock fallback chain
+  const grok = getGrokClient();
   const bedrock = getBedrockClient();
-  if (!bedrock) {
-    throw new Error('AI Service not configured: Missing both Azure OpenAI and Bedrock credentials');
+
+  if (!grok && !bedrock) {
+    throw new Error('AI Service not configured: Missing both Grok and Bedrock credentials');
   }
 
-  const models = [
-    'deepseek.v3.2',
-    'google.gemma-3-4b-it',
-    'qwen.qwen3-32b-v1:0'
-  ];
-
-  let lastError = null;
-
-  for (const model of models) {
+  // 1. Try Grok first
+  if (grok) {
     try {
-      console.log("Trying Bedrock fallback model:", model, "with options:", JSON.stringify(options));
+      console.log("Selected model: xai.grok-4.3");
+      console.log("Trying Grok model: xai.grok-4.3 with options:", JSON.stringify(options));
       const bodyParams = {
-        model,
+        model: 'xai.grok-4.3',
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
+        temperature: 0.5,
       };
       if (options.jsonMode) {
         bodyParams.response_format = { type: 'json_object' };
       }
-      const response = await bedrock.chat.completions.create(
+
+      const startTime = Date.now();
+      const response = await grok.chat.completions.create(
         bodyParams,
         {
           timeout: 5000,
         }
       );
+      const latency = Date.now() - startTime;
+      console.log(`Response latency for xai.grok-4.3: ${latency}ms`);
 
       const content = response.choices?.[0]?.message?.content;
       if (content && content.trim()) {
-        console.log("Bedrock model succeeded:", model);
+        console.log("Grok model succeeded: xai.grok-4.3");
         return content.trim();
       }
-      throw new Error('Model returned an empty content body');
+      throw new Error('Grok returned an empty content body');
     } catch (err) {
-      console.error(`[AI Service] Model ${model} failed:`, err.message || err);
-      lastError = err;
+      console.error("Provider failure for model xai.grok-4.3:", err.message || err);
     }
   }
 
-  throw lastError || new Error('All models in the fallback chain failed');
+  // 2. Fallback to Qwen on AWS Bedrock
+  if (!bedrock) {
+    throw new Error('AI Service not configured: Missing Bedrock credentials for fallback');
+  }
+
+  try {
+    console.log("Selected model: qwen.qwen3-32b");
+    console.log("Fallback activation: trying model qwen.qwen3-32b");
+    console.log("Trying Bedrock model: qwen.qwen3-32b with options:", JSON.stringify(options));
+    const bodyParams = {
+      model: 'qwen.qwen3-32b',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+    };
+    if (options.jsonMode) {
+      bodyParams.response_format = { type: 'json_object' };
+    }
+
+    const startTime = Date.now();
+    const response = await bedrock.chat.completions.create(
+      bodyParams,
+      {
+        timeout: 5000,
+      }
+    );
+    const latency = Date.now() - startTime;
+    console.log(`Response latency for qwen.qwen3-32b: ${latency}ms`);
+
+    const content = response.choices?.[0]?.message?.content;
+    if (content && content.trim()) {
+      console.log("Bedrock model succeeded: qwen.qwen3-32b");
+      return content.trim();
+    }
+    throw new Error('Model returned an empty content body');
+  } catch (err) {
+    console.error("Provider failure for model qwen.qwen3-32b:", err.message || err);
+    throw err;
+  }
 }
+
+

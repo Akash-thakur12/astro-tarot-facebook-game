@@ -30,7 +30,9 @@ describe('aiService - generateAIResponse', () => {
     process.env = originalEnv;
   });
 
-  it('should throw an error if BEDROCK_API_KEY and BEDROCK_BASE_URL are missing', async () => {
+  it('should throw an error if both Grok and Bedrock credentials are missing', async () => {
+    delete process.env.GROK_API_KEY;
+    delete process.env.GROK_BASE_URL;
     delete process.env.BEDROCK_API_KEY;
     delete process.env.BEDROCK_BASE_URL;
 
@@ -39,26 +41,24 @@ describe('aiService - generateAIResponse', () => {
     );
   });
 
-  it('should successfully return response from the first model if it succeeds', async () => {
-    process.env.BEDROCK_API_KEY = 'test-key';
-    process.env.BEDROCK_BASE_URL = 'https://test.api';
+  it('should successfully return response from Grok if it succeeds', async () => {
+    process.env.GROK_API_KEY = 'grok-key';
+    process.env.GROK_BASE_URL = 'https://grok.api';
 
-    // Mock completion create to succeed on first attempt
     const mockOpenAI = new OpenAI();
     mockOpenAI.chat.completions.create.mockResolvedValueOnce({
-      choices: [{ message: { content: 'Deepseek Response' } }]
+      choices: [{ message: { content: 'Grok Response' } }]
     });
 
     const response = await generateAIResponse('hello');
-    expect(response).toBe('Deepseek Response');
+    expect(response).toBe('Grok Response');
 
-    // Should call completions.create with deepseek.v3.2, temp 0.1, timeout 5000
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(1);
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
       {
-        model: 'deepseek.v3.2',
+        model: 'xai.grok-4.3',
         messages: [{ role: 'user', content: 'hello' }],
-        temperature: 0.1
+        temperature: 0.5
       },
       {
         timeout: 5000
@@ -66,43 +66,40 @@ describe('aiService - generateAIResponse', () => {
     );
   });
 
-  it('should fail over to the next model if the first model fails', async () => {
-    process.env.BEDROCK_API_KEY = 'test-key';
-    process.env.BEDROCK_BASE_URL = 'https://test.api';
+  it('should fail over to Qwen on Bedrock if Grok fails', async () => {
+    process.env.GROK_API_KEY = 'grok-key';
+    process.env.GROK_BASE_URL = 'https://grok.api';
+    process.env.BEDROCK_API_KEY = 'bedrock-key';
+    process.env.BEDROCK_BASE_URL = 'https://bedrock.api';
 
     const mockOpenAI = new OpenAI();
-    // 1st model (deepseek): 1 failure
-    mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('Deepseek attempt 1 failed'));
-    // 2nd model (gemma): 1 success
+    // Grok fails
+    mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('Grok failed'));
+    // Bedrock succeeds
     mockOpenAI.chat.completions.create.mockResolvedValueOnce({
-      choices: [{ message: { content: 'Gemma Response' } }]
+      choices: [{ message: { content: 'Qwen Response' } }]
     });
 
     const response = await generateAIResponse('hello');
-    expect(response).toBe('Gemma Response');
+    expect(response).toBe('Qwen Response');
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(2);
 
     const calls = mockOpenAI.chat.completions.create.mock.calls;
-    expect(calls[0][0].model).toBe('deepseek.v3.2');
-    expect(calls[1][0].model).toBe('google.gemma-3-4b-it');
+    expect(calls[0][0].model).toBe('xai.grok-4.3');
+    expect(calls[1][0].model).toBe('qwen.qwen3-32b');
   });
 
-  it('should throw an error if all models in the chain fail', async () => {
-    process.env.BEDROCK_API_KEY = 'test-key';
-    process.env.BEDROCK_BASE_URL = 'https://test.api';
+  it('should throw an error if both Grok and Qwen fail', async () => {
+    process.env.GROK_API_KEY = 'grok-key';
+    process.env.GROK_BASE_URL = 'https://grok.api';
+    process.env.BEDROCK_API_KEY = 'bedrock-key';
+    process.env.BEDROCK_BASE_URL = 'https://bedrock.api';
 
     const mockOpenAI = new OpenAI();
-    // 3 models * 1 attempt = 3 failures
-    for (let i = 0; i < 3; i++) {
-      mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error(`Failure #${i + 1}`));
-    }
+    mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('Grok failed'));
+    mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('Qwen failed'));
 
-    await expect(generateAIResponse('hello')).rejects.toThrow('Failure #3');
-    expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(3);
-
-    const calls = mockOpenAI.chat.completions.create.mock.calls;
-    expect(calls[0][0].model).toBe('deepseek.v3.2');
-    expect(calls[1][0].model).toBe('google.gemma-3-4b-it');
-    expect(calls[2][0].model).toBe('qwen.qwen3-32b-v1:0');
+    await expect(generateAIResponse('hello')).rejects.toThrow('Qwen failed');
+    expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(2);
   });
 });

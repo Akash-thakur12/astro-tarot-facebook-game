@@ -29,3 +29,5 @@ dist-ssr
 jdk/
 jdk21/
 *.zip
+
+.env*
