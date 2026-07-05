@@ -63,16 +63,15 @@ export function humanize(text, seed = 1) {
 
   let result = text;
 
-  // 1. Remove markdown formatting (bold, italics, headers, lists)
-  result = result.replace(/\*\*|__/g, ""); // Bold
-  result = result.replace(/\*|_/g, "");   // Italics
+  // 1. Remove markdown formatting (except bold/lists/headers if required for persona)
   result = result.replace(/#+\s+/g, "");  // Headers
-  result = result.replace(/^\s*[-*+]\s+/gm, ""); // Bullet points
 
   // Save allowed emojis from being removed
   result = result.replace(/🔮/g, "___PREDICTION_EMOJI___");
   result = result.replace(/📿/g, "___REASONING_EMOJI___");
   result = result.replace(/🪔/g, "___GUIDANCE_EMOJI___");
+  result = result.replace(/🌟/g, "___STAR_EMOJI___");
+  result = result.replace(/⚡/g, "___LIGHTNING_EMOJI___");
 
   // 2. Remove emojis (Step 3)
   result =
@@ -91,6 +90,8 @@ export function humanize(text, seed = 1) {
   result = result.replace(/___PREDICTION_EMOJI___/g, "🔮");
   result = result.replace(/___REASONING_EMOJI___/g, "📿");
   result = result.replace(/___GUIDANCE_EMOJI___/g, "🪔");
+  result = result.replace(/___STAR_EMOJI___/g, "🌟");
+  result = result.replace(/___LIGHTNING_EMOJI___/g, "⚡");
 
   // 3. Keep planets/houses limited to maximum of 2 and replace with neutral simple words, not astrology terms
   result = limitPlanetsAndHouses(result);

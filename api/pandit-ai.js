@@ -139,8 +139,14 @@ export const SEMANTIC_CATEGORIES = {
       { phrase: "patch-up", isStrong: true },
       { phrase: "ex gf", isStrong: true },
       { phrase: "ex girlfriend", isStrong: true },
-      { phrase: "wapis", isStrong: false },
-      { phrase: "bapis", isStrong: false },
+      { phrase: "wapis", isStrong: true },
+      { phrase: "bapis", isStrong: true },
+      { phrase: "vaapis", isStrong: true },
+      { phrase: "reunion", isStrong: true },
+      { phrase: "ex", isStrong: true },
+      { phrase: "ex boyfriend", isStrong: true },
+      { phrase: "move on", isStrong: true },
+      { phrase: "move-on", isStrong: true },
       { phrase: "dhokha", isStrong: true },
       { phrase: "relationship status", isStrong: true },
       { phrase: "crush like me", isStrong: true },
@@ -622,7 +628,7 @@ const PRIORITY_ORDER = [
 const KEYWORD_REGEXES = {
   career: /naukri|job|career|promotion|vyapar|business|salary|interview|tarakki|unnati/i,
   marriage: /shadi|vivah|marriage|marry|married|rishta|engagement|jeevan saathi/i,
-  love: /pyaar|love|crush|\bex\b|relationship|partner|soulmate|breakup|patch up/i,
+  love: /pyaar|love|crush|\bex\b|relationship|partner|soulmate|breakup|patch up|patchup|reunion|wapas|bapis|vaapis|ex girlfriend|ex boyfriend|move on|move-on/i,
   money: /paisa|\bdhan\b|rich|crorepati|lottery|stock|crypto|property|karz|wealth|financial/i,
   health: /health|bimari|stress|mental|recovery|surgery|fitness|swasthya|swasth|anxiety/i,
   family: /family|ghar|parents|bhai|behen|property dispute/i,
@@ -814,7 +820,7 @@ function _getTopicAndSubType(question) {
     return { tier: 3, topic: 'nazar' };
 
   // 3. Specific Tier 2 Topics
-  if (/pyaar|love|crush|\bex\b|relationship|partner|soulmate|breakup|patch up/i.test(q))
+  if (/pyaar|love|crush|\bex\b|relationship|partner|soulmate|breakup|patch up|patchup|reunion|wapas|bapis|vaapis|ex girlfriend|ex boyfriend|move on|move-on/i.test(q))
     return { tier: 2, topic: 'love' };
 
   if (/paisa|\bdhan\b|rich|crorepati|lottery|stock|crypto|property|karz|wealth|financial/i.test(q))
@@ -2604,6 +2610,35 @@ export default async function handler(req, res) {
 
   let relationshipLoss = false;
   const factMemory = (mode === 'chat' || mode === 'personal') ? await getFactMemory(uid) : {};
+
+  // Relationship Investigation Routing (Phase 31H)
+  const RELATIONSHIP_INVESTIGATION_PATTERNS = [
+    /cheat/i,
+    /affair/i,
+    /third\s*person/i,
+    /extra\s*marital/i,
+    /kisi\s+aur\s+ke\s+saath\s+relation/i,
+    /chakkar/i,
+    /loyalty/i,
+    /faithfulness/i
+  ];
+  const isRelationshipInvestigationQuery = (mode === 'chat' || mode === 'personal') && RELATIONSHIP_INVESTIGATION_PATTERNS.some(pattern => pattern.test(questionText));
+  const p2Name = userData?.p2?.name || userData?.partner?.name || userData?.partnerName || getFact(factMemory, 'relationship.spouseName') || getFact(factMemory, 'relationship.partnerName');
+  const hasPartnerDetails = !!(p2Name || (userData?.p2 && (userData?.p2?.dobDay || userData?.p2?.dob)));
+
+  if (isRelationshipInvestigationQuery && !hasPartnerDetails) {
+    const replyText = `🔮 Prediction:
+Aapki janm jaankari mere paas hai, lekin is connection ko aur gehrai se dekhne ke liye mujhe us vyakti ke baare me kuch jaankari chahiye:
+
+• Naam
+• Janm tithi (agar pata ho)
+• Janm samay (agar pata ho)
+• Janm sthan (agar pata ho)
+
+Jitni adhik jaankari hogi, utna adhik vyaktigat relationship analysis mil sakega.`;
+    return res.status(200).json({ text: replyText });
+  }
+
   const wasAwaitingClarification = (mode === 'chat' || mode === 'personal')
     ? (getFact(factMemory, 'awaitingClarification') === true)
     : false;
@@ -2695,7 +2730,7 @@ Current Season: ${season}`;
   const isGreeting = isGreetingMessage(questionText);
   const isProfileAck = isProfileAcknowledgementMessage(questionText);
   const isMemoryRecall = isMemoryRecallMessage(questionText);
-  const isVague = !isProfileAck && !isMemoryRecall && !wasAwaitingClarification && isVagueMessage(questionText);
+  const isVague = !isProfileAck && !isMemoryRecall && !wasAwaitingClarification && !isRelationshipInvestigationQuery && isVagueMessage(questionText);
 
 
 
@@ -2860,11 +2895,50 @@ Current Season: ${season}`;
   const isRemedy = qClean.includes('upay') || qClean.includes('upaya') || qClean.includes('remedy') || qClean.includes('nivaran');
   const isTimingQuery = hasTimingKeyword && !isGreeting && !isProfileAck && !isMemoryRecall && !isVague && !isGratitude && !isRemedy && !wasAwaitingClarification;
 
-  const skipDashaPreservation = isGreeting || isVague || !hasBirthDetails || isNonAstrologyQuestion(questionText) || !isTimingQuery;
+  const allHistoryMsgs = Array.isArray(history) ? history : [];
+  let pastHistory = [];
+  if (allHistoryMsgs.length > 0) {
+    const lastMsg = allHistoryMsgs[allHistoryMsgs.length - 1];
+    if (lastMsg.role === 'user' && lastMsg.content === (userData?.question || '')) {
+      pastHistory = allHistoryMsgs.slice(0, -1);
+    } else {
+      pastHistory = allHistoryMsgs;
+    }
+  }
+
+  let skipDashaPreservation = isGreeting || isVague || !hasBirthDetails || isNonAstrologyQuestion(questionText) || !isTimingQuery;
 
   const astroData = (mode === 'chat' || mode === 'personal')
     ? await getAstrologyData({ dob, tob, pob })
     : null;
+
+  let dashaAlreadyMentioned = false;
+  if (astroData && pastHistory.length > 0) {
+    const mahadashaLord = (astroData.mahadasha || '').toLowerCase();
+    const antardashaLord = (astroData.antardasha || '').toLowerCase();
+    const historyText = pastHistory.map(m => m.content).join(' ').toLowerCase();
+    const aliases = {
+      sun: ['sun', 'surya', 'सूर्य'],
+      moon: ['moon', 'chandra', 'चंद्रमा', 'चन्द्रमा', 'चन्द्र'],
+      mars: ['mars', 'mangal', 'मंगल'],
+      mercury: ['mercury', 'budh', 'बुध'],
+      jupiter: ['jupiter', 'guru', 'गुरु', 'बृहस्पति'],
+      venus: ['venus', 'shukra', 'शुक्र'],
+      saturn: ['saturn', 'shani', 'शनि'],
+      rahu: ['rahu', 'राहु'],
+      ketu: ['ketu', 'केतु']
+    };
+    if (mahadashaLord && antardashaLord) {
+      const mAliases = aliases[mahadashaLord] || [mahadashaLord];
+      const aAliases = aliases[antardashaLord] || [antardashaLord];
+      const mMatch = mAliases.some(alias => historyText.includes(alias));
+      const aMatch = aAliases.some(alias => historyText.includes(alias));
+      if (mMatch && aMatch) {
+        dashaAlreadyMentioned = true;
+        skipDashaPreservation = true;
+      }
+    }
+  }
 
   let updatedFacts = factMemory;
   // Construct prompt for API providers
@@ -2973,19 +3047,7 @@ Marital Status: ${maritalStatus}`;
       promptSections.push("PROVIDED ASTROLOGY DATA\nDATA UNAVAILABLE");
     }
 
-    // Recent Conversation (Recent 3 turns)
-    const allHistoryMsgs = Array.isArray(history) ? history : [];
-
-    // Ensure we exclude the current question if it is the last message
-    let pastHistory = [];
-    if (allHistoryMsgs.length > 0) {
-      const lastMsg = allHistoryMsgs[allHistoryMsgs.length - 1];
-      if (lastMsg.role === 'user' && lastMsg.content === userData.question) {
-        pastHistory = allHistoryMsgs.slice(0, -1);
-      } else {
-        pastHistory = allHistoryMsgs;
-      }
-    }
+    // Recent Conversation (Recent 3 turns) - pastHistory already calculated in outer scope
     const pastUserMsgs = pastHistory.filter(m => m.role === 'user');
     const pastAssistantMsgs = pastHistory.filter(m => m.role === 'model' || m.role === 'assistant');
 
@@ -3063,7 +3125,10 @@ The user has provided full birth details (DOB, Time of Birth, Place of Birth).
     const todayFormatted = currentDate.toLocaleDateString('hi-IN');
     const dayOfWeek = currentDate.toLocaleDateString('hi-IN', { weekday: 'long' });
 
-    const classification = getTopicAndSubType(questionText);
+    let classification = getTopicAndSubType(questionText);
+    if (isRelationshipInvestigationQuery) {
+      classification = { tier: 2, topic: 'love' };
+    }
     const tierType = classification.tier;
     const questionTopic = classification.topic;
 
@@ -3095,6 +3160,17 @@ CURRENT_YEAR: ${currentYear}
 `;
     promptSections.push(tierStrategyBlock.trim());
 
+    if (questionTopic === 'love' && astroData) {
+      const loveData = calculateLoveEngine(astroData);
+      const loveEngineBlock = `=== CALCULATED RELATIONSHIP ENGINE DATA ===
+Reunion Potential: ${loveData.reunionPotential}
+Relationship Stability: ${loveData.relationshipStrength}
+Timing Window: ${loveData.loveWindows.join(', ')}
+Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potential: ${loveData.soulmatePotential})
+`;
+      promptSections.push(loveEngineBlock.trim());
+    }
+
     const multiIntent = detectMultiIntent(questionText);
     if (multiIntent && multiIntent.primary) {
       let multiIntentBlock = `=== DETECTED INTENTS ===\n`;
@@ -3106,31 +3182,78 @@ CURRENT_YEAR: ${currentYear}
     }
 
 
+    const topic = questionTopic;
+    const userMemory = updatedFacts;
+    const primaryTopic = questionTopic;
+    const kundliData = astroData;
+    const loveData = astroData ? calculateLoveEngine(astroData) : null;
+    const moneyData = astroData ? calculateMoneyEngine(astroData) : null;
+    const healthData = astroData ? calculateHealthEngine(astroData) : null;
+    const tarotData = userData?.tarotData || userData?.tarot || null;
+    const profileData = {
+      name,
+      gender,
+      dob,
+      tob,
+      pob,
+      maritalStatus,
+      occupation: profile?.occupation || userData?.occupation || 'Unknown'
+    };
+    const conversationHistory = pastHistory;
+
+    // Context Isolation Rule: Only include partnerData for love/compatibility/marriage topics,
+    // or when the query explicitly asks about the partner/relationship.
+    const relationshipKeywords = /partner|husband|wife|spouse|girlfriend|boyfriend|relationship|relation|shadi|shaadi|marriage|vivaah|vivah|love|pyar|pyaar|compatibility|cheat|affair|third\s*person|extra\s*marital|loyalty|faithfulness|chakkar/i;
+    const isExplicitRelationshipQuery = relationshipKeywords.test(questionText);
+    const isRelationshipTopic = ['love', 'marriage', 'compatibility', 'relationship_return', 'partner_loyal'].includes(questionTopic);
+    const includePartnerData = isRelationshipTopic || isExplicitRelationshipQuery;
+    const partnerData = includePartnerData ? (userData?.p2 || userData?.partner || null) : null;
+
+    const aiContext = {
+      primaryTopic,
+      kundliData,
+      loveData,
+      moneyData,
+      healthData,
+      tarotData,
+      userMemory,
+      profileData,
+      conversationHistory,
+      partnerData
+    };
+
+    let tier1Data = null;
+    if (tierType === 1) {
+      tier1Data = calculateTier1Data(questionTopic, astroData);
+    }
+
+    const hasCalculatedData = !!(astroData || (loveData && loveData.loveScore) || (moneyData && moneyData.wealthScore) || (healthData && healthData.vitalityScore) || tarotData);
+
     let systemInstruction = "";
     if (isGreeting) {
       systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+You are "AstroOracle", an elite, deeply intuitive, and charismatic Astrologer and Tarot Reader. Reply in Hindi/Hinglish only. Respond in a warm, mystical, confident, emotionally intelligent, conversational, and human-like tone.
 
 GREETING MODE RULES:
 - The user is only greeting you (e.g., "Hello", "Hi", "Namaste", "Pranam", "Ram Ram").
 - Do NOT generate any astrology reading or predictions.
 - Do NOT mention dasha, planets, houses, government jobs, birthplace, or any birth chart details.
-- Give a short, warm welcome message (e.g., "Namaste Beta! Kaise hain aap?").
-- Ask them clearly what they want to know about their career, marriage, health, or finance today.
+- Give a short, warm, charismatic welcome message.
+- Invite them to ask their question about career, marriage, health, finance, or family.
 `;
     } else if (isVague) {
       systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+You are "AstroOracle", an elite, deeply intuitive, and charismatic Astrologer and Tarot Reader. Reply in Hindi/Hinglish only. Respond in a warm, mystical, confident, emotionally intelligent, conversational, and human-like tone.
 
 VAGUE MODE RULES:
 - The user wants to begin a conversation but has not yet asked a specific astrology question.
 - Encourage them warmly to continue and ask their specific question about career, marriage, health, finance, or family.
 - Do NOT generate any predictions, dasha details, planet positions, lagna, or nakshatra.
-- Keep the reply welcoming and invite them to ask their question.
+- Keep the reply welcoming, charismatic, and invite them to ask their question.
 `;
     } else if (tierType === 5 || questionTopic === 'profile_acknowledgement') {
       systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+You are "AstroOracle", an elite, deeply intuitive, and charismatic Astrologer and Tarot Reader. Reply in Hindi/Hinglish only. Respond in a warm, mystical, confident, emotionally intelligent, conversational, and human-like tone.
 
 PROFILE ACKNOWLEDGEMENT MODE RULES:
 - The user is asking if you know, remember, or possess their profile details (e.g. name, marriage status, occupation, birth details).
@@ -3141,7 +3264,7 @@ PROFILE ACKNOWLEDGEMENT MODE RULES:
 `;
     } else if (tierType === 6 || questionTopic === 'memory_recall') {
       systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+You are "AstroOracle", an elite, deeply intuitive, and charismatic Astrologer and Tarot Reader. Reply in Hindi/Hinglish only. Respond in a warm, mystical, confident, emotionally intelligent, conversational, and human-like tone.
 
 MEMORY RECALL MODE RULES:
 - The user is asking you to retrieve or disclose their stored profile details (e.g. name, date of birth, age, birthplace, occupation, married status, children count).
@@ -3152,45 +3275,96 @@ MEMORY RECALL MODE RULES:
 - If a queried detail is not in the USER PROFILE or Fact Memory, politely state that you do not have that specific information yet.
 - Keep the response direct, warm, and natural.
 `;
-    } else if (tierType === 1) {
-      systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
-
-RESPONSE STYLE & CONTENT RULES:
-- Write your response as warm, natural conversational paragraphs. Do NOT use rigid headers (like Summary:, Timing:, Reason:, Upay:, Question:).
-- Start directly with a clear and concise answer to the user's specific question. Do NOT prepend greeting phrases (like "Ram Ram", "Namaste") or address the user by name/beta at the very beginning. Focus entirely on answering the user's current question as the primary objective.
-- Integrate the predicted timing or time window naturally into your paragraph.
-- Weave in the astrological reasoning (dasha, planetary transits/placements) organically to support your prediction. Do NOT repeat birth details (birthplace, age, dasha names, occupation) unless they are directly relevant.
-- Offer a practical remedy (Upay) naturally within the flow of the conversation.
-- End naturally with a follow-up question asking if they want to know more.
-
-Example of correct response style:
-Aapki kundli ke hisaab se Guru-Rahu chandal yog bana hua hai, jo buddhi ko sankochit karta hai aur dhyan bhatkata hai. Is vajah se naukri me tarakki aapko February 2027 se April 2027 ke beech mil sakti hai, kyunki dashmesh bhav par guru grah ki dristi pad rahi hai. Upay ke roop me aap roz subah surya dev ko jal arpit karein aur peele phool chadhayein. Kya aap jaanna chahenge ki kaunsa din tarakki ke liye sabse shubh rahega?
-
-Use engine data only. Never invent astrology. Do not use English words like Career, Promotion, Job, salary, marriage. Use simple Hindi/Hinglish words.
-`;
-    } else if (tierType === 2) {
-      systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
-
-TIER 2 RESPONSE RULES:
-- Analyze the user's question and birth details/Astro Data (mahadasha, antardasha, planetary placements, lagna) to give a personalized prediction for the topic: "${questionTopic}".
-- Explain how their current dasha/planetary positions influence this area of life.
-- Suggest a practical and relevant remedy (Upay) based on their chart.
-- Do NOT use generic templates. Provide a warm, custom, and detailed response.
-- End with a follow-up question.
-`;
     } else {
       systemInstruction = `
-You are "Pandit AI", an expert Vedic Astrologer. Reply in Hindi/Hinglish only. Respond warmly like a traditional Pandit ji (aadar + apnapan + clear).
+You are "AstroOracle", an elite, deeply intuitive, and charismatic Astrologer and Tarot Reader. You control tone, formatting, readability, engagement, and structure (acting purely as a presentation layer, and must NOT override routing, calculations, or validations).
 
-TIER 3 RESPONSE RULES:
-- Provide shastra-based spiritual guidance, mantra remedies, or daily/lifestyle recommendations for the topic: "${questionTopic}".
-- Use their birth chart details to guide their spiritual growth, state of mind, or daily focus.
-- Suggest a safe spiritual remedy, mantra, or custom Upay based on their chart.
-- Do not confirm black magic, ghosts, or dangerous curses (fear). Keep the reading positive, encouraging, and shastra-based.
-- Do NOT use generic templates.
-- End with a follow-up question.
+### CORE IDENTITY:
+You read the astrological and situational context, not just generic charts. You provide profound, empathetic guidance based on available evidence, relationship indicators, and chart details. You NEVER lie about astrology.
+
+### INPUT:
+USER: ${name}, DOB: ${dob || 'Not Provided'}
+AI_CONTEXT: ${JSON.stringify(aiContext)}
+CURRENT: ${todayFormatted}, ${dayOfWeek}, ${currentYear}
+
+### DATA AVAILABILITY & ACCURACY RULES:
+${hasCalculatedData ? `
+- Valid astrology/engine calculations are AVAILABLE in AI_CONTEXT.
+- You MUST NOT say "DOB do", "Janam vivaran hai nahi", "Janam vivaran ke bina", "Janam vivaran nahi hai", "Data nahi mila", or ask for birth details.
+- Use the relevant engine data (e.g., loveData for love topic, moneyData for money/finance topic, etc.) as the PRIMARY evidence source.
+- Use memory, profile data, conversation history, astrology context, and supporting engine outputs as secondary context.
+- Never contradict computed engine data.
+- IF AI_CONTEXT.kundliData contains Mahadasha/Antardasha details, you may mention them. If they are absent, do NOT invent them.
+- When answering relationship queries, you are explicitly allowed to use and describe compatibility, reunion signals, relationship timing, emotional compatibility, and relationship obstacles from the provided loveData.
+- Do NOT expose raw numerical scores (e.g., do NOT output "Reunion chance = 85%", "Marriage score = 80", or "Success probability = 81%"). Instead, translate them qualitatively:
+  * Under 50: weak signal
+  * 50-79: moderate signal
+  * 80-89: strong signal
+  * 90+: very strong signal
+` : `
+- No birth details or engine calculations are available.
+- You MUST acknowledge honestly: "Janam vivaran ke bina main grah ki exact position nahi dekh paungi".
+- Do NOT invent or make up specific dates, dasha names, planet positions, or numerical scores.
+- You may politely invite the user to provide their birth details (DOB, birth time, and birth place) to calculate their exact mahadasha.
+`}
+
+### PSYCHIC LIMITS:
+Avoid psychic claims or language implying supernatural certainty. Do NOT use phrases like "I can sense energy", "I feel your aura", "The universe told me", or "I know what they think". Replace with:
+- "Based on your question..."
+- "Based on available astrology signals..."
+- "Based on relationship indicators..."
+- "Based on the current context..."
+${isRelationshipInvestigationQuery ? `
+### RELATIONSHIP INVESTIGATION FLOW (HIGH ENGAGEMENT MODE):
+- The user is asking about cheating, affair, third person, extra marital relation, loyalty, or faithfulness.
+- You must perform a deep, emotionally compelling, and highly engaging analysis based on the available partner details (partnerData) and love/compatibility calculations (loveData).
+- You MUST NOT reply with refusing or evasive phrases like "I cannot know" or "I don't have enough information".
+- Instead, focus on allowed deep themes:
+  * Hidden influence
+  * Emotional distance
+  * Third-party interference signals
+  * Mixed intentions
+  * Trust imbalance
+  * Unspoken emotions
+  * Communication blockage
+- Analyze and discuss:
+  * Compatibility analysis
+  * Relationship indicators
+  * Trust indicators
+  * Communication indicators
+  * Emotional compatibility
+- CRITICAL SAFETY LIMITS:
+  * Do NOT state "affair confirmed" or "cheating confirmed" or "third person confirmed".
+  * Instead use soft indicators: "strong indications", "signals", "patterns", "possibility", "influence".
+  * Make the response feel deep, personal, and mysterious without presenting speculation as proven fact.
+- Keep the MANDATORY response structure:
+  * 🌟 **The Cosmic Truth**: Give a strong, emotionally compelling interpretation using available metrics.
+  * ⚡ **The Hidden Friction**: Identify the relationship tension and emotional blocks.
+  * 🔮 **Your Next Power Move**: Provide 1 practical, specific action.
+  * **FINAL LINE - CURIOSITY HOOK**: Ask 1 natural question.
+` : ''}
+
+### RESPONSE STRUCTURE - MANDATORY:
+
+🌟 **The Cosmic Truth**
+[Read the situation. Use the relevant engine data from AI_CONTEXT as the primary evidence source. If no calculations exist, use universal archetypes + topic wisdom. Use **bold** for 2 key insights. Be specific about feelings/indications, not fake dates.]
+
+⚡ **The Hidden Friction**
+[Name the real emotional/psychological block user is facing in ${topic}. Make them feel understood.]
+
+🔮 **Your Next Power Move**
+[Provide 1 practical, specific action or remedy from the available context or daily/universal guidelines. No generic "sab theek hoga".]
+
+**FINAL LINE - CURIOSITY HOOK:**
+Ask 1 natural question. Examples:
+"Kya aap jaanna chahenge ki is energy ka peak kab aayega?"
+"Kya us vyakti ke dil me kya chal raha hai ye aur gehra dekhna chahenge?"
+
+### BANNED PHRASES:
+"Data not available", "vistaar se kundli dekhni padti hai", "shastra me kaha gaya hai", 
+"Sab theek ho jayega", "Achhe din aane wale hain", "khatra", "maut", "barbaad"
+
+TONE: Warm, Mystical, Confident, Human. 100-180 words.
 `;
     }
 
@@ -3201,10 +3375,22 @@ TIER 3 RESPONSE RULES:
 `;
     promptSections.push(forbiddenRulesBlock.trim());
 
+    let greetingSuppressionInstruction = "";
+    if (pastHistory.length > 0) {
+      greetingSuppressionInstruction = `
+- CONVERSATION TURN IS SUBSEQUENT (Not first turn): You MUST NOT use any welcome greetings, introductions, or greeting phrases (like "Beta, aapka swagat hai", "Namaste Beta", "Aapka swagat hai") anywhere, especially not at the beginning of your response. Start directly with the answer to the user's follow-up question.`;
+    }
+
+    let dashaRepetitionInstruction = "";
+    if (dashaAlreadyMentioned && astroData) {
+      dashaRepetitionInstruction = `
+- DASHA REPETITION PREVENTION: The user's current Dasha (${astroData.mahadasha || 'Unknown'}/${astroData.antardasha || 'Unknown'}) has already been discussed in previous messages. Avoid repeating the full explanation or dasha names again unless the user explicitly asks about timing/dasha. You can refer to it concisely (e.g., "grah sthiti") or omit it entirely to avoid redundancy.`;
+    }
+
     const priorityRulesBlock = `
 === PRIORITY & CONTEXT RULES ===
 - The current question has the highest priority. Focus entirely on answering the user's specific question as the primary objective.
-- GREETING & NAME BANS: Unless the user is only greeting you (isGreeting=true), you must NOT start your response with any greeting phrases (like "Ram Ram", "Namaste", "Pranam", "Kalyan ho") or address the user by name/beta at the very beginning of the response (e.g. do NOT start with "Ram Ram beta Akash" or "Akash Beta, ..."). Start the response directly with the answer/prediction.
+- GREETING & NAME BANS: Unless the user is only greeting you (isGreeting=true), you must NOT start your response with any greeting phrases (like "Ram Ram", "Namaste", "Pranam", "Kalyan ho") or address the user by name/beta at the very beginning of the response (e.g. do NOT start with "Ram Ram beta Akash" or "Akash Beta, ..."). Start the response directly with the answer/prediction.${greetingSuppressionInstruction}${dashaRepetitionInstruction}
 - Do NOT repeat the user's chart summary (such as Sun Mahadasha, Mercury Antardasha, Government Job, Hamirpur, age, or birthplace) unless it is directly relevant to the specific question asked. Birth chart context should SUPPORT the answer, not replace it.
 - FOLLOW-UP DETECTION: If the user asks a short follow-up query (e.g., "kab", "kis year", "kitne saal", "uska kya hoga", "phir", "aur", "when", "then", "what about", etc.), you MUST read the "Recent Conversation" history to understand the subject they are asking about, and answer using that context.
 `;
@@ -3353,6 +3539,16 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
             .replace(/🪔\s*Guidance:\s*/gi, "")
             .replace(/🪔\s*Upay:\s*/gi, "")
             .trim();
+        }
+        if (pastHistory.length > 0) {
+          completedResponse = completedResponse.replace(
+            /^(🔮\s*Prediction:\s*(?:\n\n)?)(?:Namaste\s+Beta|Pranam\s+Beta|Kalyan\s+ho\s+Beta|Beta,\s+aapka\s+swagat\s+hai|Aapka\s+swagat\s+hai|Beta\b,?\s*swagat\s+hai)[!.,\s\n]*/i,
+            '$1'
+          );
+          completedResponse = completedResponse.replace(
+            /^(?:Namaste\s+Beta|Pranam\s+Beta|Kalyan\s+ho\s+Beta|Beta,\s+aapka\s+swagat\s+hai|Aapka\s+swagat\s+hai|Beta\b,?\s*swagat\s+hai)[!.,\s\n]*/i,
+            ''
+          );
         }
         jsonResponse = {
           text: completedResponse

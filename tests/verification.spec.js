@@ -1585,4 +1585,135 @@ Ganesh ji ki upasana karein. Kya aur kuch janna chahte hain?
     expect(() => parseModelResponse("No")).toThrow('INCOMPLETE_AI_RESPONSE');
     expect(() => parseModelResponse(null)).toThrow('INVALID_AI_RESPONSE');
   });
+
+  it('38. Verify Phase 31H: Relationship Investigation Flow', async () => {
+    // Case 1: Partner details missing
+    const req1 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_relationship_investigation_1',
+          question: 'Kya mera partner mujhe cheat kar raha hai?',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh'
+        },
+        history: []
+      }
+    };
+    const res1 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    await handler(req1, res1);
+    expect(res1.statusCode).toBe(200);
+    expect(res1.jsonData.text).toContain('Aapki janm jaankari mere paas hai, lekin is connection ko aur gehrai se dekhne ke liye');
+    expect(res1.jsonData.text).toContain('Naam');
+    expect(res1.jsonData.text).toContain('Janm tithi');
+
+    // Case 2: Partner details present (should proceed to LLM call)
+    const req2 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_relationship_investigation_2',
+          question: 'Kya mera partner cheat kar raha hai?',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          p2: {
+            name: 'Priya',
+            dobDay: 15, dobMonth: 5, dobYear: 2000
+          }
+        },
+        history: []
+      }
+    };
+    const res2 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    await handler(req2, res2);
+    expect(res2.statusCode).toBe(200);
+    // Should return mockAIResponse since it proceeded to AI call
+    expect(res2.jsonData.text).toContain('🔮 Prediction:');
+    expect(res2.jsonData.text).toContain('Safalta milegi.');
+  });
+
+  it('39. Verify Context Isolation Rule for partnerData', async () => {
+    const { generateAIResponse } = await import('../services/aiService.js');
+    const mockGenerate = vi.mocked(generateAIResponse);
+
+    // Case 1: Pure Career question (partnerData should be ignored/null in prompt)
+    const req1 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_context_isolation_1',
+          question: 'Career me promotion kab hoga?',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur',
+          p2: { name: 'Priya', dobDay: 15 }
+        },
+        history: []
+      }
+    };
+    const res1 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    mockGenerate.mockClear();
+    await handler(req1, res1);
+    expect(res1.statusCode).toBe(200);
+
+    const call1 = mockGenerate.mock.calls.find(call => call[0].includes('AI_CONTEXT'));
+    expect(call1).toBeDefined();
+    const prompt1 = call1[0];
+    expect(prompt1).toContain('"partnerData":null');
+
+    // Case 2: Career question mentioning relationship/partner (partnerData should be included)
+    const req2 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock_token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_verify_context_isolation_2',
+          question: 'Kya partner ke aane se career me fayda hoga?',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur',
+          p2: { name: 'Priya', dobDay: 15 }
+        },
+        history: []
+      }
+    };
+    const res2 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    mockGenerate.mockClear();
+    await handler(req2, res2);
+    expect(res2.statusCode).toBe(200);
+
+    const call2 = mockGenerate.mock.calls.find(call => call[0].includes('AI_CONTEXT'));
+    expect(call2).toBeDefined();
+    const prompt2 = call2[0];
+    expect(prompt2).toContain('"partnerData":{"name":"Priya"');
+  });
 });
