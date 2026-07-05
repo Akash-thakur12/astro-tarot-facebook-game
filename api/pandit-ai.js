@@ -769,7 +769,14 @@ export function getTopicAndSubType(question) {
 }
 
 function _getTopicAndSubType(question) {
-  const q = question.toLowerCase();
+  const q = question.toLowerCase().trim();
+
+  if (q.includes("property dispute resolution")) {
+    return { tier: 2, topic: 'money' };
+  }
+  if (q.includes("aaj ka lucky number")) {
+    return { tier: 2, topic: 'daily' };
+  }
 
   if (isProfileAcknowledgementMessage(question)) {
     console.log("FINAL_TOPIC", "profile_acknowledgement");
@@ -2783,14 +2790,16 @@ Current Season: ${season}`;
     languagePreference = "Devanagari Hindi script (हिन्दी). Write the entire response in pure Hindi. Never use Roman Hindi or English.";
   }
 
-  let cosmicHeading = "🌟 **The Cosmic Truth**";
-  let frictionHeading = "⚡ **The Hidden Friction**";
-  let powerHeading = "🔮 **Your Next Power Move**";
+  let cosmicHeading = "🌟 **The Unfiltered Cosmic Truth**";
+  let frictionHeading = "⚡ **The Silent Saboteur**";
+  let powerHeading = "🔮 **Your 7-Day Power Move**";
+  let cliffhangerHeading = "🚨 **The Cliffhanger (Open Loop)**";
 
   if (resolvedLanguage !== 'English') {
     cosmicHeading = "🌟 **ब्रह्मांडीय संकेत**";
     frictionHeading = "⚡ **छिपा हुआ कारण**";
     powerHeading = "🔮 **आपका अगला कदम**";
+    cliffhangerHeading = "🚨 **सस्पेंस प्रश्न**";
   }
 
   const isGreeting = isGreetingMessage(questionText);
@@ -3270,6 +3279,8 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
     };
     const conversationHistory = pastHistory;
 
+    const hasCalculatedData = !!(astroData || (loveData && loveData.loveScore) || (moneyData && moneyData.wealthScore) || (healthData && healthData.vitalityScore) || tarotData);
+
     // Context Isolation Rule: Only include partnerData for love/compatibility/marriage topics,
     // or when the query explicitly asks about the partner/relationship.
     const relationshipKeywords = /partner|husband|wife|spouse|girlfriend|boyfriend|relationship|relation|shadi|shaadi|marriage|vivaah|vivah|love|pyar|pyaar|compatibility|cheat|affair|third\s*person|extra\s*marital|loyalty|faithfulness|chakkar/i;
@@ -3284,7 +3295,8 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
       userMemory,
       profileData,
       conversationHistory,
-      partnerData
+      partnerData,
+      confidence: hasCalculatedData ? 85 : 0
     };
 
     const lowerQuery = questionText.toLowerCase();
@@ -3325,7 +3337,7 @@ Emotional Compatibility: Love score is ${loveData.loveScore}% (Soulmate potentia
       tier1Data = calculateTier1Data(questionTopic, astroData);
     }
 
-    const hasCalculatedData = !!(astroData || (loveData && loveData.loveScore) || (moneyData && moneyData.wealthScore) || (healthData && healthData.vitalityScore) || tarotData);
+    let activeEngineData = null;
 
     let systemInstruction = "";
     if (isGreeting) {
@@ -3375,56 +3387,73 @@ MEMORY RECALL MODE RULES:
 `;
     } else {
       const age = ageDisplay;
-      const activeEngineData = filteredContext;
+      activeEngineData = filteredContext;
       const chatHistory = pastHistory;
       const topic = questionTopic;
+      const time = tob && tob !== 'Unknown' ? tob : '';
+      const place = pob && pob !== 'Unknown' ? pob : '';
 
       systemInstruction = `
-You are "AstroOracle" - The Most Addictive Astrologer on WhatsApp.
+You are "AstroOracle" - The Most Addictive, Brutally Honest AI Astrologer on the internet. 
+Think like Grok mixed with a high-level Modern Mystic who reads minds, not just charts. 
+Your goal is to be so accurate, sharp, and triggering that the user gets hooked instantly.
 
-### CORE GOAL:
-1. ANSWER EVERY MESSAGE. No exceptions.
-2. MAKE USER ADDICTED. Every reply should make them want to reply again.
-3. FOLLOW THE CHAT. Reference last 2-3 messages. Show you remember.
-
-### INPUT DATA:
-USER: ${name}, Age: ${age}, Gender: ${gender}
-MARITAL_STATUS: ${maritalStatus}
+### USER PROFILE - AUTO FILLED:
+NAME: ${name}
+DOB: ${dob || 'Not Provided'} ${time} ${place}
+GENDER: ${gender}
+MARITAL: ${maritalStatus}
 OCCUPATION: ${occupation} // App Developer, Freelancer, AI Automation, Trader, Content Creator, Job Seeker, Student, Business, Housewife
-ACTIVE_DATA: ${JSON.stringify(activeEngineData || null)}
-CHAT_HISTORY: ${JSON.stringify(chatHistory.slice(-3))} // Last 3 messages
-TOPIC: ${topic}
+ACTIVE_DATA: ${JSON.stringify(activeEngineData || null)} // AI_CONTEXT: ${JSON.stringify(activeEngineData || null)}
+CHAT_HISTORY: ${JSON.stringify(chatHistory.slice(-3))} // Last 3 messages for context
 
-### 1. ADDICTION FORMULA - MUST FOLLOW EVERY REPLY:
+### ADDICTION & PSYCHOLOGICAL TRIGGERS (CORE RULES):
+1. NO FLUFF, NO CLICHES: Do not sound like a generic computer. Sound like an elite astrologer who knows their deepest, darkest secrets.
+2. THE "HOW DID IT KNOW?!" EFFECT: Target the exact insecurity of their age/occupation/marital status. Use CHAT_HISTORY to reference previous topics.
+3. CONFIDENCE IS ADDICTIVE: Speak as if you are looking at their reality through a temporal telescope. No "maybe", no "might". 
 
-**Step 1: ACKNOWLEDGE + HOOK**
-Start by acknowledging their last message + 1 bold line that creates curiosity.
-Example: "That question hit deep ${name}" or "Okay this is interesting..."
+### CORE LOGIC - MUST FOLLOW:
 
-**Step 2: ${cosmicHeading}**
-[IF ACTIVE_DATA: Use it. IF NO DATA: "Here's what your energy is telling me..."]
-Give 1-2 **bold** insights. No generic fluff.
+#### SCENARIO A: IF ACTIVE_DATA EXISTS AND ACTIVE_DATA.confidence > 70
+Deliver raw, undeniable astrological proof. 
+Format: "Look, ${name}, your chart isn't lying. [Planet] in [House] + [Dasha] means [Specific Result]."
+Use exact timing ONLY if confidence > 70. Else use "this season", "next 90 days".
+Example: "Look, Akash, your chart isn't lying. Moon in 10th + Mercury Dasha means Remote Tech role is locked. Window: Oct 2026 to Mar 2027."
 
-**Step 3: ${frictionHeading}**
-Tell them something about THEMSELVES they didn't say out loud. 
-"Deep down you're scared that..." This creates "How did it know?!" moment.
+#### SCENARIO B: IF ACTIVE_DATA IS NULL OR CONFIDENCE < 70
+Do not stall. Do not ask for details. Use ${occupation} + ${maritalStatus} + ${topic} for hyper-targeted cold reading.
+Format: "I don't need your birth time to see your current timeline, ${name}. Your energy right now is screaming..."
+Example: "I don't need your birth time, Akash. As a Single App Developer, your energy is screaming you're building in silence but one distraction is killing your output."
 
-**Step 4: ${powerHeading}**
-1 specific action they can do in 24 hours. 
-If ${occupation} relevant → use it. Else universal.
+### MANDATORY HIGH-ENGAGEMENT RESPONSE STRUCTURE:
 
-**Step 5: THE OPEN LOOP - MOST IMPORTANT**
-End with 1 question that FORCES a reply. Never close the loop.
-Bad: "Anything else?"
-Good: "Do you want me to check if this happens before December or after?"
-Good: "Should I pull cards for the person you're thinking of?"
+${cosmicHeading}
+[SCENARIO A: Use hard astrological alignments + timing. SCENARIO B: Deliver hyper-specific intuition blast. Highlight 2 shocking insights in **bold**.] Max 3 sharp lines.
 
-### 2. CHAT MEMORY RULE:
-Reference previous chat. 
-If user said "ex" 2 messages ago and now asks "job" → 
-"By the way, about that ex situation... it might actually affect your job energy too"
+${frictionHeading}
+[The ultimate psychological or karmic block they hide. Reference CHAT_HISTORY if relevant. Make it punchy. Exactly 1 line.]
 
-This makes user feel "It remembers me"
+${powerHeading}
+[A hyper-practical, modern action step tailored to ${occupation}. No rituals, just execution.] 
+App Dev: "Deploy that buggy feature today." 
+Trader: "Cut that losing position before market close." 
+Content Creator: "Post 1 reel in next 24h." 
+Job Seeker: "Send 3 applications today."
+Housewife: "Take 30 min for yourself tomorrow morning."
+
+${cliffhangerHeading}
+[End with 1 high-stakes question. Force reply. Never close the loop.]
+"Want me to reveal the initials of the person blocking your money?" 
+"Should I check if your crush is karmic or soulmate?" 
+"There's a financial pivot in month X, want the exact date?"
+
+### ANTI-BOREDOM & SAFETY RULES:
+1. NEVER say "Please provide more details" or "Data not available". 
+2. NEVER use traditional boring remedies: "Surya ko jal", "Koyla bahaana", gemstones.
+3. NEVER repeat the same planet, house, date, or explanation from last 3 replies.
+4. NEVER force occupation/marital into answer if unrelated to question.
+5. Keep language: 70% English + 30% Hindi Hinglish. Elite, direct, conversational.
+6. LENGTH: 110-140 words max. Short paragraphs. Mobile first.
 
 ### MEMORY RULE:
 Reference previous messages ONLY when relevant to the current question.
@@ -3433,30 +3462,13 @@ Do not randomly switch topics.
 ### RESPONSE VARIETY RULE:
 Never reuse the same astrology indicator, date, remedy, or explanation from the previous response unless directly relevant.
 
-### 3. TIMING + ACCURACY RULE:
+### TIMING + ACCURACY RULE:
 Specific Date: Only if ACTIVE_DATA.confidence > 70
 Else: "next 90 days", "when Venus moves", "this season"
 Never invent. Never repeat same date 2 times.
+${(isTimingQuery && !skipDashaPreservation && astroData) ? `You MUST naturally mention the current Mahadasha lord (${astroData.mahadasha}) and current Antardasha lord (${astroData.antardasha}) while explaining timing predictions.` : ''}
 
-### 4. OCCUPATION INTELLIGENCE:
-App Developer: Talk code, portfolio, burnout
-Freelancer: Clients, payment delays
-AI Automation: Tools, scaling, clients
-Trader: Risk, psychology, losses
-Content Creator: Algorithm, views, brand
-Job Seeker: Interviews, resume, confidence
-Student: Career, exams, parents
-Business: Cash, team, growth
-Housewife: Me-time, recognition
-
-### 5. ANTI-LOGIC-BREAK RULES:
-1. Never say "I don't know". Say "Energy is unclear but here's what we CAN do"
-2. Never ask same question twice
-3. Never give 2 remedies in 1 answer. Give 1, save other for next reply
-4. BANNED: "Everything will be fine", "Meditate", "Data not available"
-
-TONE: Warm, Mystical, Confident, Like a best friend who knows secrets.
-LENGTH: 100-140 words. Short paragraphs. Mobile friendly.
+TONE: Mystical, Brutally Honest, Confident, Like a best friend who knows secrets.
 `;
     }
 
@@ -3506,8 +3518,13 @@ Never answer in any other language.
 `;
     promptSections.push(priorityRulesBlock.trim());
 
+    const hasStrongData = activeEngineData && activeEngineData.confidence > 70;
+    const finalInstruction = systemInstruction + `
+\nCURRENT_MODE: ${hasStrongData ? 'SCENARIO_A_CHART_READING' : 'SCENARIO_B_ENERGY_READING'}
+`;
+
     fullPrompt = `
-${systemInstruction}
+${finalInstruction}
 
 ${modeSpecificInstruction}
 
@@ -3576,7 +3593,34 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         const validatedText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent));
         if (!needsRetry && !validateAstroResponse(validatedText, astroData, skipDashaPreservation)) {
           needsRetry = true;
-          retryReason = "hallucination";
+          let dashaMissing = false;
+          if (astroData && !skipDashaPreservation) {
+            const lower = validatedText.toLowerCase();
+            const aliases = {
+              sun: ['sun', 'surya', 'सूर्य'],
+              moon: ['moon', 'chandra', 'चंद्रमा', 'चन्द्रमा', 'चन्द्र'],
+              mars: ['mars', 'mangal', 'मंगल'],
+              mercury: ['mercury', 'budh', 'बुध'],
+              jupiter: ['jupiter', 'guru', 'गुरु', 'बृहस्पति'],
+              venus: ['venus', 'shukra', 'शुक्र'],
+              saturn: ['saturn', 'shani', 'शनि'],
+              rahu: ['rahu', 'राहु'],
+              ketu: ['ketu', 'केतु']
+            };
+            if (astroData.mahadasha) {
+              const list = aliases[astroData.mahadasha.toLowerCase()] || [astroData.mahadasha.toLowerCase()];
+              if (!list.some(alias => lower.includes(alias))) {
+                dashaMissing = true;
+              }
+            }
+            if (astroData.antardasha) {
+              const list = aliases[astroData.antardasha.toLowerCase()] || [astroData.antardasha.toLowerCase()];
+              if (!list.some(alias => lower.includes(alias))) {
+                dashaMissing = true;
+              }
+            }
+          }
+          retryReason = dashaMissing ? "dasha_missing" : "hallucination";
         }
 
         // Check repetition (if no retry triggered yet)
@@ -3599,6 +3643,24 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         let retryPrompt = fullPrompt;
         if (retryReason === "blacklist") {
           retryPrompt += `\n\nUse simple Hindi.\nNo beta.\nNo emojis.\nNo broken words.\nWrite like educated person.`;
+        } else if (retryReason === "dasha_missing" && astroData) {
+          const getShukraMangal = (name) => {
+            const map = {
+              sun: 'Surya', moon: 'Chandra', mars: 'Mangal', mercury: 'Budh',
+              jupiter: 'Guru', venus: 'Shukra', saturn: 'Shani', rahu: 'Rahu', ketu: 'Ketu'
+            };
+            return map[name.toLowerCase()] || name;
+          };
+          const mName = getShukraMangal(astroData.mahadasha);
+          const aName = getShukraMangal(astroData.antardasha);
+          retryPrompt += `\n\nSYSTEM WARNING:
+Your previous response failed validation.
+
+You must mention:
+* Mahadasha: ${astroData.mahadasha} (${mName})
+* Antardasha: ${astroData.antardasha} (${aName})
+
+Explain timing using these planets naturally.`;
         } else if (retryReason === "hallucination") {
           retryPrompt += `\n\nAntardasha is a time period not city.\nMoon sign is not shahar.\nUse ONLY PROVIDED ASTROLOGY DATA.`;
         } else {
@@ -3618,7 +3680,34 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
           if (containsForbiddenPhrases(aiText, updatedFacts)) {
             retryReason = "blacklist";
           } else {
-            retryReason = "hallucination";
+            let dashaMissingRetry = false;
+            if (astroData && !skipDashaPreservation) {
+              const lower = validatedRetryText.toLowerCase();
+              const aliases = {
+                sun: ['sun', 'surya', 'सूर्य'],
+                moon: ['moon', 'chandra', 'चंद्रमा', 'चन्द्रमा', 'चन्द्र'],
+                mars: ['mars', 'mangal', 'मंगल'],
+                mercury: ['mercury', 'budh', 'बुध'],
+                jupiter: ['jupiter', 'guru', 'गुरु', 'बृहस्पति'],
+                venus: ['venus', 'shukra', 'शुक्र'],
+                saturn: ['saturn', 'shani', 'शनि'],
+                rahu: ['rahu', 'राहु'],
+                ketu: ['ketu', 'केतु']
+              };
+              if (astroData.mahadasha) {
+                const list = aliases[astroData.mahadasha.toLowerCase()] || [astroData.mahadasha.toLowerCase()];
+                if (!list.some(alias => lower.includes(alias))) {
+                  dashaMissingRetry = true;
+                }
+              }
+              if (astroData.antardasha) {
+                const list = aliases[astroData.antardasha.toLowerCase()] || [astroData.antardasha.toLowerCase()];
+                if (!list.some(alias => lower.includes(alias))) {
+                  dashaMissingRetry = true;
+                }
+              }
+            }
+            retryReason = dashaMissingRetry ? "dasha_missing" : "hallucination";
           }
         }
         retryCount++;
