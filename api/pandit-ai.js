@@ -2719,14 +2719,21 @@ Current Season: ${season}`;
     resolvedLanguage = detectQuestionLanguage(questionText);
   }
 
-  const isDevanagari = /[\u0900-\u097F]/.test(questionText);
   let languagePreference = "";
   if (resolvedLanguage === 'English') {
     languagePreference = "English (Latin/Roman script). Write the entire response in English.";
-  } else if (isDevanagari) {
-    languagePreference = "Devanagari Hindi script (हिन्दी लिपि). Write the entire response in pure Devanagari Hindi. Do not use English script (Latin letters) at all.";
   } else {
-    languagePreference = "Hinglish (Hindi written in Roman/Latin script, e.g., 'Aapki shaadi 2026 me hogi'). Write the entire response in Hinglish. Do not use Devanagari script at all.";
+    languagePreference = "Devanagari Hindi script (हिन्दी). Write the entire response in pure Hindi. Never use Roman Hindi or English.";
+  }
+
+  let cosmicHeading = "🌟 **The Cosmic Truth**";
+  let frictionHeading = "⚡ **The Hidden Friction**";
+  let powerHeading = "🔮 **Your Next Power Move**";
+
+  if (resolvedLanguage !== 'English') {
+    cosmicHeading = "🌟 **ब्रह्मांडीय संकेत**";
+    frictionHeading = "⚡ **छिपा हुआ कारण**";
+    powerHeading = "🔮 **आपका अगला कदम**";
   }
 
   const isGreeting = isGreetingMessage(questionText);
@@ -3340,21 +3347,21 @@ ${isRelationshipInvestigationQuery ? `
   * Instead use soft indicators: "strong indications", "signals", "patterns", "possibility", "influence".
   * Make the response feel deep, personal, and mysterious without presenting speculation as proven fact.
 - Keep the MANDATORY response structure:
-  * 🌟 **The Cosmic Truth**: Give a strong, emotionally compelling interpretation using available metrics.
-  * ⚡ **The Hidden Friction**: Identify the relationship tension and emotional blocks.
-  * 🔮 **Your Next Power Move**: Provide 1 practical, specific action.
+  * ${cosmicHeading}: Give a strong, emotionally compelling interpretation using available metrics.
+  * ${frictionHeading}: Identify the relationship tension and emotional blocks.
+  * ${powerHeading}: Provide 1 practical, specific action.
   * **FINAL LINE - CURIOSITY HOOK**: Ask 1 natural question.
 ` : ''}
 
 ### RESPONSE STRUCTURE - MANDATORY:
 
-🌟 **The Cosmic Truth**
+${cosmicHeading}
 [Read the situation. Use the relevant engine data from AI_CONTEXT as the primary evidence source. If no calculations exist, use universal archetypes + topic wisdom. Use **bold** for 2 key insights. Be specific about feelings/indications, not fake dates.]
 
-⚡ **The Hidden Friction**
+${frictionHeading}
 [Name the real emotional/psychological block user is facing in ${topic}. Make them feel understood.]
 
-🔮 **Your Next Power Move**
+${powerHeading}
 [Provide 1 practical, specific action or remedy from the available context or daily/universal guidelines. No generic "sab theek hoga".]
 
 **FINAL LINE - CURIOSITY HOOK:**
@@ -3395,6 +3402,10 @@ TONE: Warm, Mystical, Confident, Human. 100-180 words.
 - GREETING & NAME BANS: Unless the user is only greeting you (isGreeting=true), you must NOT start your response with any greeting phrases (like "Ram Ram", "Namaste", "Pranam", "Kalyan ho") or address the user by name/beta at the very beginning of the response (e.g. do NOT start with "Ram Ram beta Akash" or "Akash Beta, ..."). Start the response directly with the answer/prediction.${greetingSuppressionInstruction}${dashaRepetitionInstruction}
 - Do NOT repeat the user's chart summary (such as Sun Mahadasha, Mercury Antardasha, Government Job, Hamirpur, age, or birthplace) unless it is directly relevant to the specific question asked. Birth chart context should SUPPORT the answer, not replace it.
 - FOLLOW-UP DETECTION: If the user asks a short follow-up query (e.g., "kab", "kis year", "kitne saal", "uska kya hoga", "phir", "aur", "when", "then", "what about", etc.), you MUST read the "Recent Conversation" history to understand the subject they are asking about, and answer using that context.
+
+IMPORTANT LANGUAGE RULE:
+${languagePreference}
+Never answer in any other language.
 `;
     promptSections.push(priorityRulesBlock.trim());
 

@@ -71,7 +71,7 @@ export async function generateAIResponse(prompt, options = {}) {
       const response = await grok.chat.completions.create(
         bodyParams,
         {
-          timeout: 5000,
+          timeout: 15000,
         }
       );
       const latency = Date.now() - startTime;
