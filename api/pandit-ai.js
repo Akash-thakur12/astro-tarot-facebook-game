@@ -3070,20 +3070,27 @@ Current Season: ${season}`;
   let fullPrompt = "";
   if (mode === 'chat' || mode === 'personal') {
     const occupation = profile?.occupation || userData?.occupation || 'Unknown';
+    const skipSemanticPhrases = new Set([
+      'hnn', 'haan', 'aur batao', 'next', 'detail', 'hn', 'hn btao', 'haan batao', 'aur bata', 'aur detail'
+    ]);
+    const qClean = (questionText || '').toLowerCase().trim();
+    const cleanQForFollowUp = qClean.replace(/[?.,!]/g, '').trim();
 
     let semanticFacts = null;
-    try {
-      semanticFacts = await extractSemanticFacts({
-        question: questionText,
-        existingFacts: factMemory,
-        userProfile: {
-          maritalStatus,
-          occupation,
-          age: ageDisplay
-        }
-      });
-    } catch (err) {
-      console.error("Semantic fact extraction failed:", err);
+    if (!skipSemanticPhrases.has(cleanQForFollowUp)) {
+      try {
+        semanticFacts = await extractSemanticFacts({
+          question: questionText,
+          existingFacts: factMemory,
+          userProfile: {
+            maritalStatus,
+            occupation,
+            age: ageDisplay
+          }
+        });
+      } catch (err) {
+        console.error("Semantic fact extraction failed:", err);
+      }
     }
 
     if (semanticFacts && typeof semanticFacts.confidence === 'number' && semanticFacts.confidence >= 0.80) {
@@ -3158,14 +3165,24 @@ Current Season: ${season}`;
 
     const qClean = (questionText || '').toLowerCase().trim();
     const cleanQForFollowUp = qClean.replace(/[?.,!]/g, '').trim();
-    const followUpPhrases = ['aur batao', 'hn', 'next', 'detail', 'hn btao', 'haan', 'more detail', 'in detail'];
-    const isFollowUpWord = followUpPhrases.includes(cleanQForFollowUp);
+    const followUpPhrases = [
+      'aur batao', 'hn', 'next', 'detail', 'hn btao', 'haan', 'more detail', 'in detail',
+      'hnn bta', 'haan batao', 'aur bata', 'aur detail'
+    ];
+    const isFollowUpWord =
+      followUpPhrases.some(p =>
+        cleanQForFollowUp.startsWith(p)
+      ) ||
+      /^(hn|haan|hnn|ok|okay|accha|achha|detail|next)\b/i.test(cleanQForFollowUp);
 
     const lastUserMsg = [...pastHistory].reverse().find(m => m.role === 'user');
     const isSameQuestion = lastUserMsg && getJaccardSimilarity(qClean, lastUserMsg.content.toLowerCase().trim()) > 0.70;
     shouldAdvance = isFollowUpWord || isSameQuestion;
 
-    activeTopic = shouldAdvance ? (lastActiveTopic || matchedTopic || 'daily') : (matchedTopic || lastActiveTopic || 'daily');
+    activeTopic = matchedTopic || lastActiveTopic || 'daily';
+    if (shouldAdvance && lastActiveTopic) {
+      activeTopic = lastActiveTopic;
+    }
     
     // First interaction starts at layer 1
     const currentProgressVal = topicProgress[activeTopic] || 1;
@@ -3478,7 +3495,38 @@ MEMORY RECALL MODE RULES:
     } else {
       const age = ageDisplay;
       activeEngineData = filteredContext;
+      let layersObj = null;
+      let scoreVal = null;
+      if (['marriage', 'love'].includes(activeTopic)) {
+        layersObj = loveData?.layers;
+        scoreVal = loveData?.loveScore;
+      } else if (['career', 'money'].includes(activeTopic)) {
+        layersObj = moneyData?.layers;
+        scoreVal = moneyData?.wealthScore;
+      } else if (activeTopic === 'health') {
+        layersObj = healthData?.layers;
+        scoreVal = healthData?.vitalityScore;
+      } else if (activeTopic === 'travel') {
+        layersObj = travelData?.layers;
+      } else if (activeTopic === 'children') {
+        layersObj = childrenData?.layers;
+      } else if (activeTopic === 'daily' && astroData) {
+        const dailyData = calculateDailyTransitEngine(astroData, dayOfWeek);
+        layersObj = dailyData?.layers;
+        scoreVal = dailyData?.todayScore;
+      }
+
+      const compactActiveData = {
+        confidence: activeEngineData?.confidence,
+        layers: layersObj,
+        score: scoreVal,
+        partnerData: activeEngineData?.partnerData || null
+      };
       const chatHistory = pastHistory;
+      const compactHistory = chatHistory
+        .slice(-5)
+        .map(m => `${m.role}: ${(m.content || '').slice(0, 150)}`)
+        .join('\n');
       const topic = questionTopic;
       const time = tob && tob !== 'Unknown' ? tob : '';
       const place = pob && pob !== 'Unknown' ? pob : '';
@@ -3492,8 +3540,8 @@ DOB: ${dob || 'Not Provided'} ${time} ${place}
 GENDER: ${gender}
 MARITAL: ${maritalStatus}
 OCCUPATION: ${occupation}
-ACTIVE_DATA: ${JSON.stringify(activeEngineData || null)} // AI_CONTEXT: ${JSON.stringify(activeEngineData || null)}
-CHAT_HISTORY: ${JSON.stringify(chatHistory.slice(-3))} // CRITICAL: Read this to avoid repetition
+ACTIVE_DATA: ${JSON.stringify(compactActiveData || null)} // AI_CONTEXT: ${JSON.stringify({ partnerData: compactActiveData.partnerData })}
+CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
 
 ### THE INFINITE LOOP RULES - MUST FOLLOW:
 1. **NEVER REPEAT:** If user asks same question again, go 1 layer deeper.
