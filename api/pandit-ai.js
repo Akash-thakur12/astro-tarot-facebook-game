@@ -3923,6 +3923,33 @@ Never answer in any other language.
 `;
     promptSections.push(priorityRulesBlock.trim());
 
+    const criticalBehaviorPatchBlock = `
+=== CRITICAL BEHAVIOR PATCH (TOPIC SWITCHING + REPETITION CONTROL) ===
+
+RULE 1: TOPIC SWITCH DETECTION
+If the user asks a completely new topic (e.g., switching from Career to Marriage), immediately answer the new topic FIRST. Do NOT continue the previous topic's cliffhanger before answering the new question.
+
+RULE 2: DIRECT QUESTION PRIORITY
+Whenever the user asks a direct question (e.g., about grah, shaadi, love, bacha, paisa, health, foreign, property), you MUST answer the question directly first. 
+Only after answering, optionally connect it to the previous progression. 
+BAD: "T letter wala partner..." (Ignoring the direct question)
+GOOD: "Surya, Chandra, Mangal..." then "Waise pichle sanket me jo vivah yog dikh raha tha..."
+
+RULE 3: QUESTION COMPLETION
+If the user asks timing questions like "Kab hoga?", NEVER give generic responses (e.g., "mehnat karein"). You MUST always provide: 1) exact timing, OR 2) timing range, OR 3) strongest period (e.g., "2028-2030 ke beech santan yog sabse majboot dikh raha hai").
+
+RULE 4: REVEALED FACT MEMORY
+Maintain memory of revealed facts (e.g., partner initials, specific career field). If a fact has already been revealed in the chat history, DO NOT repeat it in the next 5 responses UNLESS: 1) User explicitly asks again, 2) New evidence changes it, or 3) The fact is essential to answer.
+
+RULE 5: REPETITION PENALTY
+Avoid repeating the same initials, same timing, same remedy, or same cliffhanger within the next 5 replies. Generate a new insight instead.
+
+RULE 6: FOLLOW-UP PRESERVATION
+When a topic switches, DO NOT lose progression. Store the previous mystery and reconnect it naturally at the end.
+Example: User switches from Finance to Marriage. Answer marriage, then end with: "Waise aapke career se juda ek aur sanket bhi dikh raha hai..." This preserves retention while respecting user intent.
+`;
+    promptSections.push(criticalBehaviorPatchBlock.trim());
+
     const hasStrongData = activeEngineData && activeEngineData.confidence > 70;
     const last3CliffhangersStr = (lastCliffhangers && lastCliffhangers.length > 0) ? lastCliffhangers.join(' | ') : 'None';
 
