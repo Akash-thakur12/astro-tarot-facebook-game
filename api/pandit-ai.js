@@ -2633,10 +2633,10 @@ export default async function handler(req, res) {
       return res.status(200).json({ text: emptyText });
     }
 
-    const selfHarmKeywords = /\b(suicide|self-harm|kill myself|harm myself|end my life|die|zehar|zeher|atmahatya|mar jau|mar jaunga)\b/i;
-    if (selfHarmKeywords.test(questionTextRaw)) {
+    const safetyKeywords = /\b(suicide|self-harm|kill myself|harm myself|end my life|die|zehar|zeher|atmahatya|mar jau|mar jaunga|maar diya|marne ki koshish|jaan se maar|pitai|hamla|attack|hinsa|dhamki|pareshan karta hai|torture|abuse|kill me|murder|assault|violence|threatening me|trying to kill me)\b/i;
+    if (safetyKeywords.test(questionTextRaw)) {
       return res.status(200).json({
-        text: "I cannot answer queries related to self-harm or suicide. Please contact a helpline for support (AASRA: 91-9820466726)."
+        text: "Agar aapko vastav me suraksha ka khatra lagta hai to kripya ise gambhirta se lein aur turant kisi trusted vyakti ya authority se sampark karein. Brahmandiya urjaon ka sanket aspasht hai, aur aise gambhir vishayon me bhautik suraksha hi sarvopari hai."
       });
     }
   }
@@ -3234,9 +3234,12 @@ Current Season: ${season}`;
 
     const lastUserMsg = [...pastHistory].reverse().find(m => m.role === 'user');
     const isSameQuestion = lastUserMsg && getJaccardSimilarity(qClean, lastUserMsg.content.toLowerCase().trim()) > 0.70;
-    shouldAdvance = isFollowUpWord || isSameQuestion;
-
+    
     activeTopic = matchedTopic || lastActiveTopic || 'daily';
+    const isSemanticContinuation = (matchedTopic && lastActiveTopic && matchedTopic === lastActiveTopic);
+    
+    shouldAdvance = isFollowUpWord || isSameQuestion || isSemanticContinuation;
+
     if (shouldAdvance && lastActiveTopic) {
       activeTopic = lastActiveTopic;
     }

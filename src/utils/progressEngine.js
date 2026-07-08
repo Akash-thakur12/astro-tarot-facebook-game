@@ -97,7 +97,7 @@ export function getDailySecret(dob, today, category = 'General', pastHistory = [
   
   const recentSecrets = [];
   if (Array.isArray(pastHistory)) {
-    const last3 = pastHistory.slice(-3).filter(m => m.role === 'assistant');
+    const last3 = pastHistory.slice(-3).filter(m => m.role === 'assistant' || m.role === 'model');
     for (const msg of last3) {
       if (msg.content) {
         for (const sec of secrets) {
