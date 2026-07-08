@@ -46,7 +46,7 @@ export async function updateProgress(uid, action, cachedProgress = null) {
   }
 }
 
-export function getDailySecret(dob, today, category = 'General') {
+export function getDailySecret(dob, today, category = 'General', pastHistory = []) {
   const secretsMap = {
     Love: [
       "Prem sambandho me aaj madhurta rahegi",
@@ -94,10 +94,28 @@ export function getDailySecret(dob, today, category = 'General') {
   };
 
   const secrets = secretsMap[category] || secretsMap.General;
+  
+  const recentSecrets = [];
+  if (Array.isArray(pastHistory)) {
+    const last3 = pastHistory.slice(-3).filter(m => m.role === 'assistant');
+    for (const msg of last3) {
+      if (msg.content) {
+        for (const sec of secrets) {
+          if (msg.content.includes(sec)) {
+            recentSecrets.push(sec);
+          }
+        }
+      }
+    }
+  }
+
+  const availableSecrets = secrets.filter(s => !recentSecrets.includes(s));
+  const pool = availableSecrets.length > 0 ? availableSecrets : secrets;
+
   const hashStr = dob + today + category;
   const hash = hashStr.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const dayOffset = new Date(today).getDate() || 1;
-  const index = (hash + dayOffset) % secrets.length;
+  const index = (hash + dayOffset) % pool.length;
 
-  return secrets[index];
+  return pool[index];
 }

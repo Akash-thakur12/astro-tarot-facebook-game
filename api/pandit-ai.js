@@ -2438,7 +2438,7 @@ function getLevel(score) {
   return 'Master';
 }
 
-async function injectSecretAndScore(text, uid, userData, cachedProgress = null, category = 'General') {
+async function injectSecretAndScore(text, uid, userData, cachedProgress = null, category = 'General', pastHistory = []) {
   if (!text) return text;
 
   const progressUid = userData?.uid || uid || 'guest';
@@ -2454,7 +2454,7 @@ async function injectSecretAndScore(text, uid, userData, cachedProgress = null, 
   }
   const today = new Date().toISOString().split('T')[0];
   const dobKey = (userData?.dobDay || '') + '' + (userData?.dobMonth || '') + '' + (userData?.dobYear || '');
-  const secret = getDailySecret(dobKey, today, category);
+  const secret = getDailySecret(dobKey, today, category, pastHistory);
   const nextLevel = Math.ceil((progress.score + 1) / 100) * 100;
 
   let cleaned = text;
@@ -3599,7 +3599,7 @@ MEMORY RECALL MODE RULES:
       };
       const chatHistory = pastHistory;
       const compactHistory = chatHistory
-        .slice(-5)
+        .slice(-10)
         .map(m => `${m.role}: ${(m.content || '').slice(0, 150)}`)
         .join('\n');
       const topic = questionTopic;
@@ -3862,7 +3862,7 @@ ${powerHeading}
 [New action every time. 1 action based on ${occupation}. No generic advice.]
 
 ${cliffhangerHeading}
-[New question every time. Never repeat last 3 cliffhangers. This must also match the CLIFFHANGER tag at the end.]
+[Generate a highly PERSONALIZED cliffhanger based strictly on ACTIVE_TOPIC, the user's specific query, and recently revealed insights. NEVER use generic templates. Example for Career: "Kya aapka career private sector me zyada chamkega ya apna business zyada safal hoga?". This must also match the CLIFFHANGER tag at the end.]
 
 ### CRITICAL ANTI-BUG RULES:
 1. NEVER ask "aur vistaar se batayein" or "kya aap janna chahte hain". User already asked.
@@ -3945,12 +3945,25 @@ DO NOT skip the TARGET_LAYER.
 INSTEAD, expand the insight for that specific layer. Provide deeper interpretation, practical meaning, consequence, emotional impact, compatibility insight, or future progression related to that fact.
 Example: If TARGET_LAYER is partner initial 'T' and it was already revealed, DO NOT just say "Partner initial T". Say: "Is sambandh me bhavnatmak samajh aur communication adhik mahatvapurn dikh raha hai."
 
-RULE 5: REPETITION PENALTY
-Avoid repeating the same initials, same timing, same remedy, or same cliffhanger within the next 5 replies. Generate a new insight instead.
+RULE 5: FACT SURFACE CONTROL & REMEDY REPETITION
+Create a lightweight internal suppression layer in your mind for "recentlySurfacedFacts" and "recentlySurfacedRemedies" by scanning the last 10 messages of CHAT_HISTORY.
+If a fact (e.g., "partner initial T", "March 2027 marriage", "santan sukh") or a specific remedy (e.g., "Peepal par jal") has already been surfaced in those 10 messages:
+DO NOT surface it again.
+Unless: 1) User explicitly asks about that exact fact. 2) New evidence changes the fact. 3) The fact is absolutely required to answer the question.
+Generate alternative remedies from existing remedy pools, and generate fresh insights instead of repeating revealed facts.
 
-RULE 6: FOLLOW-UP PRESERVATION
+RULE 6: TOPIC ISOLATION RULE
+If the user asks an unrelated or specific topic like "Kala jadu", "Nazar", "Health", "Parents", "Property", "Career", or "Money":
+Do NOT automatically inject out-of-context facts like marriage timing, partner initials, or childbirth timing unless directly relevant to their specific question.
+
+RULE 7: FOLLOW-UP PRESERVATION
 When a topic switches, DO NOT lose progression. Store the previous mystery and reconnect it naturally at the end.
 Example: User switches from Finance to Marriage. Answer marriage, then end with: "Waise aapke career se juda ek aur sanket bhi dikh raha hai..." This preserves retention while respecting user intent.
+
+RULE 8: DATE PRESENTATION VARIATION
+Do NOT invent new years or change deterministic calculations.
+Instead, present the exact same timing differently on each turn.
+Example: If the core timing is "March 2027", vary the text to: "2027 ki pehli chhamahi", "2026 ke antim mahino se 2027 ke madhya tak", "agle 12-18 mahino me". Keep the underlying evidence 100% consistent, just rotate the phrasing.
 `;
     promptSections.push(criticalBehaviorPatchBlock.trim());
 
@@ -4037,7 +4050,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         }
 
         // Check astrology hallucinations (Step 11)
-        const validatedText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent));
+        const validatedText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory);
         if (!needsRetry && !validateAstroResponse(validatedText, astroData, skipDashaPreservation)) {
           needsRetry = true;
           let dashaMissing = false;
@@ -4126,7 +4139,7 @@ Explain timing using these planets naturally.`;
           aiText = humanize(aiText);
         }
 
-        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent));
+        const validatedRetryText = await injectSecretAndScore(aiText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory);
         needsRetry =
           containsForbiddenPhrases(aiText, updatedFacts)
           ||
@@ -4172,7 +4185,7 @@ Explain timing using these planets naturally.`;
       if (needsRetry && retryCount >= 2) {
         console.error("VALIDATION_FAILED_3X");
         const friendlyFallbackText = getFriendlyAstrologyFallback(resolvedLanguage, isDevanagari, maritalStatus);
-        return res.status(200).json({ text: await injectSecretAndScore(friendlyFallbackText, uid, userData, progress, getSecretCategory(detectedIntent)) });
+        return res.status(200).json({ text: await injectSecretAndScore(friendlyFallbackText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory) });
       }
 
       if (!aiText || !aiText.trim()) {
@@ -4181,7 +4194,7 @@ Explain timing using these planets naturally.`;
 
       if (mode === 'chat' || mode === 'personal') {
         const deduplicatedText = removeDuplicateSentences(aiText);
-        let completedResponse = await injectSecretAndScore(deduplicatedText, uid, userData, progress, getSecretCategory(detectedIntent));
+        let completedResponse = await injectSecretAndScore(deduplicatedText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory);
         if (isGreeting || isVague) {
           completedResponse = completedResponse
             .replace(/🔮\s*Prediction:\s*/gi, "")
@@ -4323,7 +4336,7 @@ Explain timing using these planets naturally.`;
   if (mode === 'chat' || mode === 'personal') {
     console.log("RESPONSE SOURCE = OFFLINE");
     const backendFallback = getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus);
-    const formattedFallback = await injectSecretAndScore(backendFallback, uid, userData, progress, getSecretCategory(detectedIntent));
+    const formattedFallback = await injectSecretAndScore(backendFallback, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory);
     return res.status(200).json({
       text: formattedFallback
     });
