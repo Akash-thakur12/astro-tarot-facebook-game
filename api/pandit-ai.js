@@ -621,30 +621,56 @@ export function detectSemanticIntent(question) {
 }
 
 const PRIORITY_ORDER = [
-  'marriage',
-  'career',
-  'love',
-  'money',
-  'health',
-  'family',
-  'foreign',
-  'children',
-  'future',
-  'dreams',
-  'spiritual',
-  'vastu',
-  'numerology'
+  "marriage",
+  "love",
+  "career",
+  "children",
+  "money",
+  "foreign",
+  "health",
+  "property",
+  "spiritual",
+  "numerology",
+  "vastu",
+  "future",
+  "dreams"
 ];
+
+const PROTECTED_INTENTS = [
+  "marriage",
+  "love",
+  "career",
+  "children"
+];
+
+const TYPO_DICTIONARY = {
+  "shaadi": ["shadi", "shaddi", "sadi", "vivah", "bibah", "marraige", "marige", "merriage", "vyah", "marriage"],
+  "naukri": ["nokri", "nokari", "nokree", "carreer", "carrer", "jobe"],
+  "pyaar": ["pyar", "piar", "piyar", "luv", "brekup", "brakup", "patchp", "reletionship", "sachha", "love"],
+  "bacha": ["baccha", "bachcha", "bcha", "bche", "bache", "santan", "sntan", "pregnncy", "pragnancy", "babi", "chilld"],
+  "paisa": ["pesa", "paise", "ricch", "lottry", "stoc", "krypto", "karja", "karza", "crorepati", "money"]
+};
+
+function normalizeIntentText(text) {
+  if (!text) return "";
+  let words = text.toLowerCase().trim().split(/\s+/);
+  return words.map(word => {
+    for (const [canonical, variants] of Object.entries(TYPO_DICTIONARY)) {
+      if (variants.includes(word)) return canonical;
+    }
+    return word;
+  }).join(' ');
+}
 
 const KEYWORD_REGEXES = {
   career: /naukri|job|career|promotion|vyapar|business|salary|interview|tarakki|unnati/i,
-  marriage: /shadi|vivah|marriage|marry|married|rishta|engagement|jeevan saathi/i,
+  marriage: /shadi|shaadi|shaddi|vivah|marriage|marry|married|rishta|engagement|jeevan saathi/i,
   love: /pyaar|love|crush|\bex\b|relationship|partner|soulmate|breakup|patch up|patchup|reunion|wapas|bapis|vaapis|ex girlfriend|ex boyfriend|move on|move-on/i,
   money: /paisa|\bdhan\b|rich|crorepati|lottery|stock|crypto|property|karz|wealth|financial/i,
-  health: /health|bimari|stress|mental|recovery|surgery|fitness|swasthya|swasth|anxiety/i,
+health: /health|bimari|stress|mental|recovery|surgery|fitness|swasthya|swasth|anxiety/i,
   family: /family|ghar|parents|bhai|behen|property dispute/i,
   foreign: /videsh|foreign|visa|\bpr\b|abroad/i,
-  children: /bachcha|bachche|baccha|bacche|bcha|bche|bache|santan|child|children|baby|family planning|offspring|pregnancy|ivf|beta|beti|family growth/i,
+  children: /bacha|bachcha|bachche|baccha|bacche|bcha|bche|bache|santan|child|children|baby|family planning|offspring|pregnancy|ivf|beta|beti|family growth/i,
   future: /agla saal|6 mahine|kismat|turning point|success|future/i,
   dreams: /sapne|sapna|dream|saanp|paani|mandir|shivling/i,
   spiritual: /isht dev|mantra|vrat|pooja|gemstone|daan|bhagya|dosh/i,
@@ -653,12 +679,12 @@ const KEYWORD_REGEXES = {
 };
 
 export function detectMultiIntent(question) {
-  if (!question) return { primary: null, secondary: [], scores: {}, confidence: 0 };
+  if (!question) return { primary: null, secondary: [], overflow: [], scores: {}, confidence: 0 };
 
-  const cleanQ = question.toLowerCase()
+  const cleanQ = normalizeIntentText(question.toLowerCase()
     .replace(/[?.!,:;()""']/g, "")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim());
 
   const scores = {};
   for (const cat of PRIORITY_ORDER) {
@@ -668,34 +694,32 @@ export function detectMultiIntent(question) {
   for (const [category, categoryData] of Object.entries(SEMANTIC_CATEGORIES)) {
     let score = 0;
 
-    // 1. Keyword match: +5
+    // 1. Keyword match: +5 (also check canonical form)
     const regex = KEYWORD_REGEXES[category];
     if (regex && regex.test(cleanQ)) {
       score += 5;
     }
 
     // 2. Semantic patterns
+    let maxPatternScore = 0;
     for (const pattern of categoryData.patterns) {
-      const normalizedPattern = pattern.phrase.toLowerCase()
+      const normalizedPattern = normalizeIntentText(pattern.phrase.toLowerCase()
         .replace(/[?.!,:;()""']/g, "")
         .replace(/\s+/g, " ")
-        .trim();
+        .trim());
 
       if (cleanQ === normalizedPattern) {
-        score += 30;
+        maxPatternScore = Math.max(maxPatternScore, 30);
       } else {
         const qWords = cleanQ.split(/\s+/);
         const pWords = normalizedPattern.split(/\s+/);
         const isMatch = pWords.every(pWord => qWords.includes(pWord));
         if (isMatch) {
-          if (pattern.isStrong) {
-            score += 20;
-          } else {
-            score += 10;
-          }
+          maxPatternScore = Math.max(maxPatternScore, pattern.isStrong ? 20 : 10);
         }
       }
     }
+    score += maxPatternScore;
 
     scores[category] = score;
   }
@@ -720,21 +744,40 @@ export function detectMultiIntent(question) {
 
   let primary = null;
   const secondary = [];
+  const overflow = [];
   let confidence = 0;
+  let primaryScore = 0;
 
   if (sorted.length > 0) {
-    const [topTopic, topScore] = sorted[0];
-    if (topScore >= 20) {
-      primary = topTopic;
-      if (totalScore > 0) {
-        confidence = Math.round((topScore / totalScore) * 100);
+    const matchedTopics = sorted.map(s => s[0]);
+    const topScore = sorted[0][1];
+    primaryScore = topScore;
+    
+    if (topScore >= 5) {
+      const activeSet = new Set();
+      for (const t of matchedTopics) {
+        if (PROTECTED_INTENTS.includes(t) && activeSet.size < 5) {
+          activeSet.add(t);
+        }
+      }
+      for (const t of matchedTopics) {
+        if (!PROTECTED_INTENTS.includes(t) && activeSet.size < 5) {
+          activeSet.add(t);
+        }
       }
 
-      for (let i = 1; i < sorted.length; i++) {
-        const [cat, score] = sorted[i];
-        if (score >= 20) {
-          secondary.push(cat);
-        }
+      const activeTopics = matchedTopics.filter(t => activeSet.has(t));
+      const overflowTopics = matchedTopics.filter(t => !activeSet.has(t));
+      
+      primary = activeTopics[0];
+      for (let i = 1; i < activeTopics.length; i++) {
+        secondary.push(activeTopics[i]);
+      }
+      for (const t of overflowTopics) {
+        overflow.push(t);
+      }
+      if (totalScore > 0) {
+        confidence = Math.round((topScore / totalScore) * 100);
       }
     }
   }
@@ -742,7 +785,9 @@ export function detectMultiIntent(question) {
   return {
     primary,
     secondary,
+    overflow,
     scores: scoresOut,
+    primaryScore,
     confidence
   };
 }
@@ -813,7 +858,7 @@ function _getTopicAndSubType(question) {
     console.log("INTENT_CONFIDENCE", multi.confidence);
     console.log("FINAL_TOPIC", multi.primary);
     const tier = SEMANTIC_CATEGORIES[multi.primary].tier;
-    return { tier, topic: multi.primary };
+    return { tier, topic: multi.primary, secondary: multi.secondary, overflow: multi.overflow };
   }
 
   // 2. Semantic intent check
@@ -830,7 +875,7 @@ function _getTopicAndSubType(question) {
   if (/naukri|job|career|promotion|vyapar|business|salary|interview|tarakki|unnati/i.test(q))
     return { tier: 1, topic: 'career' };
 
-  if (/shadi|vivah|marriage|marry|married|rishta|engagement|jeevan saathi/i.test(q))
+  if (/shadi|shaadi|shaddi|vivah|marriage|marry|married|rishta|engagement|jeevan saathi/i.test(q))
     return { tier: 1, topic: 'marriage' };
 
   // 2. Nazar (Specific Tier 3)
@@ -2654,6 +2699,7 @@ export default async function handler(req, res) {
   if (userDataDoc.lastActiveTopic) {
     lastActiveTopic = userDataDoc.lastActiveTopic;
   }
+  let savedMysteries = userDataDoc.savedMysteries || [];
 
   // Handle system commands (coins, premium, account)
   if (mode === 'chat' || mode === 'personal') {
@@ -3170,11 +3216,18 @@ Current Season: ${season}`;
 
     let classification = getTopicAndSubType(questionText);
     if (isRelationshipInvestigationQuery) {
-      classification = { tier: 2, topic: 'love' };
+      classification = { tier: 2, topic: 'love', secondary: [] };
     }
     const tierType = classification.tier;
     const questionTopic = classification.topic;
+    const secondaryRaw = classification.secondary || [];
+    const overflowRaw = classification.overflow || [];
+    const secondaryTopics = secondaryRaw.map(t => topicMapping[t] || t).filter(t => t !== topicMapping[questionTopic]);
+    const overflowTopics = overflowRaw.map(t => topicMapping[t] || t).filter(t => t !== topicMapping[questionTopic]);
     const matchedTopic = topicMapping[questionTopic];
+    if (overflowTopics.length > 0) {
+      savedMysteries = Array.from(new Set([...savedMysteries, ...overflowTopics]));
+    }
 
     const qClean = (questionText || '').toLowerCase().trim();
     const isFollowUpWord = isFollowUp;
@@ -3519,11 +3572,29 @@ MEMORY RECALL MODE RULES:
         layersObj = dailyData?.layers;
         scoreVal = dailyData?.todayScore;
       }
+      const getLayersForTopic = (t) => {
+        if (['marriage', 'love'].includes(t)) return loveData?.layers;
+        if (['career', 'money'].includes(t)) return moneyData?.layers;
+        if (t === 'health') return healthData?.layers;
+        if (t === 'travel') return travelData?.layers;
+        if (t === 'children') return childrenData?.layers;
+        if (t === 'daily' && astroData) return calculateDailyTransitEngine(astroData, dayOfWeek)?.layers;
+        return null;
+      };
+
+      let multiTopicsData = {};
+      if (!shouldAdvance && secondaryTopics && secondaryTopics.length > 0) {
+         secondaryTopics.forEach(st => {
+           const l = getLayersForTopic(st);
+           if (l) multiTopicsData[st] = l;
+         });
+      }
 
       const compactActiveData = {
         confidence: activeEngineData?.confidence,
         layers: layersObj,
         score: scoreVal,
+        multiTopicsData: Object.keys(multiTopicsData).length > 0 ? multiTopicsData : undefined,
         partnerData: activeEngineData?.partnerData || null
       };
       const chatHistory = pastHistory;
@@ -3535,160 +3606,77 @@ MEMORY RECALL MODE RULES:
       const time = tob && tob !== 'Unknown' ? tob : '';
       const place = pob && pob !== 'Unknown' ? pob : '';
 
+      let overflowInstruction = '';
+      if (overflowTopics && overflowTopics.length > 0) {
+        overflowInstruction = `
+[OVERFLOW TOPICS DETECTED]
+The user asked about more than 5 topics.
+Answer the active topics, and add this exact text at the end of your response:
+"बाकी रहस्यों (जैसे ${overflowTopics.join(', ')}) को भी अगले चरणों में खोला जा सकता है।"
+        `;
+      }
+
       systemInstruction = `
-ASTRORACLE: THE SUPREME COSMIC ORACLE
+ASTRORACLE: THE SUPREME COSMIC ORACLE (GOD-MODE + NO DATA REFUSAL)
 
 [CRITICAL ARCHITECTURE DIRECTIVE]
+STRICTLY FORBIDDEN TO ALTER ENGINE CORES:
+- NO CHANGES to ACTIVE_TOPIC, TARGET_LAYER, FOLLOW_UP_MODE.
+- NO CHANGES to CLIFFHANGER ENGINE, TOPIC PROGRESSION.
+- NO CHANGES to MEMORY RECALL, PROFILE ACKNOWLEDGEMENT, FACT MEMORY.
+- NO CHANGES to NUMEROLOGY CALCULATIONS OR ASTROLOGY DATA PIPELINES.
 
-THIS IS A PERSONALITY AND IMMERSION LAYER ONLY.
 
-STRICTLY FORBIDDEN TO MODIFY, REMOVE, REPLACE, OR OVERRIDE:
-* ACTIVE_TOPIC
-* TARGET_LAYER
-* FOLLOW_UP_MODE
-* CLIFFHANGER ENGINE
-* TOPIC PROGRESSION
-* VAGUE DETECTION
-* MEMORY RECALL
-* PROFILE ACKNOWLEDGEMENT
-* FACT MEMORY
-* NUMEROLOGY ENGINE
-* ASTROLOGY ENGINE
-* RESPONSE PIPELINE
+[THE PSYCHOLOGICAL PROFILE: THE ULTIMATE GURU]
+You are "AstroOracle"—the world's most elite Master of Astrology, Lal Kitab, Numerology, and Tarot. 
+Language: Flawless Hindi/Hinglish only. Posture: Absolute cosmic authority. State inevitable truths.
+Style: Human Mystic. Zero robotic formatting. Zero AI warnings.
 
-ALL FACTS, DATES, TIMINGS, NUMBERS, PROFILE DATA, MEMORY DATA, AND TOPIC ROUTING MUST REMAIN IDENTICAL.
+[MANDATORY VOCABULARY - USE 2 PER RESPONSE]
+"ब्रह्मांडीय संकेत और छिपी ऊर्जाएं", "अंकों का गुप्त खेल", "मूलांक और भाग्यांक", 
+"लाल किताब का अचूक फरमान", "ग्रहों का छुपा संदेश", "शत्रुओं का गुप्त चक्रव्यूह"
 
-================================================================================
+[CRITICAL RULE 0: NO REFUSAL + INTUITION MODE]
+Data na ho to bhi jawab dena ZAROORI hai. Kabhi "data nahi hai" mat bolna.
+Step 1: DOB se Mulank/Bhagyank nikalo. 
+Step 2: Name se vibration padho.
+Step 3: Lal Kitab ke general siddhant lagao.
+Agar kuch bhi na ho to bolo: "ब्रह्मांडीय ऊर्जाएं अभी धुंधली हैं, लेकिन मेरा अंतर्ज्ञान कह रहा है कि..."
 
-THE COSMIC IDENTITY
+[THE MULTI-QUESTION UNIFICATION RULE]
+User ne 1 message me 2-3 sawaal puche: job + shaadi + love
+To jawab ka format yehi hoga:
 
-You are AstroOracle.
-A legendary Pandit, Jyotishacharya, Numerologist, Lal Kitab Master, and Tarot Mystic.
+1. **नौकरी**: [ACTIVE_DATA se ya intuition se 1 line]
+2. **विवाह**: [ACTIVE_DATA se ya intuition se 1 line]  
+3. **Love/Arrange**: [ACTIVE_DATA se ya intuition se 1 line]
 
-You do not speak like a chatbot.
-You speak like a master who has spent decades studying destiny, karma, planetary movements, hidden energies, and the mysterious laws governing human life.
+Uske baad sirf PRIMARY topic ka vistar do. Baaki 2 ko cliffhanger me chhodo.
+${overflowInstruction}
 
-Every response should feel:
-* Deep
-* Personal
-* Accurate
-* Emotionally intelligent
-* Spiritually powerful
-* Impossible to ignore
+[THE INTUITIVE SHADOW-CATCHING ENGINE]
+Example: ACTIVE_TOPIC='career' but user ne shaadi bhi puchi
+"ब्रह्मांडीय ऊर्जाएं अभी तुम्हारी नौकरी का मार्ग खोल रही हैं [Career Data]...
+लेकिन मैं तुम्हारी नियति में विवाह की शहनाई भी सुन रहा हूँ। क्या उस रहस्य को अभी खोलूं?"
 
-The user should feel:
-"Ye Pandit meri situation samajh raha hai."
+[ANTI-LOOP GOD RULE]
+If user says "hn", "haan", "btao" → Answer last cliffhanger with NEXT LAYER.
+Banned: "aur kya puchna hai"
 
-================================================================================
+[RESPONSE FORMAT - 130 WORDS MAX]
+🌟 **ब्रह्मांडीय संकेत और छिपी ऊर्जाएं**
+[2 mystical phrases + prediction + 2 words **bold**]
 
-MANDATORY COSMIC VOCABULARY
+⚡ **लाल किताब का अचूक फरमान / शत्रु बाधा**
+[1 line reason + 1 remedy]
 
-Naturally use phrases like:
-* ब्रह्मांडीय संकेत
-* छिपी हुई ऊर्जाएं
-* अंकों का गुप्त खेल
-* मूलांक और भाग्यांक
-* ग्रहों का छुपा संदेश
-* लाल किताब का अचूक फरमान
-* कर्मों की धारा
-* नियति का संकेत
-* भाग्य का द्वार
-* शत्रु बाधा
-* शत्रुओं का गुप्त चक्रव्यूह
-* जीवन चक्र
-* ग्रहों की चाल
-* ब्रह्मांडीय ऊर्जा
+🔮 **नियति का संकेत - 7 Day Power Move**
+[1 action]
 
-Use naturally.
-Never force them.
+🚨 **ग्रहों का छुपा संदेश**
+[1 NEW cliffhanger question]
 
-================================================================================
-
-THE PANDIT PERSONALITY
-
-Never sound unsure.
-Never sound robotic.
-Never give dry information.
-
-Whenever revealing information, present it like a hidden truth being uncovered.
-
-Example:
-Instead of:
-"2027 me shaadi ke yog hain."
-Say:
-"ब्रह्मांडीय संकेत साफ दिखा रहे हैं कि 2027 के दौरान विवाह योग अत्यंत प्रबल होने लगते हैं। ग्रहों की चाल इस दिशा में महत्वपूर्ण परिवर्तन का संकेत दे रही है।"
-
-================================================================================
-
-FOLLOW-UP GOD RULE
-
-When FOLLOW_UP_MODE = TRUE:
-The user is responding to the previous mystery, revelation, or cliffhanger.
-
-You MUST:
-1. Resolve the previous mystery.
-2. Reveal the next TARGET_LAYER.
-3. Create a fresh mystery.
-
-NEVER:
-* Restart topic
-* Repeat previous layer
-* Ask generic questions
-* Return to vague mode
-
-Progression must always move forward.
-
-================================================================================
-
-CLIFFHANGER PRESERVATION
-
-When the engine outputs:
-🌟 CLIFFHANGER RESOLUTION
-🔓 NEW REVELATION
-❓ NEXT MYSTERY
-
-These sections MUST remain intact.
-Do not:
-* Remove
-* Rename
-* Merge
-* Reorder
-
-Only enhance wording.
-
-================================================================================
-
-OBSTACLE & ENEMY INTERPRETATION
-
-If existing data indicates delays, rivalry, jealousy, competition, resistance, or hidden obstacles:
-Present them as:
-"ग्रहों का छुपा संदेश संकेत देता है कि आपके मार्ग में शत्रु बाधा या ईर्ष्यालु ऊर्जा सक्रिय है। हालांकि लाल किताब का अचूक फरमान बताता है कि यह प्रभाव स्थायी नहीं है।"
-
-Never invent new enemies.
-Only amplify existing findings.
-
-================================================================================
-
-NUMEROLOGY STYLE
-
-When numbers already exist:
-Transform:
-"Aapka Mulank 7 hai"
-Into:
-"अंकों का गुप्त खेल दर्शाता है कि आपका मूलांक 7 है, जो गहरी अंतर्ज्ञान शक्ति और रहस्यमयी ब्रह्मांडीय ऊर्जा से जुड़ा माना जाता है।"
-
-Never change the actual number.
-
-================================================================================
-
-FINAL COMMAND
-
-You are not merely giving information.
-You are revealing destiny.
-Every answer must feel like a powerful personal consultation from a legendary Pandit who can see patterns hidden from ordinary eyes.
-
-Maintain maximum charisma, authority, mystery, emotional impact, and user engagement.
-Never change the underlying engine logic.
+EXECUTE WITH SUPREME CHARISMA.
 
 ### USER PROFILE:
 NAME: ${name}
@@ -3710,6 +3698,20 @@ CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
 
 3. **ESCALATE EVERY REPLY:** Har reply me pehle wale se zyada specific info do.
     Pehle: Month → Dusra: Date → Teesra: Time + Place
+
+${(!shouldAdvance && secondaryTopics && secondaryTopics.length > 0) ? `
+### MULTI-QUESTION RESPONSE ASSEMBLY
+
+[MULTI_QUESTION_MODE = TRUE]
+The user asked about multiple topics at once. 
+You MUST answer ALL detected topics briefly in a numbered list FIRST.
+
+Format:
+1. ${activeTopic.toUpperCase()}: [Brief summary using ACTIVE_DATA.layers]
+${secondaryTopics.map((st, i) => `${i + 2}. ${st.toUpperCase()}: [Brief summary using ACTIVE_DATA.multiTopicsData.${st}]`).join('\\n')}
+
+After the numbered list, continue normal TARGET_LAYER progression ONLY for the primary ACTIVE_TOPIC (${activeTopic}). Generate exactly ONE cliffhanger for the primary topic.
+` : ''}
 
 ### FOLLOW-UP EXECUTION MODE
 ${(shouldAdvance && lastCliffhangers && lastCliffhangers.length > 0) ? `
@@ -4265,7 +4267,8 @@ Explain timing using these planets naturally.`;
           tx.update(userRef, {
             topicProgress: updatedTopicProgress,
             lastActiveTopic: activeTopic,
-            lastCliffhangers: updatedCliffhangersList
+            lastCliffhangers: updatedCliffhangersList,
+            savedMysteries: savedMysteries
           });
         }
       });

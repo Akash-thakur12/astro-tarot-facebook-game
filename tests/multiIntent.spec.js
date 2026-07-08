@@ -102,6 +102,7 @@ describe('Pandit AI Advanced Multi-Intent Detection Tests', () => {
 
     it('should classify "Shadi kab hogi aur foreign jane ke yog" correctly', () => {
       const res = detectMultiIntent('Shadi kab hogi aur foreign jane ke yog');
+      console.log("SHADI_FOREIGN", res);
       expect(res.primary).toBe('marriage');
       expect(res.secondary).toContain('foreign');
     });
@@ -116,7 +117,88 @@ describe('Pandit AI Advanced Multi-Intent Detection Tests', () => {
   describe('Integration with getTopicAndSubType()', () => {
     it('should return primary intent and trigger debugging output logs', () => {
       const res = getTopicAndSubType('Pati ignore karta hai aur paise ki problem hai');
-      expect(res).toEqual({ tier: 1, topic: 'marriage' });
+      expect(res).toEqual({ tier: 1, topic: 'marriage', secondary: ['money'], overflow: [] });
+    });
+  });
+
+  describe('Intent Normalization and Overflow', () => {
+    it('should detect career and marriage correctly from typos', () => {
+      const q = "meri nokari kab lagegi aur shaddi kab hogi";
+      const result = detectMultiIntent(q);
+      
+      expect(result.primary).toBe('marriage');
+      expect(result.secondary).toContain('career');
+      expect(result.overflow.length).toBe(0);
+      expect(result.confidence).toBeGreaterThan(0);
+    });
+
+    it('should route 4 simultaneous topics safely', () => {
+      const q = "meri nokri kab hogi aur shaadi kab hogi aur luv hogi ya arrange aur mera bacha kab hoga";
+      const result = detectMultiIntent(q);
+      
+      expect(result.primary).toBe('marriage');
+      expect(result.secondary).toContain('career');
+      expect(result.secondary).toContain('love');
+      expect(result.secondary).toContain('children');
+      expect(result.overflow.length).toBe(0);
+    });
+
+    it('should handle shaadi + bacha without overflow', () => {
+      const q = "shaadi bacha";
+      const result = detectMultiIntent(q);
+      expect(result.primary).toBeTruthy();
+      expect(result.overflow).not.toContain('children');
+      expect(result.overflow).not.toContain('marriage');
+    });
+
+    it('should handle shaadi + love + bacha without overflow', () => {
+      const q = "shaadi love bacha";
+      const result = detectMultiIntent(q);
+      expect(result.primary).toBeTruthy();
+      expect(result.overflow).not.toContain('children');
+      expect(result.overflow).not.toContain('marriage');
+      expect(result.overflow).not.toContain('love');
+    });
+
+    it('should handle career + marriage + children + money + foreign', () => {
+      const q = "career marriage children money foreign";
+      const result = detectMultiIntent(q);
+      expect(result.primary).toBeTruthy();
+      expect(result.secondary.length).toBe(4);
+      expect(result.overflow.length).toBe(0);
+      expect(result.overflow).not.toContain('children');
+    });
+
+    it('should handle 6-topic overflow scenario keeping protected intents out of overflow', () => {
+      const q = "job shaadi love bacha paisa foreign";
+      const result = detectMultiIntent(q);
+      
+      expect(result.primary).toBeTruthy();
+      expect(result.secondary.length).toBe(4);
+      expect(result.overflow.length).toBe(1);
+      expect(result.overflow).not.toContain('children');
+      expect(result.overflow).not.toContain('marriage');
+      expect(result.overflow).not.toContain('love');
+      expect(result.overflow).not.toContain('career');
+    });
+
+    it('should handle 7-topic overflow scenario keeping protected intents out of overflow', () => {
+      const q = "job shaadi love bacha paisa foreign bimari";
+      const result = detectMultiIntent(q);
+      
+      expect(result.primary).toBeTruthy();
+      expect(result.secondary.length).toBe(4);
+      expect(result.overflow.length).toBe(2);
+      expect(result.overflow).not.toContain('children');
+    });
+
+    it('should get correct Topic and SubType from getTopicAndSubType with typos', () => {
+      const result = getTopicAndSubType("nokri shaadi luv bacha");
+      
+      expect(result.topic).toBe('marriage');
+      expect(result.secondary).toContain('career');
+      expect(result.secondary).toContain('love');
+      expect(result.secondary).toContain('children');
     });
   });
 });
