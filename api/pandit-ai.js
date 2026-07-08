@@ -50,6 +50,15 @@ export function isNonAstrologyQuestion(question) {
   return NON_ASTROLOGY_PATTERNS.some(p => p.test(q)) || NON_ASTROLOGY_PATTERNS_DEV.some(p => p.test(question));
 }
 
+export function isFollowUpMessage(text) {
+  const q = (text || '').toLowerCase().trim();
+
+  return (
+    /^(ji\s+)?(hn|hnn|haan|yes|ok|okay)(\s+.*)?$/i.test(q) ||
+    /^(ji\s+)?(batao|btaiye|aur batao|aur btaiye|next|detail|more)/i.test(q)
+  );
+}
+
 export const SEMANTIC_CATEGORIES = {
   career: {
     tier: 1,
@@ -2852,10 +2861,12 @@ Current Season: ${season}`;
     cliffhangerHeading = "🚨 **सस्पेंस प्रश्न**";
   }
 
+  const isFollowUp = isFollowUpMessage(questionText);
+
   const isGreeting = isGreetingMessage(questionText);
   const isProfileAck = isProfileAcknowledgementMessage(questionText);
   const isMemoryRecall = isMemoryRecallMessage(questionText);
-  const isVague = !isProfileAck && !isMemoryRecall && !wasAwaitingClarification && !isRelationshipInvestigationQuery && isVagueMessage(questionText);
+  const isVague = !isFollowUp && !isProfileAck && !isMemoryRecall && !wasAwaitingClarification && !isRelationshipInvestigationQuery && isVagueMessage(questionText);
 
 
 
@@ -3164,16 +3175,7 @@ Current Season: ${season}`;
     const matchedTopic = topicMapping[questionTopic];
 
     const qClean = (questionText || '').toLowerCase().trim();
-    const cleanQForFollowUp = qClean.replace(/[?.,!]/g, '').trim();
-    const followUpPhrases = [
-      'aur batao', 'hn', 'next', 'detail', 'hn btao', 'haan', 'more detail', 'in detail',
-      'hnn bta', 'haan batao', 'aur bata', 'aur detail'
-    ];
-    const isFollowUpWord =
-      followUpPhrases.some(p =>
-        cleanQForFollowUp.startsWith(p)
-      ) ||
-      /^(hn|haan|hnn|ok|okay|accha|achha|detail|next)\b/i.test(cleanQForFollowUp);
+    const isFollowUpWord = isFollowUp;
 
     const lastUserMsg = [...pastHistory].reverse().find(m => m.role === 'user');
     const isSameQuestion = lastUserMsg && getJaccardSimilarity(qClean, lastUserMsg.content.toLowerCase().trim()) > 0.70;
@@ -3554,6 +3556,9 @@ CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
 
 3. **ESCALATE EVERY REPLY:** Har reply me pehle wale se zyada specific info do.
     Pehle: Month → Dusra: Date → Teesra: Time + Place
+
+### FOLLOW-UP RULE
+If the user sends a follow-up acknowledgement, assume they are responding YES to the most recent cliffhanger question and continue the same topic immediately.
 
 ### CORE LOGIC:
 

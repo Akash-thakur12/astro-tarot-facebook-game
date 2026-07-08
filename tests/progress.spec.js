@@ -879,4 +879,132 @@ CLIFFHANGER: Dhan labh kab hoga?`);
     expect(userStore.topicProgress.career).toBe(3); // Should advance to 3
     expect(userStore.lastCliffhangers.length).toBeLessThanOrEqual(3);
   });
+
+  it('should verify follow-up query "hnn btao" does not trigger VAGUE MODE and advances marriage layer progression', async () => {
+    const { getAuth } = await import('firebase-admin/auth');
+    const auth = getAuth();
+    vi.spyOn(auth, 'verifyIdToken').mockResolvedValue({ uid: 'test_vague_override_user' });
+
+    const { getFirestore } = await import('firebase-admin/firestore');
+    const db = getFirestore();
+    const docRef = db.collection('users').doc('test_vague_override_user');
+    const mockGet = docRef.get;
+    const mockUpdate = docRef.update;
+
+    let userStore = {
+      coins: 1000,
+      premium: true,
+      name: 'Akash',
+      dob: '1999-08-31',
+      topicProgress: {
+        marriage: 1, love: 1, career: 1, money: 1, health: 1, travel: 1, children: 1, daily: 1
+      },
+      lastCliffhangers: [],
+      lastActiveTopic: null
+    };
+
+    mockGet.mockImplementation(async () => ({
+      exists: true,
+      data: () => userStore
+    }));
+
+    mockUpdate.mockImplementation(async (updates) => {
+      userStore = { ...userStore, ...updates };
+    });
+
+    db.runTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: async () => ({
+          exists: true,
+          data: () => userStore
+        }),
+        update: (ref, updates) => {
+          userStore = { ...userStore, ...updates };
+        }
+      };
+      return cb(tx);
+    });
+
+    const { generateAIResponse } = await import('../services/aiService.js');
+    vi.mocked(generateAIResponse).mockResolvedValue(`🔮 Prediction: Timing holds strong.
+📿 Reasoning: Dasha Venus.
+🪔 Guidance: Pray.
+🚨 **The Cliffhanger (Open Loop)**
+Kya aap saathi ka swabhav kaisa hoga jaanna chahte hain?
+
+CLIFFHANGER: Kya aap saathi ka swabhav kaisa hoga jaanna chahte hain?`);
+
+    // Turn 1: Initial query on Marriage
+    const req1 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_vague_override_user',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          maritalStatus: 'Single',
+          occupation: 'Government Job',
+          question: 'Meri shadi kab hogi?'
+        },
+        history: []
+      }
+    };
+    const res1 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    await handler(req1, res1);
+    expect(res1.statusCode).toBe(200);
+    expect(userStore.lastActiveTopic).toBe('marriage');
+    expect(userStore.topicProgress.marriage).toBe(1);
+
+    // Turn 2: Follow-up query "hnn btao" (Should NOT trigger vague mode, should advance target layer to 2)
+    const req2 = {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-token' },
+      body: {
+        mode: 'chat',
+        userData: {
+          uid: 'test_vague_override_user',
+          dobDay: 31, dobMonth: 8, dobYear: 1999,
+          tobHour: 12, tobMinute: 50, tobPeriod: 'PM',
+          pob: 'Hamirpur Himachal Pradesh',
+          maritalStatus: 'Single',
+          occupation: 'Government Job',
+          question: 'hnn btao'
+        },
+        history: [
+          { role: 'user', content: 'Meri shadi kab hogi?' },
+          { role: 'assistant', content: res1.jsonData.text }
+        ]
+      }
+    };
+    const res2 = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.jsonData = data; return this; }
+    };
+
+    vi.mocked(generateAIResponse).mockImplementation(async (prompt) => {
+      if (prompt.includes("Extract ONLY structured facts")) {
+        return JSON.stringify({ confidence: 0 });
+      }
+      // If vague rules are matched, prompt will not contain TARGET_LAYER: 2
+      expect(prompt).toContain('ACTIVE_TOPIC: marriage');
+      expect(prompt).toContain('TARGET_LAYER: 2');
+      expect(prompt).not.toContain('VAGUE MODE RULES');
+      return `🔮 Prediction: Partner will be supportive.
+CLIFFHANGER: What about spouse profession?`;
+    });
+
+    await handler(req2, res2);
+    expect(res2.statusCode).toBe(200);
+    expect(userStore.lastActiveTopic).toBe('marriage');
+    expect(userStore.topicProgress.marriage).toBe(2);
+  });
 });
