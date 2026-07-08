@@ -54,6 +54,7 @@ export function isFollowUpMessage(text) {
   const q = (text || '').toLowerCase().trim();
 
   return (
+    /^ji$/i.test(q) ||
     /^(ji\s+)?(hn|hnn|haan|yes|ok|okay)(\s+.*)?$/i.test(q) ||
     /^(ji\s+)?(batao|btaiye|aur batao|aur btaiye|next|detail|more)/i.test(q)
   );
@@ -3559,6 +3560,13 @@ CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
 
 ### FOLLOW-UP RULE
 If the user sends a follow-up acknowledgement, assume they are responding YES to the most recent cliffhanger question and continue the same topic immediately.
+${(shouldAdvance && lastCliffhangers && lastCliffhangers.length > 0) ? `\nCRITICAL FOLLOW-UP CONTEXT
+The user is responding YES to this cliffhanger:
+"${lastCliffhangers[lastCliffhangers.length - 1]}"
+You MUST answer this cliffhanger first.
+You MUST stay inside ACTIVE_TOPIC.
+You MUST continue TARGET_LAYER progression.
+Do NOT switch topics.` : ''}
 
 ### CORE LOGIC:
 

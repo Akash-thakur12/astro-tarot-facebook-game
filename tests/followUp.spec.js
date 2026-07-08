@@ -1,4 +1,5 @@
 import { isFollowUpMessage } from '../api/pandit-ai.js';
+import { describe, it, expect } from 'vitest';
 
 describe('Follow-up Detection (isFollowUpMessage)', () => {
   const followUpCases = [

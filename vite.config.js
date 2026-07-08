@@ -29,7 +29,8 @@ export default defineConfig({
       'tests/validationSuite.spec.js',
       'tests/specialtyEngines.spec.js',
       'tests/semanticRouting.spec.js',
-      'tests/multiIntent.spec.js'
+      'tests/multiIntent.spec.js',
+      'tests/followUp.spec.js'
     ],
   },
 })
