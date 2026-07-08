@@ -324,40 +324,36 @@ export function calculateChildrenEngine(astroData) {
   const moonHouse = houses.Moon || 1;
 
   let score = 55;
-
   if ([5, 9, 11].includes(jupHouse)) score += 20;
   if ([5, 9, 11].includes(moonHouse)) score += 10;
 
-  let childrenPotential = "Mehnat aur upay se safalta milegi";
-  if (score >= 75) childrenPotential = "Santan sukh ke prabal yog hain";
-  else if (score >= 60) childrenPotential = "Anukul yog ban rahe hain";
-
-  let familyGrowth = "Nayi shuruaat aur khushi ke yog";
-  if (score < 60) familyGrowth = "Dheemi pragati rahegi";
-
-  let dateWindow = "2026-11";
+  let baseYear = 2026;
   if (astroData.antardashaEnd) {
     const parts = astroData.antardashaEnd.split('/');
     if (parts.length === 2) {
-      dateWindow = `${parts[1]}-${parts[0].padStart(2, '0')}`;
+      baseYear = parseInt(parts[1], 10);
     }
   }
 
   const lagna = astroData?.lagna || "Mesh";
   const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0)) % 10;
+  
+  const conceptionYear = baseYear + (seed % 3);
+  const conceptionWindow = `${conceptionYear}-${conceptionYear + 1}`;
+  const childbirthWindow = `${conceptionYear + 1}-${conceptionYear + 2}`;
 
   const childrenLayers = {
-    layer1: `Timing: ${formatDateNatural(dateWindow)}`,
-    layer2: `Children Potential: ${childrenPotential}`,
-    layer3: `Family Growth Prospect: ${familyGrowth}`,
+    layer1: `Strongest Conception Period: ${conceptionWindow}`,
+    layer2: `Strongest Childbirth Window: ${childbirthWindow}`,
+    layer3: `Astrological Confidence Score: ${score}%`,
     layer4: `Children Career Indicator: Future child highly inclined towards ${["Creative arts/Media", "Science/Research", "Business/Entrepreneurship", "Management/Finance", "Public Sector/Service", "Engineering/IT", "Sports/Fitness", "Law/Consulting", "Teaching/Writing", "Medicine/Healthcare"][(seed + 6) % 10]}`,
     layer5: `Remedial Guidance for Delay: Daan to children or chanting ${seed % 2 === 0 ? "Santana Gopala Mantra" : "Guru Beej Mantra"} will help`
   };
 
   return {
-    childrenPotential,
-    familyGrowth,
-    childWindows: [formatDateNatural(dateWindow)],
+    childrenPotential: "Santan sukh",
+    familyGrowth: "Vridhi",
+    childWindows: [conceptionWindow],
     layers: {
       children: childrenLayers
     }
