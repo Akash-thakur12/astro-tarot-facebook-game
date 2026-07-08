@@ -3558,15 +3558,63 @@ CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
 3. **ESCALATE EVERY REPLY:** Har reply me pehle wale se zyada specific info do.
     Pehle: Month → Dusra: Date → Teesra: Time + Place
 
-### FOLLOW-UP RULE
-If the user sends a follow-up acknowledgement, assume they are responding YES to the most recent cliffhanger question and continue the same topic immediately.
-${(shouldAdvance && lastCliffhangers && lastCliffhangers.length > 0) ? `\nCRITICAL FOLLOW-UP CONTEXT
-The user is responding YES to this cliffhanger:
-"${lastCliffhangers[lastCliffhangers.length - 1]}"
-You MUST answer this cliffhanger first.
-You MUST stay inside ACTIVE_TOPIC.
-You MUST continue TARGET_LAYER progression.
-Do NOT switch topics.` : ''}
+### FOLLOW-UP EXECUTION MODE
+${(shouldAdvance && lastCliffhangers && lastCliffhangers.length > 0) ? `
+[FOLLOW_UP_MODE = TRUE]
+
+You are executing a deterministic progression algorithm.
+
+You MUST produce exactly 3 sections in this order:
+
+SECTION A: CLIFFHANGER RESOLUTION
+* Answer LAST_CLIFFHANGER: "${lastCliffhangers[lastCliffhangers.length - 1]}"
+* Resolve the exact open loop.
+* Never skip.
+
+SECTION B: TARGET_LAYER REVEAL
+* Reveal ONLY ACTIVE_TOPIC TARGET_LAYER data.
+* Never reveal future layers.
+* Never reveal past layers.
+* Never switch topics.
+
+SECTION C: NEXT CLIFFHANGER
+* Generate ONE new cliffhanger.
+* It must naturally lead to the next layer.
+* It must remain inside ACTIVE_TOPIC.
+
+---
+
+STRICT RULES
+
+If FOLLOW_UP_MODE = TRUE:
+
+DO NOT:
+* Switch topic
+* Reset progression
+* Ask generic questions
+* Enter vague mode
+* Reveal future layers
+* Reveal multiple layers
+* Skip cliffhanger resolution
+* Create unrelated predictions
+* Talk about career if ACTIVE_TOPIC=marriage
+* Talk about marriage if ACTIVE_TOPIC=career
+
+---
+
+OUTPUT FORMAT
+
+FOLLOW_UP_MODE responses MUST follow:
+
+🌟 CLIFFHANGER RESOLUTION
+[answer previous cliffhanger]
+
+🔓 NEW REVELATION
+[current TARGET_LAYER information]
+
+❓ NEXT MYSTERY
+[new cliffhanger]` : `
+If the user sends a follow-up acknowledgement, assume they are responding YES to the most recent cliffhanger question and continue the same topic immediately.`}
 
 ### CORE LOGIC:
 
