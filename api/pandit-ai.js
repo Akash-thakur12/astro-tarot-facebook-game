@@ -56,7 +56,8 @@ export function isFollowUpMessage(text) {
   return (
     /^ji$/i.test(q) ||
     /^(ji\s+)?(hn|hnn|haan|yes|ok|okay)(\s+.*)?$/i.test(q) ||
-    /^(ji\s+)?(batao|btaiye|aur batao|aur btaiye|next|detail|more)/i.test(q)
+    /^(ji\s+)?(batao|btaiye|aur batao|aur btaiye|next|detail|more)/i.test(q) ||
+    /^(nhi|nahi|no|na\b|naa|bilkul|shayad|lagta hai|ho sakta hai|aisa kuch)(?:\s+.*)?$/i.test(q)
   );
 }
 
@@ -3567,8 +3568,8 @@ You are executing a deterministic progression algorithm.
 You MUST produce exactly 3 sections in this order:
 
 SECTION A: CLIFFHANGER RESOLUTION
-* Answer LAST_CLIFFHANGER: "${lastCliffhangers[lastCliffhangers.length - 1]}"
-* Resolve the exact open loop.
+* User responded to LAST_CLIFFHANGER: "${lastCliffhangers[lastCliffhangers.length - 1]}"
+* Resolve the exact open loop based on the user's answer.
 * Never skip.
 
 SECTION B: TARGET_LAYER REVEAL
@@ -3614,7 +3615,7 @@ FOLLOW_UP_MODE responses MUST follow:
 
 ❓ NEXT MYSTERY
 [new cliffhanger]` : `
-If the user sends a follow-up acknowledgement, assume they are responding YES to the most recent cliffhanger question and continue the same topic immediately.`}
+If the user sends a follow-up response, assume they are responding to the most recent cliffhanger question and continue the same topic immediately.`}
 
 ### CORE LOGIC:
 
