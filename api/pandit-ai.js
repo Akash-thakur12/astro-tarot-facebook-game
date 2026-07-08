@@ -3963,7 +3963,14 @@ Example: User switches from Finance to Marriage. Answer marriage, then end with:
 RULE 8: DATE PRESENTATION VARIATION
 Do NOT invent new years or change deterministic calculations.
 Instead, present the exact same timing differently on each turn.
-Example: If the core timing is "March 2027", vary the text to: "2027 ki pehli chhamahi", "2026 ke antim mahino se 2027 ke madhya tak", "agle 12-18 mahino me". Keep the underlying evidence 100% consistent, just rotate the phrasing.
+Example: If the core timing is "March 2027", vary the text to: "2027 ki pehli chhamahi", "2026 ke antim mahino se 2027 ke madhya tak", "agle 12-18 mahino me", "usi daur ke aas-paas", "vivah yog ke turant baad". Keep the underlying evidence 100% consistent, just rotate the phrasing.
+
+RULE 9: RELATIVE SEQUENCING FOR MULTIPLE EVENTS
+If multiple events (e.g., marriage, career, foreign travel, children) share similar timing windows in ACTIVE_DATA, do NOT repeat the exact same date format for each event.
+Use sequence-based and relative language to create a sense of natural progression:
+- Dependent Events (Marriage -> Children): Instead of repeating "2027-2028", say "Vivah ke baad ke agle 1-2 varsh santan yog adhik sakriya dikhte hain."
+- Parallel Events (Career -> Foreign Travel -> Money): Use phrasing like "pehle career sthirta, uske baad videsh yog" or "dhan vriddhi ke baad naya avsar".
+Never fabricate new years solely for variety, but aggressively diversify presentation to avoid robotic repetition of years.
 `;
     promptSections.push(criticalBehaviorPatchBlock.trim());
 
