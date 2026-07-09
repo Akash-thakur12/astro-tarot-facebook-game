@@ -1,6 +1,6 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { verifyIdToken } from '../_utils/auth.js';
-import { verifyFacebookSignature } from '../_utils/verifyFacebookSignature.js';
+import { verifyIdToken } from '../../lib/auth.js';
+import { verifyFacebookSignature } from '../../lib/verifyFacebookSignature.js';
 
 const db = getFirestore();
 

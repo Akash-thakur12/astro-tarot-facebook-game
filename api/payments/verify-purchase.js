@@ -2,7 +2,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
-import { verifyFacebookSignature } from '../_utils/verifyFacebookSignature.js';
+import { verifyFacebookSignature } from '../../lib/verifyFacebookSignature.js';
 
 // 1. Initialize Firebase Admin
 const apps = getApps();

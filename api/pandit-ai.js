@@ -19,7 +19,7 @@ import {
   isGreetingMessage,
   isVagueMessage,
   SEMANTIC_CATEGORIES
-} from './services/topicEngine.js';
+} from '../lib/topicEngine.js';
 
 export {
   getTopicAndSubType,
@@ -48,7 +48,7 @@ import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
 import { humanize } from '../src/utils/humanizer.js';
 import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
 import { getAstrologyData } from '../src/utils/astroEngine.js';
-import { executeAIWithRetries } from './services/aiExecution.js';
+import { executeAIWithRetries } from '../lib/aiExecution.js';
 import { extractSemanticFacts, mergeSemanticFacts, getFact, setFact, migrateFactMemory, sanitizeFactMemory } from '../src/utils/semanticMemory.js';
 import {
   calculateLoveEngine,
@@ -2993,7 +2993,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         
         // Persist parsed memoryState to Firestore via progressEngine
         if (aiResult.memoryState) {
-          const { mergeRecommendationMemory } = await import('./services/memoryStateParser.js');
+          const { mergeRecommendationMemory } = await import('../lib/memoryStateParser.js');
           const mergedMemory = mergeRecommendationMemory(progress.recommendationMemory, aiResult.memoryState.recommendationMemory);
           const confidenceScore = aiResult.memoryState.debug_info?.confidenceScore ?? progress.debug_info?.confidenceScore ?? null;
           

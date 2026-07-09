@@ -9,7 +9,7 @@ import {
   getTopicAndSubType,
   resolveMultiIntent,
   getTopicProgress
-} from '../api/services/topicEngine.js';
+} from '../lib/topicEngine.js';
 
 describe('Topic Engine Core Specification Tests', () => {
 

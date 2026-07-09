@@ -1,6 +1,6 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { verifyFacebookSignature } from '../_utils/verifyFacebookSignature.js';
+import { verifyFacebookSignature } from '../../lib/verifyFacebookSignature.js';
 
 // Restore Firebase Admin initialization
 const apps = getApps();

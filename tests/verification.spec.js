@@ -1718,7 +1718,7 @@ Ganesh ji ki upasana karein. Kya aur kuch janna chahte hain?
   });
 
   it('40. Hook Model JSON Parsing Test', async () => {
-    const { executeAIWithRetries } = await import('../api/services/aiExecution.js');
+    const { executeAIWithRetries } = await import('../lib/aiExecution.js');
     const { generateAIResponse } = await import('../services/aiService.js');
     const mockGenerate = vi.mocked(generateAIResponse);
 
