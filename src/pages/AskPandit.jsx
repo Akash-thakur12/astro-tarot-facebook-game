@@ -221,6 +221,7 @@ const AskPandit = () => {
   const isHindi = currentLanguage === 'Hindi';
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
+  const activeAnimationFrameRef = useRef(null);
 
   // State
   const [loading, setLoading] = useState(false);
@@ -241,8 +242,16 @@ const AskPandit = () => {
 
   // Forms
   const [personalForm, setPersonalForm] = useState({ 
-    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', tobPeriod: '', pob: '', maritalStatus: '', occupation: '' 
+    name: '', gender: '', dobDay: '', dobMonth: '', dobYear: '', tobHour: '', tobMinute: '', dobPeriod: '', pob: '', maritalStatus: '', occupation: '' 
   });
+
+  useEffect(() => {
+    return () => {
+      if (activeAnimationFrameRef.current) {
+        cancelAnimationFrame(activeAnimationFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -675,12 +684,54 @@ const AskPandit = () => {
         const modelMessagePlaceholder = { role: 'model', content: '' };
         setMessages(prev => [...prev, modelMessagePlaceholder]);
         
-        let fullText = "";
+        let streamBuffer = "";
+        let displayedText = "";
         let isFirstToken = true;
+        let isStreamFinished = false;
+
+        const updateTyping = () => {
+          if (streamBuffer.length > 0) {
+            let step = 1;
+            if (streamBuffer.length > 50) {
+              step = 5;
+            } else if (streamBuffer.length > 20) {
+              step = 3;
+            }
+            
+            const charsToType = streamBuffer.slice(0, step);
+            streamBuffer = streamBuffer.slice(step);
+            displayedText += charsToType;
+
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'model', content: displayedText };
+              return updated;
+            });
+          }
+
+          if (!isStreamFinished || streamBuffer.length > 0) {
+            activeAnimationFrameRef.current = requestAnimationFrame(updateTyping);
+          }
+        };
+
+        activeAnimationFrameRef.current = requestAnimationFrame(updateTyping);
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            isStreamFinished = true;
+            if (streamBuffer.length > 0) {
+              displayedText += streamBuffer;
+              streamBuffer = "";
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: 'model', content: displayedText };
+                return updated;
+              });
+            }
+            break;
+          }
+          
           const chunk = decoder.decode(value, { stream: true });
           
           if (isFirstToken && chunk.trim().length > 0) {
@@ -688,17 +739,16 @@ const AskPandit = () => {
             setLoading(false);
           }
           
-          fullText += chunk;
-          
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = { role: 'model', content: fullText };
-            return updated;
-          });
+          streamBuffer += chunk;
+        }
+
+        if (activeAnimationFrameRef.current) {
+          cancelAnimationFrame(activeAnimationFrameRef.current);
+          activeAnimationFrameRef.current = null;
         }
         
         if (user?.uid) {
-          savePanditMessage(user.uid, 'model', fullText);
+          savePanditMessage(user.uid, 'model', displayedText);
         }
         
         await refreshUser();

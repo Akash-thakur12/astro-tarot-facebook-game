@@ -2818,64 +2818,95 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
           prepStartTime
         });
         
-        let accumulatedText = "";
-        let alreadyStreamedLength = 0;
         let hasSentStreamStart = false;
+        const rawAccumulator = { text: "" };
 
-        const getSafeToStreamText = (text, len) => {
-          const tags = ["DAILY_SECRET:", "CLIFFHANGER:", "MEMORY_STATE:"];
-          let firstTagIndex = -1;
-          for (const tag of tags) {
-            const idx = text.toUpperCase().indexOf(tag);
-            if (idx !== -1 && (firstTagIndex === -1 || idx < firstTagIndex)) {
-              firstTagIndex = idx;
+        async function* parseAndStreamJSON(streamSrc, accumulator) {
+          let accumulated = "";
+          let state = 0; // 0: searching, 1: streaming, 2: ended
+          let escapeActive = false;
+          let index = 0;
+          
+          for await (const chunk of streamSrc) {
+            accumulated += chunk;
+            if (accumulator) accumulator.text = accumulated;
+            
+            if (state === 0) {
+              const trimmed = accumulated.trim();
+              if (trimmed.length > 0) {
+                if (!trimmed.startsWith('{')) {
+                  state = 1;
+                  index = 0;
+                } else {
+                  const keyIdx = accumulated.indexOf('"user_response"');
+                  if (keyIdx !== -1) {
+                    const colonIdx = accumulated.indexOf(':', keyIdx);
+                    if (colonIdx !== -1) {
+                      const quoteIdx = accumulated.indexOf('"', colonIdx);
+                      if (quoteIdx !== -1) {
+                        state = 1;
+                        index = quoteIdx + 1;
+                      }
+                    }
+                  } else if (accumulated.length > 150) {
+                    state = 1;
+                    index = 0;
+                  }
+                }
+              }
             }
-          }
-          if (firstTagIndex !== -1) {
-            return text.slice(len, firstTagIndex);
-          }
-          let maxPrefixLen = 0;
-          const upperText = text.toUpperCase();
-          for (const tag of tags) {
-            for (let l = 1; l <= Math.min(upperText.length, tag.length); l++) {
-              const suffix = upperText.slice(-l);
-              if (tag.startsWith(suffix)) {
-                maxPrefixLen = Math.max(maxPrefixLen, l);
+            
+            if (state === 1) {
+              while (index < accumulated.length) {
+                const char = accumulated[index];
+                index++;
+                
+                if (escapeActive) {
+                  escapeActive = false;
+                  if (char === 'n') {
+                    yield '\n';
+                  } else if (char === 't') {
+                    yield '\t';
+                  } else {
+                    yield char;
+                  }
+                } else if (char === '\\') {
+                  escapeActive = true;
+                } else if (char === '"') {
+                  state = 2;
+                  break;
+                } else {
+                  yield char;
+                }
               }
             }
           }
-          return text.slice(len, text.length - maxPrefixLen);
-        };
-        
-        for await (const chunk of responseStream) {
+        }
+
+        const cleanStream = parseAndStreamJSON(responseStream, rawAccumulator);
+        let cleanText = "";
+
+        for await (const chunk of cleanStream) {
           if (!hasSentStreamStart) {
             console.log("STREAM_START");
             hasSentStreamStart = true;
           }
-          accumulatedText += chunk;
-          const safeText = getSafeToStreamText(accumulatedText, alreadyStreamedLength);
-          if (safeText.length > 0) {
-            res.write(safeText);
-            alreadyStreamedLength += safeText.length;
-          }
-        }
-        
-        const remainingCleanText = getSafeToStreamText(accumulatedText, alreadyStreamedLength);
-        if (remainingCleanText.length > 0) {
-          res.write(remainingCleanText);
-          alreadyStreamedLength += remainingCleanText.length;
+          res.write(chunk);
+          cleanText += chunk;
         }
 
         console.log("STREAM_END");
 
-        const parsed = extractAndRemoveSecrets(accumulatedText);
-        const cleanText = parsed.cleanText;
-        const cliffhangerText = parsed.cliffhanger;
-        const llmSecret = parsed.dailySecret;
-        const memoryState = parsed.memoryState;
+        // Parse memory state, secrets, and cliffhangers from raw text
+        const optionsObj = { llmSecret: "", memoryState: null };
+        const parsed = processRawResponse(rawAccumulator.text, optionsObj);
+        const cliffhangerText = parsed.cliffhangerText;
+        const llmSecret = optionsObj.llmSecret;
+        const memoryState = optionsObj.memoryState;
 
+        // Perform final injectSecretAndScore using fixed Temp slicing to get only secret & score
         const finalResponse = await injectSecretAndScore(
-          cleanText, 
+          "Temp", 
           uid, 
           userData, 
           progress, 
@@ -2884,7 +2915,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
           llmSecret
         );
 
-        const extraText = finalResponse.slice(cleanText.length);
+        const extraText = finalResponse.slice(4);
         if (extraText.length > 0) {
           res.write(extraText);
         }
@@ -3060,13 +3091,26 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
             updatedCliffhangersList = updatedCliffhangersList.slice(-3);
           }
 
-          tx.update(userRef, {
-            topicProgress: updateResult.topicProgress,
-            revealedLayers: updateResult.revealedLayers,
-            lastActiveTopic: activeTopic,
-            lastCliffhangers: updatedCliffhangersList,
-            savedMysteries: savedMysteries
-          });
+          if (memoryState && memoryState.recommendationMemory) {
+            const { mergeRecommendationMemory } = await import('../lib/memoryStateParser.js');
+            const mergedMemory = mergeRecommendationMemory(latestUserData.recommendationMemory || {}, memoryState.recommendationMemory);
+            tx.update(userRef, {
+              topicProgress: updateResult.topicProgress,
+              revealedLayers: updateResult.revealedLayers,
+              lastActiveTopic: activeTopic,
+              lastCliffhangers: updatedCliffhangersList,
+              savedMysteries: savedMysteries,
+              recommendationMemory: mergedMemory
+            });
+          } else {
+            tx.update(userRef, {
+              topicProgress: updateResult.topicProgress,
+              revealedLayers: updateResult.revealedLayers,
+              lastActiveTopic: activeTopic,
+              lastCliffhangers: updatedCliffhangersList,
+              savedMysteries: savedMysteries
+            });
+          }
         }
       });
     } catch (txError) {
