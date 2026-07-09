@@ -721,8 +721,8 @@ const AskPandit = () => {
             } else if (streamBuffer.length > 40) {
               step = 2; // Medium buffer catch-up: 2 characters per frame
             } else {
-              // Normal typing speed: 1 character every 30ms (decreased by ~30-40% from frame-rate)
-              if (now - lastCharTypedTime >= 30) {
+              // Normal typing speed: 1 character every 110ms (~4x slower for premium mystical feel)
+              if (now - lastCharTypedTime >= 110) {
                 step = 1;
                 shouldCheckPause = true;
               }
@@ -744,11 +744,11 @@ const AskPandit = () => {
               if (shouldCheckPause && step === 1) {
                 const char = charsToType;
                 let pauseDuration = 0;
-                if (char === '.' || char === '।') pauseDuration = 120;
-                else if (char === ',') pauseDuration = 60;
-                else if (char === '?') pauseDuration = 150;
-                else if (char === '!') pauseDuration = 150;
-                else if (char === '\n') pauseDuration = 100;
+                if (char === '.' || char === '।') pauseDuration = 400;
+                else if (char === ',') pauseDuration = 200;
+                else if (char === '?') pauseDuration = 500;
+                else if (char === '!') pauseDuration = 500;
+                else if (char === '\n') pauseDuration = 300;
 
                 if (pauseDuration > 0) {
                   pauseUntil = now + pauseDuration;
