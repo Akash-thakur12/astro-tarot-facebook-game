@@ -216,8 +216,10 @@ export async function* generateAIResponseStream(prompt, options = {}) {
         yield firstText;
       }
 
-      for await (const chunk of responseStream) {
-        const text = chunk.choices[0]?.delta?.content || "";
+      while (true) {
+        const nextResult = await iterator.next();
+        if (nextResult.done) break;
+        const text = nextResult.value.choices[0]?.delta?.content || "";
         if (text) {
           yield text;
         }
@@ -261,8 +263,10 @@ export async function* generateAIResponseStream(prompt, options = {}) {
       yield firstText;
     }
 
-    for await (const chunk of responseStream) {
-      const text = chunk.choices[0]?.delta?.content || "";
+    while (true) {
+      const nextResult = await iterator.next();
+      if (nextResult.done) break;
+      const text = nextResult.value.choices[0]?.delta?.content || "";
       if (text) {
         yield text;
       }
