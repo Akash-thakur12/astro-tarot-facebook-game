@@ -49,7 +49,7 @@ import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
 import { humanize } from '../src/utils/humanizer.js';
 import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
 import { getAstrologyData } from '../src/utils/astroEngine.js';
-import { executeAIWithRetries, executeAIWithRetriesStream, extractAndRemoveSecrets } from '../lib/aiExecution.js';
+import { executeAIWithRetries, executeAIWithRetriesStream, extractAndRemoveSecrets, processRawResponse } from '../lib/aiExecution.js';
 import { extractSemanticFacts, mergeSemanticFacts, getFact, setFact, migrateFactMemory, sanitizeFactMemory } from '../src/utils/semanticMemory.js';
 import {
   calculateLoveEngine,
