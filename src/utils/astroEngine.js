@@ -4,7 +4,7 @@ import { getGeoDetails } from './geoHelper.js';
 // Initialize Swiss Ephemeris sidereal mode
 swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0);
 
-const NAKSHATRAS = [
+export const NAKSHATRAS = [
   "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", 
   "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni", 
   "Hasta", "Chitra", "Swati", "Visakha", "Anuradha", "Jyeshtha", 
@@ -17,7 +17,7 @@ const SIGNS_HINDI = [
   "Tula", "Vrishchik", "Dhanu", "Makar", "Kumbh", "Meen"
 ];
 
-const DASHA_LORDS = [
+export const DASHA_LORDS = [
   { name: "Ketu", years: 7 },
   { name: "Venus", years: 20 },
   { name: "Sun", years: 6 },
@@ -42,23 +42,26 @@ function getSignHindi(long) {
 
 // Calculate Vimshottari Dasha
 function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) {
-  const nakshatraIndex = Math.floor(moonLong / 13.33333333);
+  const nakLength = 360 / 27;
+  const nakshatraIndex = Math.floor(moonLong / nakLength) % 27;
   const lordIndex = nakshatraIndex % 9;
   
-  const degInNakshatra = moonLong % 13.33333333;
-  const fractionElapsed = degInNakshatra / 13.33333333;
+  const degInNakshatra = moonLong % nakLength;
+  const fractionElapsed = degInNakshatra / nakLength;
   
   const birthLord = DASHA_LORDS[lordIndex];
+  const elapsedYearsAtBirth = fractionElapsed * birthLord.years;
   const remainingYearsAtBirth = (1 - fractionElapsed) * birthLord.years;
   
   const birthTimeMs = birthDate.getTime();
   const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
   
+  const firstDashaStartMs = birthTimeMs - (elapsedYearsAtBirth * msPerYear);
   const firstDashaEndMs = birthTimeMs + (remainingYearsAtBirth * msPerYear);
   const queryTimeMs = queryDate.getTime();
   
-  let mahadasha = "";
-  let mahadashaStartMs = birthTimeMs;
+  let mahadasha;
+  let mahadashaStartMs = firstDashaStartMs;
   let mahadashaEndMs = firstDashaEndMs;
   let currentLordIdx = lordIndex;
   
@@ -81,6 +84,8 @@ function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) 
       // Safeguard against infinite loops
       if (tempStartMs > queryTimeMs + (200 * msPerYear)) {
         mahadasha = lord.name;
+        mahadashaStartMs = tempStartMs - lord.years * msPerYear;
+        mahadashaEndMs = tempStartMs;
         break;
       }
     }
@@ -105,6 +110,10 @@ function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) 
     }
     tempSubStartMs = nextSubEndMs;
     subLordIdx = (subLordIdx + 1) % 9;
+  }
+  
+  if (!mahadasha || !antardasha) {
+    throw new Error(`Failed to calculate Vimshottari Dasha details mathematically. Moon longitude: ${moonLong}`);
   }
   
   return { mahadasha, antardasha, antardashaEndMs };
@@ -156,27 +165,14 @@ export async function getAstrologyData({ dob, tob, pob }) {
     // Local birth date object
     const birthDate = new Date(year, month - 1, day, hour, minute);
 
-    // Calculate decimal hour in UTC
-    const localDecimalHour = hour + (minute / 60);
-    let utcDecimalHour = localDecimalHour - geo.tzOffset;
-    let julianDayDate = day;
-    let julianDayMonth = month;
-    let julianDayYear = year;
-
-    if (utcDecimalHour < 0) {
-      utcDecimalHour += 24;
-      // Adjust day
-      const prevDay = new Date(year, month - 1, day - 1);
-      julianDayDate = prevDay.getDate();
-      julianDayMonth = prevDay.getMonth() + 1;
-      julianDayYear = prevDay.getFullYear();
-    } else if (utcDecimalHour >= 24) {
-      utcDecimalHour -= 24;
-      const nextDay = new Date(year, month - 1, day + 1);
-      julianDayDate = nextDay.getDate();
-      julianDayMonth = nextDay.getMonth() + 1;
-      julianDayYear = nextDay.getFullYear();
-    }
+    // Calculate decimal hour in UTC using Date.UTC for timezone-independent math
+    const localTimeMs = Date.UTC(year, month - 1, day, hour, minute);
+    const utcTimeMs = localTimeMs - (geo.tzOffset * 60 * 60 * 1000);
+    const utcDate = new Date(utcTimeMs);
+    const julianDayYear = utcDate.getUTCFullYear();
+    const julianDayMonth = utcDate.getUTCMonth() + 1;
+    const julianDayDate = utcDate.getUTCDate();
+    const utcDecimalHour = utcDate.getUTCHours() + (utcDate.getUTCMinutes() / 60) + (utcDate.getUTCSeconds() / 3600) + (utcDate.getUTCMilliseconds() / 3600000);
 
     // Calculate Julian Day in UT
     const jdUT = swe.swe_julday(julianDayYear, julianDayMonth, julianDayDate, utcDecimalHour, swe.SE_GREG_CAL);
@@ -194,7 +190,7 @@ export async function getAstrologyData({ dob, tob, pob }) {
     const moonLong = moonCalc.longitude;
     const moonSign = getSignHindi(moonLong);
 
-    const nakshatraIdx = Math.floor(moonLong / 13.33333333) % 27;
+    const nakshatraIdx = Math.floor(moonLong / (360 / 27)) % 27;
     const nakshatra = NAKSHATRAS[nakshatraIdx];
 
     // Calculate other planets
@@ -244,7 +240,7 @@ export async function getAstrologyData({ dob, tob, pob }) {
     // Calculate Dasha
     const { mahadasha, antardasha, antardashaEndMs } = calculateVimshottariDasha(moonLong, birthDate, new Date());
 
-    swe.swe_get_dasha_end_dates = function(julianDay, mode) {
+    swe.swe_get_dasha_end_dates = function() {
       return {
         antardasha_end_jd: (antardashaEndMs + 210866760000000) / 86400000
       };
@@ -307,7 +303,7 @@ export async function getAstrologyData({ dob, tob, pob }) {
       calculatedAt: now.toISOString()
     };
   } catch (error) {
-    console.error("Astrology calculation failed:", error);
-    return null;
+    console.error("CRITICAL ASTROLOGY ENGINE FAILURE:", error);
+    throw new Error("CRITICAL_ASTRO_ENGINE_FAILURE: " + error.message, { cause: error });
   }
 }

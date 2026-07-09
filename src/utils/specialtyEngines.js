@@ -56,7 +56,9 @@ export function calculateLoveEngine(astroData) {
   }
 
   const lagna = astroData?.lagna || "Mesh";
-  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Venus").charCodeAt(0)) % 10;
+  const now = new Date();
+  const dateSeed = now.getFullYear() + now.getMonth() + now.getDate();
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Venus").charCodeAt(0) + dateSeed) % 10;
   
   const marriageLayers = {
     layer1: `Timing: ${formatDateNatural(dateWindow)}`,
@@ -134,7 +136,9 @@ export function calculateMoneyEngine(astroData) {
   }
 
   const lagna = astroData?.lagna || "Mesh";
-  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0)) % 10;
+  const now = new Date();
+  const dateSeed = now.getFullYear() + now.getMonth() + now.getDate();
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0) + dateSeed) % 10;
   
   const careerLayers = {
     layer1: `Timing: ${formatDateNatural(dateWindow)}`,
@@ -169,7 +173,9 @@ export function calculateDailyTransitEngine(astroData, dayOfWeekStr) {
   
   // Use a hash of lagna + day of week to make it deterministic
   const lagna = astroData?.lagna || "Mesh";
-  const seed = (lagna.length + dayOfWeek.length) % 10;
+  const now = new Date();
+  const dateSeed = now.getFullYear() + now.getMonth() + now.getDate();
+  const seed = (lagna.length + dayOfWeek.length + dateSeed) % 10;
   
   let score = 65 + (seed % 4) * 5; // 65, 70, 75, 80
   
@@ -241,7 +247,9 @@ export function calculateHealthEngine(astroData) {
   if (score < 65) recoveryPotential = "Dheere-dheere sudhaar";
 
   const lagna = astroData?.lagna || "Mesh";
-  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Saturn").charCodeAt(0)) % 10;
+  const now = new Date();
+  const dateSeed = now.getFullYear() + now.getMonth() + now.getDate();
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Saturn").charCodeAt(0) + dateSeed) % 10;
 
   const healthLayers = {
     layer1: `Vitality Score: ${score}%`,
@@ -271,11 +279,13 @@ export function calculateForeignTravelEngine(astroData) {
 
   const rahuHouse = houses.Rahu || 1;
   const jupHouse = houses.Jupiter || 1;
+  const moonHouse = houses.Moon || 1;
 
   let travelChance = 50;
 
-  if ([9, 12, 3].includes(rahuHouse)) travelChance += 25;
-  if ([9, 12, 3].includes(jupHouse)) travelChance += 15;
+  if ([9, 12, 3, 7].includes(rahuHouse)) travelChance += 20;
+  if ([9, 12, 3, 7].includes(jupHouse)) travelChance += 15;
+  if ([9, 12, 3, 7].includes(moonHouse)) travelChance += 10;
 
   if (mahadasha === "Rahu" || antardasha === "Rahu") travelChance += 10;
 
@@ -296,7 +306,9 @@ export function calculateForeignTravelEngine(astroData) {
   }
 
   const lagna = astroData?.lagna || "Mesh";
-  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Rahu").charCodeAt(0)) % 10;
+  const now = new Date();
+  const dateSeed = now.getFullYear() + now.getMonth() + now.getDate();
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Rahu").charCodeAt(0) + dateSeed) % 10;
 
   const travelLayers = {
     layer1: `Travel Window: ${formatDateNatural(dateWindow)}`,
@@ -322,21 +334,27 @@ export function calculateChildrenEngine(astroData) {
   const houses = astroData.houses || {};
   const jupHouse = houses.Jupiter || 1;
   const moonHouse = houses.Moon || 1;
+  const venusHouse = houses.Venus || 1;
 
   let score = 55;
   if ([5, 9, 11].includes(jupHouse)) score += 20;
   if ([5, 9, 11].includes(moonHouse)) score += 10;
+  if ([5, 9, 11].includes(venusHouse)) score += 5;
 
   let baseYear = 2026;
+  let dateWindow = "2026-11";
   if (astroData.antardashaEnd) {
     const parts = astroData.antardashaEnd.split('/');
     if (parts.length === 2) {
       baseYear = parseInt(parts[1], 10);
+      dateWindow = `${parts[1]}-${parts[0].padStart(2, '0')}`;
     }
   }
 
   const lagna = astroData?.lagna || "Mesh";
-  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0)) % 10;
+  const now = new Date();
+  const dateSeed = now.getFullYear() + now.getMonth() + now.getDate();
+  const seed = (lagna.charCodeAt(0) + (astroData?.mahadasha || "Jupiter").charCodeAt(0) + dateSeed) % 10;
   
   const conceptionYear = baseYear + (seed % 3);
   const conceptionWindow = `${conceptionYear}-${conceptionYear + 1}`;
@@ -353,7 +371,7 @@ export function calculateChildrenEngine(astroData) {
   return {
     childrenPotential: "Santan sukh",
     familyGrowth: "Vridhi",
-    childWindows: [conceptionWindow],
+    childWindows: [formatDateNatural(dateWindow)],
     layers: {
       children: childrenLayers
     }

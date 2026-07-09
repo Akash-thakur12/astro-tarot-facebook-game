@@ -1716,4 +1716,51 @@ Ganesh ji ki upasana karein. Kya aur kuch janna chahte hain?
     const prompt2 = call2[0];
     expect(prompt2).toContain('"partnerData":{"name":"Priya"');
   });
+
+  it('40. Hook Model JSON Parsing Test', async () => {
+    const { executeAIWithRetries } = await import('../api/services/aiExecution.js');
+    const { generateAIResponse } = await import('../services/aiService.js');
+    const mockGenerate = vi.mocked(generateAIResponse);
+
+    const mockPayload = {
+      user_response: "Suno... Tumhari kundali me ek bada rahasya hai. Om Suryaya Namaha ka jaap karo! Lekin agle 24 ghante me ek grah badlega. Kya hoga tumhare career par asar, ye mai tumhe kal bataunga?",
+      dailySecret: "Shani ki drishti se bacho",
+      new_memory_state: {
+        detectedCareer: "Technology",
+        detectedBusiness: "E-commerce",
+        newDiscouragedPaths: ["Fashion Designing"],
+        summary: "Important career shift under Sun-Moon dasha"
+      },
+      debug_info: {
+        engine_used: "career",
+        calculated_lagna: "Kanya",
+        active_mahadasha: "Sun",
+        active_antardasha: "Moon",
+        confidence_score: 98.5
+      }
+    };
+
+    mockGenerate.mockResolvedValueOnce(JSON.stringify(mockPayload));
+
+    const options = {
+      fullPrompt: "Mock Prompt",
+      history: [],
+      astroData: { lagna: "Kanya", mahadasha: "Sun", antardasha: "Moon" },
+      mode: "chat",
+      uid: "test-user-123",
+      userData: { question: "Job kab milegi" },
+      progress: { score: 10, streak: 1, lastLogin: "", secrets: {}, recommendationMemory: {} },
+      detectedIntent: "career",
+      pastHistory: [],
+      skipDashaPreservation: true
+    };
+
+    const res = await executeAIWithRetries(options);
+
+    expect(res.aiText).toContain("Suno... Tumhari kundali");
+    expect(res.cliffhangerText).toBe("Kya hoga tumhare career par asar, ye mai tumhe kal bataunga?");
+    expect(options.llmSecret).toBe("Shani ki drishti se bacho");
+    expect(options.memoryState.recommendationMemory.advisedCareer).toBe("Technology");
+    expect(options.memoryState.recommendationMemory.discouragedPaths).toContain("Fashion Designing");
+  });
 });
