@@ -688,29 +688,79 @@ const AskPandit = () => {
         let displayedText = "";
         let isFirstToken = true;
         let isStreamFinished = false;
+        let lastCharTypedTime = 0;
+        let pauseUntil = 0;
+
+        let onTypingComplete;
+        const typingCompletePromise = new Promise((resolve) => {
+          onTypingComplete = resolve;
+        });
 
         const updateTyping = () => {
-          if (streamBuffer.length > 0) {
-            let step = 1;
-            if (streamBuffer.length > 50) {
-              step = 5;
-            } else if (streamBuffer.length > 20) {
-              step = 3;
-            }
-            
-            const charsToType = streamBuffer.slice(0, step);
-            streamBuffer = streamBuffer.slice(step);
-            displayedText += charsToType;
+          const now = performance.now();
 
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: 'model', content: displayedText };
-              return updated;
-            });
+          // Handle micro-pauses
+          if (now < pauseUntil) {
+            if (!isStreamFinished || streamBuffer.length > 0) {
+              activeAnimationFrameRef.current = requestAnimationFrame(updateTyping);
+            } else {
+              onTypingComplete();
+            }
+            return;
+          }
+
+          if (streamBuffer.length > 0) {
+            let step = 0;
+            let shouldCheckPause = false;
+
+            // Dynamically adjust speed based on buffer size to never fall behind by more than 2 seconds
+            if (streamBuffer.length > 150) {
+              step = 6; // Very large buffer: 6 characters per frame
+            } else if (streamBuffer.length > 100) {
+              step = 4; // Large buffer catch-up: 4 characters per frame
+            } else if (streamBuffer.length > 40) {
+              step = 2; // Medium buffer catch-up: 2 characters per frame
+            } else {
+              // Normal typing speed: 1 character every 30ms (decreased by ~30-40% from frame-rate)
+              if (now - lastCharTypedTime >= 30) {
+                step = 1;
+                shouldCheckPause = true;
+              }
+            }
+
+            if (step > 0) {
+              const charsToType = streamBuffer.slice(0, step);
+              streamBuffer = streamBuffer.slice(step);
+              displayedText += charsToType;
+              lastCharTypedTime = now;
+
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: 'model', content: displayedText };
+                return updated;
+              });
+
+              // Add natural micro-pauses on punctuation marks (only for single character normal typing to keep flow natural)
+              if (shouldCheckPause && step === 1) {
+                const char = charsToType;
+                let pauseDuration = 0;
+                if (char === '.' || char === '।') pauseDuration = 120;
+                else if (char === ',') pauseDuration = 60;
+                else if (char === '?') pauseDuration = 150;
+                else if (char === '!') pauseDuration = 150;
+                else if (char === '\n') pauseDuration = 100;
+
+                if (pauseDuration > 0) {
+                  pauseUntil = now + pauseDuration;
+                }
+              }
+            }
           }
 
           if (!isStreamFinished || streamBuffer.length > 0) {
             activeAnimationFrameRef.current = requestAnimationFrame(updateTyping);
+          } else {
+            onTypingComplete();
           }
         };
 
@@ -720,15 +770,6 @@ const AskPandit = () => {
           const { done, value } = await reader.read();
           if (done) {
             isStreamFinished = true;
-            if (streamBuffer.length > 0) {
-              displayedText += streamBuffer;
-              streamBuffer = "";
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: 'model', content: displayedText };
-                return updated;
-              });
-            }
             break;
           }
           
@@ -741,6 +782,9 @@ const AskPandit = () => {
           
           streamBuffer += chunk;
         }
+
+        // Wait for the typing animation to fully finish typing the buffered text
+        await typingCompletePromise;
 
         if (activeAnimationFrameRef.current) {
           cancelAnimationFrame(activeAnimationFrameRef.current);

@@ -1634,6 +1634,8 @@ export default async function handler(req, res) {
   let cliffhangerText = "";
   let savedMysteries = userDataDoc.savedMysteries || [];
   let topicState = null;
+  let memoryState = null;
+  let tierType = null;
 
   // Handle system commands (coins, premium, account)
   if (mode === 'chat' || mode === 'personal') {
@@ -2155,7 +2157,7 @@ Current Season: ${season}`;
     if (isRelationshipInvestigationQuery) {
       classification = { tier: 2, topic: 'love', secondary: [] };
     }
-    const tierType = classification.tier;
+    tierType = classification.tier;
     const questionTopic = classification.topic;
     const secondaryRaw = classification.secondary || [];
     const overflowRaw = classification.overflow || [];
@@ -2902,7 +2904,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         const parsed = processRawResponse(rawAccumulator.text, optionsObj);
         const cliffhangerText = parsed.cliffhangerText;
         const llmSecret = optionsObj.llmSecret;
-        const memoryState = optionsObj.memoryState;
+        memoryState = optionsObj.memoryState;
 
         // Perform final injectSecretAndScore using fixed Temp slicing to get only secret & score
         const finalResponse = await injectSecretAndScore(
@@ -2925,7 +2927,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         try {
           await db.runTransaction(async (tx) => {
             const snap = await tx.get(userRef);
-            if (snap.exists()) {
+            if (snap.exists) {
               if (tierType === 1) {
                 const coins = snap.data()?.coins || 0;
                 if (coins >= AI_QUESTION_COST) {
@@ -3003,6 +3005,7 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         jsonResponse = aiResult.jsonResponse;
         aiText = aiResult.aiText;
         cliffhangerText = aiResult.cliffhangerText;
+        memoryState = aiResult.memoryState;
         
         // Persist parsed memoryState to Firestore via progressEngine
         if (aiResult.memoryState) {
