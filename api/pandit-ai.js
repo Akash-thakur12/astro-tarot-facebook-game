@@ -50,6 +50,7 @@ import { humanize } from '../src/utils/humanizer.js';
 import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
 import { getAstrologyData } from '../src/utils/astroEngine.js';
 import { executeAIWithRetries, executeAIWithRetriesStream, extractAndRemoveSecrets, processRawResponse } from '../lib/aiExecution.js';
+import { validateResponse, rewriteResponse } from '../lib/responseValidator.js';
 import { extractSemanticFacts, mergeSemanticFacts, getFact, setFact, migrateFactMemory, sanitizeFactMemory } from '../src/utils/semanticMemory.js';
 import {
   calculateLoveEngine,
@@ -2843,13 +2844,26 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
     console.log(`Question: ${userQueryForLLM}`);
   }
 
+  let finalResponseText = "";
+  let finalCliffhangerText = "";
+  let finalMemoryState = null;
+  let finalLlmSecret = "";
+  let finalJsonResponse = null;
+  let rewritesCount = 0;
+  let finalPass = false;
+  let validatorResult = { score: 100, violations: [] };
+
+  const isLangHindi = resolvedLanguage === 'Hindi' || isDevanagari;
+  const fallbackText = isLangHindi 
+    ? "Is prashn ka satik uttar dene ke liye adhik spasht jaankari ki avashyakta hai."
+    : "More information is required to provide a reliable answer.";
+
   if (!useOfflineFallback) {
-    if (stream) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let aiResult;
       try {
-        console.log("Prompt chars:", fullPrompt.length);
-        console.log("Calling AI (Stream)...");
-        
-        const prepResult = await executeAIWithRetriesStream({
+        console.log(`Calling AI (Attempt ${attempt + 1})...`);
+        aiResult = await executeAIWithRetries({
           fullPrompt,
           history,
           astroData,
@@ -2868,221 +2882,210 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
           isVague,
           prepStartTime
         });
-        
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Transfer-Encoding', 'chunked');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        
-        const responseStream = generateAIResponseStream(prepResult.injectedPrompt, {
-          prepStartTime
-        });
-        
-        let hasSentStreamStart = false;
-        const rawAccumulator = { text: "" };
-
-        async function* parseAndStreamJSON(streamSrc, accumulator) {
-          let accumulated = "";
-          let state = 0; // 0: searching, 1: streaming, 2: ended
-          let escapeActive = false;
-          let index = 0;
-          
-          for await (const chunk of streamSrc) {
-            accumulated += chunk;
-            if (accumulator) accumulator.text = accumulated;
-            
-            if (state === 0) {
-              const trimmed = accumulated.trim();
-              if (trimmed.length > 0) {
-                if (!trimmed.startsWith('{')) {
-                  state = 1;
-                  index = 0;
-                } else {
-                  const keyIdx = accumulated.indexOf('"user_response"');
-                  if (keyIdx !== -1) {
-                    const colonIdx = accumulated.indexOf(':', keyIdx);
-                    if (colonIdx !== -1) {
-                      const quoteIdx = accumulated.indexOf('"', colonIdx);
-                      if (quoteIdx !== -1) {
-                        state = 1;
-                        index = quoteIdx + 1;
-                      }
-                    }
-                  } else if (accumulated.length > 150) {
-                    state = 1;
-                    index = 0;
-                  }
-                }
-              }
-            }
-            
-            if (state === 1) {
-              while (index < accumulated.length) {
-                const char = accumulated[index];
-                index++;
-                
-                if (escapeActive) {
-                  escapeActive = false;
-                  if (char === 'n') {
-                    yield '\n';
-                  } else if (char === 't') {
-                    yield '\t';
-                  } else {
-                    yield char;
-                  }
-                } else if (char === '\\') {
-                  escapeActive = true;
-                } else if (char === '"') {
-                  state = 2;
-                  break;
-                } else {
-                  yield char;
-                }
-              }
-            }
-          }
-        }
-
-        const cleanStream = parseAndStreamJSON(responseStream, rawAccumulator);
-        let cleanText = "";
-
-        for await (const chunk of cleanStream) {
-          if (!hasSentStreamStart) {
-            console.log("STREAM_START");
-            hasSentStreamStart = true;
-          }
-          res.write(chunk);
-          cleanText += chunk;
-        }
-
-        console.log("STREAM_END");
-
-        // Parse memory state, secrets, and cliffhangers from raw text
-        const optionsObj = { llmSecret: "", memoryState: null };
-        const parsed = processRawResponse(rawAccumulator.text, optionsObj);
-        const cliffhangerText = parsed.cliffhangerText;
-        const llmSecret = optionsObj.llmSecret;
-        memoryState = optionsObj.memoryState;
-
-        // Perform final injectSecretAndScore using fixed Temp slicing to get only secret & score
-        const finalResponse = await injectSecretAndScore(
-          "Temp", 
-          uid, 
-          userData, 
-          progress, 
-          getSecretCategory(detectedIntent), 
-          pastHistory, 
-          llmSecret
-        );
-
-        const extraText = finalResponse.slice(4);
-        if (extraText.length > 0) {
-          res.write(extraText);
-        }
-        res.end();
-
-        // Perform Firestore updates in background
-        try {
-          await db.runTransaction(async (tx) => {
-            const snap = await tx.get(userRef);
-            if (snap.exists) {
-              if (tierType === 1) {
-                const coins = snap.data()?.coins || 0;
-                if (coins >= AI_QUESTION_COST) {
-                  tx.update(userRef, { coins: coins - AI_QUESTION_COST });
-                }
-              }
-            }
-            if (mode === 'chat' || mode === 'personal') {
-              const latestUserData = snap.data() || {};
-              const latestTopicProgress = getTopicProgress(latestUserData);
-              const latestRevealed = latestUserData.revealedLayers || {};
-              const latestCliffhangers = latestUserData.lastCliffhangers || [];
-              const updateResult = updateTopicProgress(uid, topicState, latestTopicProgress, latestRevealed);
-              let updatedCliffhangersList = [...latestCliffhangers];
-              if (cliffhangerText) {
-                updatedCliffhangersList.push(cliffhangerText);
-              }
-              if (updatedCliffhangersList.length > 3) {
-                updatedCliffhangersList = updatedCliffhangersList.slice(-3);
-              }
-              tx.update(userRef, {
-                topicProgress: updateResult.topicProgress,
-                revealedLayers: updateResult.revealedLayers,
-                lastActiveTopic: activeTopic,
-                lastCliffhangers: updatedCliffhangersList,
-                savedMysteries: savedMysteries
-              });
-            }
-          });
-        } catch (txError) {
-          console.error("Deduction Transaction failed for stream:", txError);
-        }
-        return;
       } catch (err) {
-        console.error("Streaming error in pandit-ai.js:", err);
-        const friendlyFallbackText = getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus);
-        const fallbackInjected = await injectSecretAndScore(friendlyFallbackText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory, "");
-        res.write(fallbackInjected);
-        res.end();
-        return;
+        console.error(`AI Generation attempt ${attempt + 1} failed:`, err);
+        lastError = err;
+        if (attempt === 2) {
+          finalResponseText = fallbackText;
+          finalJsonResponse = { text: finalResponseText };
+          break;
+        }
+        continue;
       }
-    }
-
-    try {
-      console.log("Prompt chars:", fullPrompt.length);
-      console.log("Calling AI...");
-      
-      const aiResult = await executeAIWithRetries({
-        fullPrompt,
-        history,
-        astroData,
-        mode,
-        uid,
-        userData,
-        progress,
-        detectedIntent,
-        pastHistory,
-        skipDashaPreservation,
-        resolvedLanguage,
-        isDevanagari,
-        maritalStatus,
-        updatedFacts,
-        isGreeting,
-        isVague,
-        prepStartTime
-      });
 
       if (aiResult.isFallback) {
-        console.log("AI SUCCESS (Fallback)");
-        success = true;
-        jsonResponse = { text: aiResult.fallbackText };
-      } else {
-        console.log("AI SUCCESS");
-        success = true;
-        jsonResponse = aiResult.jsonResponse;
-        aiText = aiResult.aiText;
-        cliffhangerText = aiResult.cliffhangerText;
-        memoryState = aiResult.memoryState;
-        
-        // Persist parsed memoryState to Firestore via progressEngine
-        if (aiResult.memoryState) {
-          const { mergeRecommendationMemory } = await import('../lib/memoryStateParser.js');
-          const mergedMemory = mergeRecommendationMemory(progress.recommendationMemory, aiResult.memoryState.recommendationMemory);
-          const confidenceScore = aiResult.memoryState.debug_info?.confidenceScore ?? progress.debug_info?.confidenceScore ?? null;
-          
-          await updateProgress(progressUid, 'memory_update', {
-            recommendationMemory: mergedMemory,
-            debug_info: { confidenceScore }
-          });
+        finalResponseText = aiResult.fallbackText || fallbackText;
+        finalJsonResponse = { text: finalResponseText };
+        finalPass = true;
+        break;
+      }
+
+      const rawText = aiResult.aiText || "";
+      const recMem = progress.recommendationMemory || {};
+      validatorResult = validateResponse(rawText, userQueryForLLM, history, recMem, mode);
+
+      console.log(`[VALIDATION ATTEMPT ${attempt + 1}] score=${validatorResult.score}, violations=${JSON.stringify(validatorResult.violations)}`);
+
+      if (validatorResult.isValid) {
+        finalResponseText = rawText;
+        finalCliffhangerText = aiResult.cliffhangerText || "";
+        finalMemoryState = aiResult.memoryState || null;
+        finalLlmSecret = aiResult.llmSecret || "";
+        finalJsonResponse = aiResult.jsonResponse;
+        finalPass = true;
+        break;
+      }
+
+      const hasHighSeverity = validatorResult.violations.some(v => ["ASSUMPTION", "UNSUPPORTED_TIMING", "LANGUAGE_MISMATCH"].includes(v));
+      const hasMediumSeverity = validatorResult.violations.some(v => ["TOPIC_DRIFT", "FOLLOWUP_SPAM"].includes(v));
+
+      if (hasHighSeverity) {
+        console.log(`[VALIDATOR] HIGH severity violation detected: ${JSON.stringify(validatorResult.violations)}. Rejecting and retrying...`);
+        continue;
+      }
+
+      if (hasMediumSeverity) {
+        console.log(`[VALIDATOR] MEDIUM severity violation detected: ${JSON.stringify(validatorResult.violations)}. Rewriting...`);
+        const rewrittenText = rewriteResponse(rawText, validatorResult.violations);
+        const recheck = validateResponse(rewrittenText, userQueryForLLM, history, recMem, mode);
+        rewritesCount++;
+
+        console.log(`[VALIDATION REWRITE ATTEMPT ${attempt + 1}] score=${recheck.score}, violations=${JSON.stringify(recheck.violations)}`);
+
+        if (recheck.isValid) {
+          finalResponseText = rewrittenText;
+          finalCliffhangerText = aiResult.cliffhangerText || "";
+          finalMemoryState = aiResult.memoryState || null;
+          finalLlmSecret = aiResult.llmSecret || "";
+
+          // Re-create the jsonResponse for the rewritten text
+          const deduplicatedText = removeDuplicateSentences(rewrittenText);
+          let completedResponse = await injectSecretAndScore(
+            deduplicatedText, 
+            uid, 
+            userData, 
+            progress, 
+            getSecretCategory(detectedIntent), 
+            pastHistory
+          );
+          if (isGreeting || isVague) {
+            completedResponse = completedResponse.replace(/🔮\s*Prediction:\s*/gi, "").replace(/📿\s*Astrological\s*Reasoning:\s*/gi, "").replace(/📿\s*Reasoning:\s*/gi, "").replace(/🪔\s*Guidance:\s*/gi, "").replace(/🪔\s*Upay:\s*/gi, "").trim();
+          }
+          if (pastHistory.length > 0) {
+            completedResponse = completedResponse.replace(/^(🔮\s*Prediction:\s*(?:\n\n)?)(?:Namaste\s+Beta|Pranam\s+Beta|Kalyan\s+ho\s+Beta|Beta,\s+aapka\s+swagat\s+hai|Aapka\s+swagat\s+hai|Beta\b,?\s*swagat\s+hai)[!.,\s\n]*/i, '$1');
+            completedResponse = completedResponse.replace(/^(?:Namaste\s+Beta|Pranam\s+Beta|Kalyan\s+ho\s+Beta|Beta,\s+aapka\s+swagat\s+hai|Aapka\s+swagat\s+hai|Beta\b,?\s*swagat\s+hai)[!.,\s\n]*/i, '');
+          }
+
+          finalJsonResponse = { text: completedResponse };
+          finalPass = true;
+          validatorResult = recheck;
+          break;
+        } else {
+          console.log(`[VALIDATOR] Rewritten text still invalid. Retrying LLM generation...`);
+          continue;
         }
       }
+    }
+  } else {
+    finalResponseText = getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus);
+    const formattedFallback = await injectSecretAndScore(
+      finalResponseText, 
+      uid, 
+      userData, 
+      progress, 
+      getSecretCategory(detectedIntent), 
+      pastHistory
+    );
+    finalJsonResponse = { text: formattedFallback };
+    finalCliffhangerText = "";
+    finalMemoryState = null;
+    finalLlmSecret = "";
+    finalPass = true;
+    validatorResult = { score: 100, violations: [] };
+  }
+
+  if (!finalPass) {
+    const formattedFallback = await injectSecretAndScore(
+      fallbackText, 
+      uid, 
+      userData, 
+      progress, 
+      getSecretCategory(detectedIntent), 
+      pastHistory
+    );
+    finalResponseText = fallbackText;
+    finalJsonResponse = { text: formattedFallback };
+    finalCliffhangerText = "";
+    finalMemoryState = null;
+    finalLlmSecret = "";
+  }
+
+  // Validator Telemetry Log
+  console.log(`[VALIDATOR]
+score=${validatorResult.score}
+violations=[${validatorResult.violations.join(",")}]
+rewrites=${rewritesCount}
+final_pass=${finalPass}`);
+
+  // Persist parsed memoryState to Firestore via progressEngine
+  if (finalMemoryState) {
+    const { mergeRecommendationMemory } = await import('../lib/memoryStateParser.js');
+    const mergedMemory = mergeRecommendationMemory(progress.recommendationMemory, finalMemoryState.recommendationMemory);
+    const confidenceScore = finalMemoryState.debug_info?.confidenceScore ?? progress.debug_info?.confidenceScore ?? null;
+    
+    try {
+      await updateProgress(progressUid, 'memory_update', {
+        recommendationMemory: mergedMemory,
+        debug_info: { confidenceScore }
+      });
+      progress.recommendationMemory = mergedMemory;
     } catch (err) {
-      console.log("AI FAILED:", err.message);
-      console.error("AI Generation failed:", err.message || err);
-      lastError = err;
+      console.error("Failed to update progress for memory state:", err);
     }
   }
+
+  if (stream) {
+    try {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Transfer-Encoding', 'chunked');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+
+      res.write(finalJsonResponse.text);
+      res.end();
+
+      // Perform Firestore updates in background
+      try {
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(userRef);
+          if (snap.exists) {
+            if (tierType === 1) {
+              const coins = snap.data()?.coins || 0;
+              if (coins >= AI_QUESTION_COST) {
+                tx.update(userRef, { coins: coins - AI_QUESTION_COST });
+              }
+            }
+          }
+          if (mode === 'chat' || mode === 'personal') {
+            const latestUserData = snap.data() || {};
+            const latestTopicProgress = getTopicProgress(latestUserData);
+            const latestRevealed = latestUserData.revealedLayers || {};
+            const latestCliffhangers = latestUserData.lastCliffhangers || [];
+            const updateResult = updateTopicProgress(uid, topicState, latestTopicProgress, latestRevealed);
+            let updatedCliffhangersList = [...latestCliffhangers];
+            if (finalCliffhangerText) {
+              updatedCliffhangersList.push(finalCliffhangerText);
+            }
+            if (updatedCliffhangersList.length > 3) {
+              updatedCliffhangersList = updatedCliffhangersList.slice(-3);
+            }
+            tx.update(userRef, {
+              topicProgress: updateResult.topicProgress,
+              revealedLayers: updateResult.revealedLayers,
+              lastActiveTopic: activeTopic,
+              lastCliffhangers: updatedCliffhangersList,
+              savedMysteries: savedMysteries
+            });
+          }
+        });
+      } catch (txError) {
+        console.error("Deduction Transaction failed for stream:", txError);
+      }
+      return;
+    } catch (err) {
+      console.error("Streaming error in pandit-ai.js:", err);
+      const fallbackInjected = await injectSecretAndScore(fallbackText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory, "");
+      res.write(fallbackInjected);
+      res.end();
+      return;
+    }
+  }
+
+  // Set response parameters for non-streaming
+  success = finalPass;
+  jsonResponse = finalJsonResponse;
+  cliffhangerText = finalCliffhangerText;
+  memoryState = finalMemoryState;
 
   if (!success) {
     console.error("AI Generation failed:", lastError?.message || lastError || "Unknown error");

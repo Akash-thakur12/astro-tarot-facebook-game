@@ -32,7 +32,8 @@ export default defineConfig({
       'tests/multiIntent.spec.js',
       'tests/followUp.spec.js',
       'tests/topicEngine.spec.js',
-      'tests/careerBusiness.spec.js'
+      'tests/careerBusiness.spec.js',
+      'tests/responseValidator.spec.js'
     ],
   },
 })
