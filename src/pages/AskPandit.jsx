@@ -655,26 +655,67 @@ const AskPandit = () => {
           currentTone: tone, 
           userData: { ...personalForm, question },
           history: trimmedHistory,
-          language: currentLanguage
+          language: currentLanguage,
+          stream: true
         })
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'API Request Failed');
-
-      const aiResponseText = data.text;
-      const modelMessage = { role: 'model', content: aiResponseText };
-      setMessages(prev => [...prev, modelMessage]);
-      
-      // FIRESTORE: Save model message (if not a profile card)
-      if (user?.uid && modelMessage.type !== "profile") {
-        savePanditMessage(user.uid, 'model', aiResponseText);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'API Request Failed');
       }
-      
-      // Sync global user state to reflect coin deduction immediately
-      await refreshUser();
-      
-      showInterstitial(user);
+
+      const contentType = response.headers.get('Content-Type') || '';
+      const isStream = response.body && (contentType.includes('text/event-stream') || contentType.includes('text/plain') || contentType.includes('application/octet-stream'));
+
+      if (isStream) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        
+        const modelMessagePlaceholder = { role: 'model', content: '' };
+        setMessages(prev => [...prev, modelMessagePlaceholder]);
+        
+        let fullText = "";
+        let isFirstToken = true;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          
+          if (isFirstToken && chunk.trim().length > 0) {
+            isFirstToken = false;
+            setLoading(false);
+          }
+          
+          fullText += chunk;
+          
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'model', content: fullText };
+            return updated;
+          });
+        }
+        
+        if (user?.uid) {
+          savePanditMessage(user.uid, 'model', fullText);
+        }
+        
+        await refreshUser();
+        showInterstitial(user);
+      } else {
+        const data = await response.json();
+        const aiResponseText = data.text;
+        const modelMessage = { role: 'model', content: aiResponseText };
+        setMessages(prev => [...prev, modelMessage]);
+        
+        if (user?.uid && modelMessage.type !== "profile") {
+          savePanditMessage(user.uid, 'model', aiResponseText);
+        }
+        
+        await refreshUser();
+        showInterstitial(user);
+      }
     } catch (error) {
       console.error("AI Error:", error);
       setErrorMsg("Pandit AI is currently meditating. Please try again.");

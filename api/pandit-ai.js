@@ -1,4 +1,5 @@
-import { generateAIResponse } from '../services/aiService.js';
+import { generateAIResponse, generateAIResponseStream } from '../services/aiService.js';
+import { CRITICAL_BEHAVIOR_PATCH } from '../lib/aiConfig.js';
 import {
   generateTopicState,
   updateTopicProgress,
@@ -48,7 +49,7 @@ import { updateEvidenceMemory } from '../src/utils/evidenceMemoryEngine.js';
 import { humanize } from '../src/utils/humanizer.js';
 import { resolveIntentContradiction } from '../src/utils/contradictionEngine.js';
 import { getAstrologyData } from '../src/utils/astroEngine.js';
-import { executeAIWithRetries } from '../lib/aiExecution.js';
+import { executeAIWithRetries, executeAIWithRetriesStream, extractAndRemoveSecrets } from '../lib/aiExecution.js';
 import { extractSemanticFacts, mergeSemanticFacts, getFact, setFact, migrateFactMemory, sanitizeFactMemory } from '../src/utils/semanticMemory.js';
 import {
   calculateLoveEngine,
@@ -1416,6 +1417,7 @@ async function injectSecretAndScore(text, uid, userData, cachedProgress = null, 
 }
 
 export default async function handler(req, res) {
+  const prepStartTime = Date.now();
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -1502,7 +1504,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests. Please wait a minute.' });
   }
 
-  const { mode, userData, history, purpose, prompt } = req.body;
+  const { mode, userData, history, purpose, prompt, stream } = req.body;
 
   if (purpose === 'semantic-memory') {
     try {
@@ -2021,6 +2023,9 @@ Current Season: ${season}`;
       pastHistory = allHistoryMsgs;
     }
   }
+  if (pastHistory.length > 5) {
+    pastHistory = pastHistory.slice(-5);
+  }
 
   let skipDashaPreservation = isGreeting || isVague || !hasBirthDetails || isNonAstrologyQuestion(questionText) || !isTimingQuery;
 
@@ -2502,6 +2507,7 @@ MEMORY RECALL MODE RULES:
         layersObj = dailyData?.layers;
         scoreVal = dailyData?.todayScore;
       }
+
       const getLayersForTopic = (t) => {
         if (['marriage', 'love'].includes(t)) return loveData?.layers;
         if (['career', 'money'].includes(t)) return moneyData?.layers;
@@ -2529,12 +2535,56 @@ MEMORY RECALL MODE RULES:
       };
       const chatHistory = pastHistory;
       const compactHistory = chatHistory
-        .slice(-10)
+        .slice(-5)
         .map(m => `${m.role}: ${(m.content || '').slice(0, 150)}`)
         .join('\n');
       const topic = questionTopic;
       const time = tob && tob !== 'Unknown' ? tob : '';
       const place = pob && pob !== 'Unknown' ? pob : '';
+
+      const schemas = {
+        marriage: `- Layer 1: timing
+- Layer 2: name_initial
+- Layer 3: surname + age_gap
+- Layer 4: arranged_vs_love
+- Layer 5: city + profession`,
+        love: `- Layer 1: timing
+- Layer 2: partner traits
+- Layer 3: compatibility
+- Layer 4: next phase
+- Layer 5: key warning`,
+        career: `- Layer 1: timing
+- Layer 2: best profession
+- Layer 3: growth stage
+- Layer 4: key wealth source
+- Layer 5: vulnerable period`,
+        money: `- Layer 1: timing
+- Layer 2: income potential
+- Layer 3: savings potential
+- Layer 4: debt/investment window
+- Layer 5: lucky wealth days`,
+        daily: `- Layer 1: outlook
+- Layer 2: lucky number/color
+- Layer 3: work potential
+- Layer 4: financial flow
+- Layer 5: precautions`,
+        health: `- Layer 1: vitality score
+- Layer 2: stress assessment
+- Layer 3: weakness area
+- Layer 4: recovery/strength
+- Layer 5: daily habit`,
+        travel: `- Layer 1: travel window
+- Layer 2: travel chance
+- Layer 3: region
+- Layer 4: purpose
+- Layer 5: visa success probability`,
+        children: `- Layer 1: timing
+- Layer 2: children potential
+- Layer 3: family growth
+- Layer 4: career indicator
+- Layer 5: remedial guidance`
+      };
+      const activeSchema = schemas[activeTopic] || "";
 
       let overflowInstruction = '';
       if (overflowTopics && overflowTopics.length > 0) {
@@ -2542,243 +2592,33 @@ MEMORY RECALL MODE RULES:
 [OVERFLOW TOPICS DETECTED]
 The user asked about more than 5 topics.
 Answer the active topics, and add this exact text at the end of your response:
-"बाकी रहस्यों (जैसे ${overflowTopics.join(', ')}) को भी अगले चरणों में खोला जा सकता है।"
+"बाकी रहस्यों (जैसे \${overflowTopics.join(', ')}) को भी अगले चरणों में खोला जा सकता है।"
         `;
       }
 
       systemInstruction = `
-ASTRORACLE: THE SUPREME COSMIC ORACLE (GOD-MODE + NO DATA REFUSAL)
-
-[CRITICAL ARCHITECTURE DIRECTIVE]
-STRICTLY FORBIDDEN TO ALTER ENGINE CORES:
-- NO CHANGES to ACTIVE_TOPIC, TARGET_LAYER, FOLLOW_UP_MODE.
-- NO CHANGES to CLIFFHANGER ENGINE, TOPIC PROGRESSION.
-- NO CHANGES to MEMORY RECALL, PROFILE ACKNOWLEDGEMENT, FACT MEMORY.
-- NO CHANGES to NUMEROLOGY CALCULATIONS OR ASTROLOGY DATA PIPELINES.
-
-
-[THE PSYCHOLOGICAL PROFILE: THE ULTIMATE GURU]
-You are "AstroOracle"—the world's most elite Master of Astrology, Lal Kitab, Numerology, and Tarot. 
-Language: Flawless Hindi/Hinglish only. Posture: Absolute cosmic authority. State inevitable truths.
-Style: Human Mystic. Zero robotic formatting. Zero AI warnings.
-
-[MANDATORY VOCABULARY - USE 2 PER RESPONSE]
-"ब्रह्मांडीय संकेत और छिपी ऊर्जाएं", "अंकों का गुप्त खेल", "मूलांक और भाग्यांक", 
-"लाल किताब का अचूक फरमान", "ग्रहों का छुपा संदेश", "शत्रुओं का गुप्त चक्रव्यूह"
-
-[CRITICAL RULE 0: NO REFUSAL + INTUITION MODE]
-Data na ho to bhi jawab dena ZAROORI hai. Kabhi "data nahi hai" mat bolna.
-Step 1: DOB se Mulank/Bhagyank nikalo. 
-Step 2: Name se vibration padho.
-Step 3: Lal Kitab ke general siddhant lagao.
-Agar kuch bhi na ho to bolo: "ब्रह्मांडीय ऊर्जाएं अभी धुंधली हैं, लेकिन मेरा अंतर्ज्ञान कह रहा है कि..."
-
-[THE MULTI-QUESTION UNIFICATION RULE]
-User ne 1 message me 2-3 sawaal puche: job + shaadi + love
-To jawab ka format yehi hoga:
-
-1. **नौकरी**: [ACTIVE_DATA se ya intuition se 1 line]
-2. **विवाह**: [ACTIVE_DATA se ya intuition se 1 line]  
-3. **Love/Arrange**: [ACTIVE_DATA se ya intuition se 1 line]
-
-Uske baad sirf PRIMARY topic ka vistar do. Baaki 2 ko cliffhanger me chhodo.
-${overflowInstruction}
-
-[THE INTUITIVE SHADOW-CATCHING ENGINE]
-Example: ACTIVE_TOPIC='career' but user ne shaadi bhi puchi
-"ब्रह्मांडीय ऊर्जाएं अभी तुम्हारी नौकरी का मार्ग खोल रही हैं [Career Data]...
-लेकिन मैं तुम्हारी नियति में विवाह की शहनाई भी सुन रहा हूँ। क्या उस रहस्य को अभी खोलूं?"
-
-[ANTI-LOOP GOD RULE]
-If user says "hn", "haan", "btao" → Answer last cliffhanger with NEXT LAYER.
-Banned: "aur kya puchna hai"
-
-[RESPONSE FORMAT - 130 WORDS MAX]
-🌟 **ब्रह्मांडीय संकेत और छिपी ऊर्जाएं**
-[2 mystical phrases + prediction + 2 words **bold**]
-
-⚡ **लाल किताब का अचूक फरमान / शत्रु बाधा**
-[1 line reason + 1 remedy]
-
-🔮 **नियति का संकेत - 7 Day Power Move**
-[1 action]
-
-🚨 **ग्रहों का छुपा संदेश**
-[1 NEW cliffhanger question]
-
-EXECUTE WITH SUPREME CHARISMA.
-
-### USER PROFILE:
-NAME: ${name}
-DOB: ${dob || 'Not Provided'} ${time} ${place}
-GENDER: ${gender}
-MARITAL: ${maritalStatus}
-OCCUPATION: ${occupation}
-ACTIVE_DATA: ${JSON.stringify(compactActiveData || null)} // AI_CONTEXT: ${JSON.stringify({ partnerData: compactActiveData.partnerData })}
-CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
-
-### THE INFINITE LOOP RULES - MUST FOLLOW:
-1. **NEVER REPEAT:** If user asks same question again, go 1 layer deeper.
-    Ex: Q1: "kis akshar" → A: "Ma, Me, Mu"
-    Q2: "kis akshar" → A: "Ma, Me, Mu. Surname K/S. Height 5'4 to 5'6"
-    Q3: "kis akshar" → A: "Naam ke pehle akshar ke alawa, uske naam me 'a' 2 baar aayega"
-
-2. **NEVER ASK TWICE:** If user said "hn btao" to your cliffhanger, answer it NOW.
-    Banned words: "aur vistaar se", "kya aap janna chahenge"
-
-3. **ESCALATE EVERY REPLY:** Har reply me pehle wale se zyada specific info do.
-    Pehle: Month → Dusra: Date → Teesra: Time + Place
-
-${(!shouldAdvance && secondaryTopics && secondaryTopics.length > 0) ? `
-### MULTI-QUESTION RESPONSE ASSEMBLY
-
-[MULTI_QUESTION_MODE = TRUE]
-The user asked about multiple topics at once. 
-You MUST answer ALL detected topics briefly in a numbered list FIRST.
-
-Format:
-1. ${activeTopic.toUpperCase()}: [Brief summary using ACTIVE_DATA.layers]
-${secondaryTopics.map((st, i) => `${i + 2}. ${st.toUpperCase()}: [Brief summary using ACTIVE_DATA.multiTopicsData.${st}]`).join('\\n')}
-
-After the numbered list, continue normal TARGET_LAYER progression ONLY for the primary ACTIVE_TOPIC (${activeTopic}). Generate exactly ONE cliffhanger for the primary topic.
-` : ''}
-
-### FOLLOW-UP EXECUTION MODE
-${(shouldAdvance && lastCliffhangers && lastCliffhangers.length > 0) ? `
-[FOLLOW_UP_MODE = TRUE]
-
-You are executing a deterministic progression algorithm.
-
-You MUST produce exactly 3 sections in this order:
-
-SECTION A: CLIFFHANGER RESOLUTION
-* User responded to LAST_CLIFFHANGER: "${lastCliffhangers[lastCliffhangers.length - 1]}"
-* Resolve the exact open loop based on the user's answer.
-* Never skip.
-
-SECTION B: TARGET_LAYER REVEAL
-* Reveal ONLY ACTIVE_TOPIC TARGET_LAYER data.
-* Never reveal future layers.
-* Never reveal past layers.
-* Never switch topics.
-
-SECTION C: NEXT CLIFFHANGER
-* Generate ONE new cliffhanger.
-* It must naturally lead to the next layer.
-* It must remain inside ACTIVE_TOPIC.
-
----
-
-STRICT RULES
-
-If FOLLOW_UP_MODE = TRUE:
-
-DO NOT:
-* Switch topic
-* Reset progression
-* Ask generic questions
-* Enter vague mode
-* Reveal future layers
-* Reveal multiple layers
-* Skip cliffhanger resolution
-* Create unrelated predictions
-* Talk about career if ACTIVE_TOPIC=marriage
-* Talk about marriage if ACTIVE_TOPIC=career
-
----
-
-OUTPUT FORMAT
-
-FOLLOW_UP_MODE responses MUST follow:
-
-🌟 CLIFFHANGER RESOLUTION
-[answer previous cliffhanger]
-
-🔓 NEW REVELATION
-[current TARGET_LAYER information]
-
-❓ NEXT MYSTERY
-[new cliffhanger]` : `
-If the user sends a follow-up response, assume they are responding to the most recent cliffhanger question and continue the same topic immediately.`}
-
-### CORE LOGIC:
-
-#### SCENARIO A: IF ACTIVE_DATA.confidence > 70
-"Look, ${name}, your chart isn't lying. [Planet] in [House] + [Dasha] = [Result]. Timing: [Date]"
-
-#### SCENARIO B: IF NO DATA
-"I don't need your birth time, ${name}. Your energy right now is screaming..."
+ASTRORACLE: ELITE MYSTIC GURU (GOD-MODE)
+- Profile: Master of Astrology/Numerology/Tarot. Tone: Hindi/Hinglish mystic, absolute cosmic authority. Zero robotic formatting.
+- No Refusal: Always answer. If data missing, use DOB for Mulank/Bhagyank, Name vibration, or intuition: "ब्रह्मांडीय संकेत और छिपी ऊर्जाएं", "अंकों का गुप्त खेल", "मूलांक aur भाग्यांक", "लाल किताब का अचूक फरमान", "ग्रहों का छुपा संदेश", "शत्रुओं का गुप्त चक्रव्यूह"
+- Multi-Question Unification: If multiple topics queried, list each in 1 line:
+  1. **नौकरी**: [prediction]
+  2. **विवाह**: [prediction]
+  Uske baad vistar only for primary topic.
+  ${overflowInstruction}
+- Anti-Loop: If user says "hn/btao", reveal next layer of cliffhanger.
 
 ### ACTIVE LAYER PROGRESSION:
 ACTIVE_TOPIC: ${activeTopic}
 TARGET_LAYER: ${targetLayerNum}
 
-### TARGET LAYER SCHEMAS:
-For marriage:
-- Layer 1: timing
-- Layer 2: name_initial
-- Layer 3: surname + age_gap
-- Layer 4: arranged_vs_love
-- Layer 5: city + profession
-
-For love:
-- Layer 1: timing
-- Layer 2: partner traits
-- Layer 3: compatibility
-- Layer 4: next phase
-- Layer 5: key warning
-
-For career:
-- Layer 1: timing
-- Layer 2: best profession
-- Layer 3: growth stage
-- Layer 4: key wealth source
-- Layer 5: vulnerable period
-
-For money:
-- Layer 1: timing
-- Layer 2: income potential
-- Layer 3: savings potential
-- Layer 4: debt/investment window
-- Layer 5: lucky wealth days
-
-For daily:
-- Layer 1: outlook
-- Layer 2: lucky number/color
-- Layer 3: work potential
-- Layer 4: financial flow
-- Layer 5: precautions
-
-For health:
-- Layer 1: vitality score
-- Layer 2: stress assessment
-- Layer 3: weakness area
-- Layer 4: recovery/strength
-- Layer 5: daily habit
-
-For travel:
-- Layer 1: travel window
-- Layer 2: travel chance
-- Layer 3: region
-- Layer 4: purpose
-- Layer 5: visa success probability
-
-For children:
-- Layer 1: timing
-- Layer 2: children potential
-- Layer 3: family growth
-- Layer 4: career indicator
-- Layer 5: remedial guidance
+### TARGET LAYER SCHEMA:
+For ${activeTopic}:
+${activeSchema}
 
 RULE:
 You MUST focus the "Cosmic Truth" (${cosmicHeading}) section entirely on the TARGET_LAYER (${targetLayerNum}) information of the ACTIVE_TOPIC (${activeTopic}).
-- If TARGET_LAYER is 1: Reveal timing.
-- If TARGET_LAYER is 2: Reveal the second layer details.
-- If TARGET_LAYER is 3: Reveal the third layer details.
-- If TARGET_LAYER is 4: Reveal the fourth layer details.
-- If TARGET_LAYER is 5: Reveal all remaining details.
 Do NOT reveal layer details higher than the TARGET_LAYER.
-Use the pre-calculated layer data provided in ACTIVE_DATA for the active topic. For example, if TARGET_LAYER is 2, use the value of layer2 from the active topic's layers.
+Use the pre-calculated layer data provided in ACTIVE_DATA for the active topic. For example, if TARGET_LAYER is 1, use the value of layer1 from the active topic's layers.
 
 ### RESPONSE STRUCTURE FOR 1000 MESSAGES:
 
@@ -2804,16 +2644,65 @@ ${cliffhangerHeading}
 ${(isTimingQuery && !skipDashaPreservation && astroData) ? `You MUST naturally mention the current Mahadasha lord (${astroData.mahadasha}) and current Antardasha lord (${astroData.antardasha}) while explaining timing predictions.` : ''}
 
 TONE: Direct, Brutal, Hinglish. LENGTH: 110-140 words.
+
+### USER PROFILE:
+NAME: ${name}
+DOB: ${dob || 'Not Provided'} ${time} ${place}
+GENDER: ${gender}
+MARITAL: ${maritalStatus}
+OCCUPATION: ${occupation}
+ACTIVE_DATA: ${JSON.stringify(compactActiveData || null)} // AI_CONTEXT: ${JSON.stringify({ partnerData: compactActiveData.partnerData })}
+CHAT_HISTORY: ${compactHistory} // CRITICAL: Read this to avoid repetition
+
+### THE INFINITE LOOP RULES - MUST FOLLOW:
+1. **NEVER REPEAT:** If user asks same question again, go 1 layer deeper.
+2. **NEVER ASK TWICE:** If user said "hn btao" to your cliffhanger, answer it NOW.
+3. **ESCALATE EVERY REPLY:** Har reply me pehle wale se zyada specific info do.
+
+${(!shouldAdvance && secondaryTopics && secondaryTopics.length > 0) ? `
+### MULTI-QUESTION RESPONSE ASSEMBLY
+[MULTI_QUESTION_MODE = TRUE]
+The user asked about multiple topics at once. 
+You MUST answer ALL detected topics briefly in a numbered list FIRST.
+Format:
+1. \${activeTopic.toUpperCase()}: [Brief summary using ACTIVE_DATA.layers]
+\${secondaryTopics.map((st, i) => \`\${i + 2}. \${st.toUpperCase()}: [Brief summary using ACTIVE_DATA.multiTopicsData.\${st}]\`).join('
+')}
+After the numbered list, continue normal TARGET_LAYER progression ONLY for the primary ACTIVE_TOPIC (\${activeTopic}). Generate exactly ONE cliffhanger for the primary topic.
+` : ''}
+
+### FOLLOW-UP EXECUTION MODE
+${(shouldAdvance && lastCliffhangers && lastCliffhangers.length > 0) ? `
+[FOLLOW_UP_MODE = TRUE]
+You MUST produce exactly 3 sections in this order:
+SECTION A: CLIFFHANGER RESOLUTION
+* User responded to LAST_CLIFFHANGER: "\${lastCliffhangers[lastCliffhangers.length - 1]}"
+* Resolve the exact open loop based on the user's answer.
+SECTION B: TARGET_LAYER REVEAL
+* Reveal ONLY ACTIVE_TOPIC TARGET_LAYER data.
+SECTION C: NEXT CLIFFHANGER
+* Generate ONE new cliffhanger.
+---
+STRICT RULES
+If FOLLOW_UP_MODE = TRUE:
+DO NOT Switch topic or reset progression.
+---
+OUTPUT FORMAT
+🌟 CLIFFHANGER RESOLUTION
+[answer previous cliffhanger]
+🔓 NEW REVELATION
+[current TARGET_LAYER information]
+❓ NEXT MYSTERY
+[new cliffhanger]` : `
+If the user sends a follow-up response, assume they are responding to the most recent cliffhanger question and continue the same topic immediately.`}
+
+### CORE LOGIC:
+#### SCENARIO A: IF ACTIVE_DATA.confidence > 70
+"Look, ${name}, your chart isn't lying. [Planet] in [House] + [Dasha] = [Result]. Timing: [Date]"
+#### SCENARIO B: IF NO DATA
+"I don't need your birth time, ${name}. Your energy right now is screaming..."
 `;
     }
-
-    const forbiddenRulesBlock = `
-=== FORBIDDEN RULES ===
-- Do NOT output: "Data not available", "score" (except in "Karma Score:"), "window", exact dates without engine calculations, "khatra", "maut", "barbaad".
-- For Tier 2 and Tier 3, you should naturally and conversationally reference relevant astrological factors (planets, transits, houses, dasha, nakshatra) based ONLY on the provided USER PROFILE and Astrology Data. The explanation must flow naturally as part of the guidance and reasoning, and you must NEVER output raw data dumps or overly technical chart lists.
-- FORBIDDEN REPETITIVE PHRASES: Do NOT use generic phrases like "stable progress", "strong foundation", "dhairya rakhein", "yoga aur dhyan karein" (or their Devanagari/Hinglish equivalents like "dheemi pragati", "dheeraj rakhein", "yoga aur dhyan") unless specifically justified by context.
-`;
-    promptSections.push(forbiddenRulesBlock.trim());
 
     let greetingSuppressionInstruction = "";
     if (pastHistory.length > 0) {
@@ -2827,81 +2716,19 @@ TONE: Direct, Brutal, Hinglish. LENGTH: 110-140 words.
 - DASHA REPETITION PREVENTION: The user's current Dasha (${astroData.mahadasha || 'Unknown'}/${astroData.antardasha || 'Unknown'}) has already been discussed in previous messages. Avoid repeating the full explanation or dasha names again unless the user explicitly asks about timing/dasha. You can refer to it concisely (e.g., "grah sthiti") or omit it entirely to avoid redundancy.`;
     }
 
-    const priorityRulesBlock = `
-=== PRIORITY & CONTEXT RULES ===
-- The current question has the highest priority. Focus entirely on answering the user's specific question as the primary objective.
-- GREETING & NAME BANS: Unless the user is only greeting you (isGreeting=true), you must NOT start your response with any greeting phrases (like "Ram Ram", "Namaste", "Pranam", "Kalyan ho") or address the user by name/beta at the very beginning of the response (e.g. do NOT start with "Ram Ram beta Akash" or "Akash Beta, ..."). Start the response directly with the answer/prediction.${greetingSuppressionInstruction}${dashaRepetitionInstruction}
-- Do NOT repeat the user's chart summary (such as Sun Mahadasha, Mercury Antardasha, Government Job, Hamirpur, age, or birthplace) unless it is directly relevant to the specific question asked. Birth chart context should SUPPORT the answer, not replace it.
-- FOLLOW-UP DETECTION: If the user asks a short follow-up query (e.g., "kab", "kis year", "kitne saal", "uska kya hoga", "phir", "aur", "when", "then", "what about", etc.), you MUST read the "Recent Conversation" history to understand the subject they are asking about, and answer using that context.
-
-=== QUALITY, DIVERSITY & ANTI-REPETITION RULES ===
-- Do NOT repeat the same remedy/remediations across unrelated questions in the chat session.
-- Do NOT mention the same year/date/window repeatedly unless directly supported by the strongest topic-specific evidence.
-- Prioritize question-specific evidence over general chart signals (e.g. if the user asks a Career question, do not focus on Saturn/remedies if the money/career data shows success).
-- Never reuse the previous response structure wording. Avoid repeating the same phrases or templates used in the last 5 responses. Generate fresh insights from the current context.
-- Use maximum 2 astrology indicators per answer.
-- Do not repeat the same indicator used in the previous response unless directly relevant.
-
-=== TOPIC-SPECIFIC RESPONSES ===
-- Career / Job / Business: Focus on concrete skills, professional aptitude, market opportunities, and active career paths.
-- App Development / Coding: Focus on technology stacks, software engineering, product building, entrepreneurship, and remote work opportunities. Do NOT give generic job advice.
-- Relationships / Love / Marriage: Focus on emotional dynamics, mutual communication, and reunion/compatibility indicators.
-
-IMPORTANT LANGUAGE RULE:
-${languagePreference}
-Never answer in any other language.
+    const rulesBlock = `
+=== OPERATIONAL RULES ===
+- Banned Output: "Data not available", "window", "khatra", "maut", "barbaad", "stable progress", "strong foundation", "dhairya rakhein" (or Devanagari/Hinglish equivalents).
+- Format: Reference astrology factors naturally. No raw data dumps or technical chart lists. Use max 2 indicators.
+- No repetitions: Do not repeat previous response structure, remedies, or indicators.
+- Greeting Ban: Do not start with greeting or user name. Answer directly.
+- Context: Do not repeat chart summary. Use context for short follow-ups.${greetingSuppressionInstruction}${dashaRepetitionInstruction}
+- Focus: Career (skills, tech stacks, coding, opportunities), Love (dynamics, compatibility).
+- Language: ${languagePreference}
 `;
-    promptSections.push(priorityRulesBlock.trim());
+    promptSections.push(rulesBlock.trim());
 
-    const criticalBehaviorPatchBlock = `
-=== CRITICAL BEHAVIOR PATCH (TOPIC SWITCHING + REPETITION CONTROL) ===
-
-RULE 1: TOPIC SWITCH DETECTION
-If the user asks a completely new topic (e.g., switching from Career to Marriage), immediately answer the new topic FIRST. Do NOT continue the previous topic's cliffhanger before answering the new question.
-
-RULE 2: DIRECT QUESTION PRIORITY
-Whenever the user asks a direct question (e.g., about grah, shaadi, love, bacha, paisa, health, foreign, property), you MUST answer the question directly first. 
-Only after answering, optionally connect it to the previous progression. 
-BAD: "T letter wala partner..." (Ignoring the direct question)
-GOOD: "Surya, Chandra, Mangal..." then "Waise pichle sanket me jo vivah yog dikh raha tha..."
-
-RULE 3: QUESTION COMPLETION
-If the user asks timing questions like "Kab hoga?", NEVER give generic responses (e.g., "mehnat karein"). You MUST always provide: 1) exact timing, OR 2) timing range, OR 3) strongest period (e.g., "2028-2030 ke beech santan yog sabse majboot dikh raha hai").
-
-RULE 4: REVEALED FACT MEMORY (TARGET_LAYER SAFETY)
-Maintain memory of revealed facts (e.g., partner initials, exact timing). If the exact fact specified by TARGET_LAYER has ALREADY been revealed recently in CHAT_HISTORY:
-DO NOT repeat the exact fact blindly.
-DO NOT skip the TARGET_LAYER. 
-INSTEAD, expand the insight for that specific layer. Provide deeper interpretation, practical meaning, consequence, emotional impact, compatibility insight, or future progression related to that fact.
-Example: If TARGET_LAYER is partner initial 'T' and it was already revealed, DO NOT just say "Partner initial T". Say: "Is sambandh me bhavnatmak samajh aur communication adhik mahatvapurn dikh raha hai."
-
-RULE 5: FACT SURFACE CONTROL & REMEDY REPETITION
-Create a lightweight internal suppression layer in your mind for "recentlySurfacedFacts" and "recentlySurfacedRemedies" by scanning the last 10 messages of CHAT_HISTORY.
-If a fact (e.g., "partner initial T", "March 2027 marriage", "santan sukh") or a specific remedy (e.g., "Peepal par jal") has already been surfaced in those 10 messages:
-DO NOT surface it again.
-Unless: 1) User explicitly asks about that exact fact. 2) New evidence changes the fact. 3) The fact is absolutely required to answer the question.
-Generate alternative remedies from existing remedy pools, and generate fresh insights instead of repeating revealed facts.
-
-RULE 6: TOPIC ISOLATION RULE
-If the user asks an unrelated or specific topic like "Kala jadu", "Nazar", "Health", "Parents", "Property", "Career", or "Money":
-Do NOT automatically inject out-of-context facts like marriage timing, partner initials, or childbirth timing unless directly relevant to their specific question.
-
-RULE 7: FOLLOW-UP PRESERVATION
-When a topic switches, DO NOT lose progression. Store the previous mystery and reconnect it naturally at the end.
-Example: User switches from Finance to Marriage. Answer marriage, then end with: "Waise aapke career se juda ek aur sanket bhi dikh raha hai..." This preserves retention while respecting user intent.
-
-RULE 8: DATE PRESENTATION VARIATION
-Do NOT invent new years or change deterministic calculations.
-Instead, present the exact same timing differently on each turn.
-Example: If the core timing is "March 2027", vary the text to: "2027 ki pehli chhamahi", "2026 ke antim mahino se 2027 ke madhya tak", "agle 12-18 mahino me", "usi daur ke aas-paas", "vivah yog ke turant baad". Keep the underlying evidence 100% consistent, just rotate the phrasing.
-
-RULE 9: RELATIVE SEQUENCING FOR MULTIPLE EVENTS
-If multiple events (e.g., marriage, career, foreign travel, children) share similar timing windows in ACTIVE_DATA, do NOT repeat the exact same date format for each event.
-Use sequence-based and relative language to create a sense of natural progression:
-- Dependent Events (Marriage -> Children): Instead of repeating "2027-2028", say "Vivah ke baad ke agle 1-2 varsh santan yog adhik sakriya dikhte hain."
-- Parallel Events (Career -> Foreign Travel -> Money): Use phrasing like "pehle career sthirta, uske baad videsh yog" or "dhan vriddhi ke baad naya avsar".
-Never fabricate new years solely for variety, but aggressively diversify presentation to avoid robotic repetition of years.
-`;
+    const criticalBehaviorPatchBlock = CRITICAL_BEHAVIOR_PATCH;
     promptSections.push(criticalBehaviorPatchBlock.trim());
 
     const hasStrongData = activeEngineData && activeEngineData.confidence > 70;
@@ -2957,6 +2784,160 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
   }
 
   if (!useOfflineFallback) {
+    if (stream) {
+      try {
+        console.log("Prompt chars:", fullPrompt.length);
+        console.log("Calling AI (Stream)...");
+        
+        const prepResult = await executeAIWithRetriesStream({
+          fullPrompt,
+          history,
+          astroData,
+          mode,
+          uid,
+          userData,
+          progress,
+          detectedIntent,
+          pastHistory,
+          skipDashaPreservation,
+          resolvedLanguage,
+          isDevanagari,
+          maritalStatus,
+          updatedFacts,
+          isGreeting,
+          isVague,
+          prepStartTime
+        });
+        
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Transfer-Encoding', 'chunked');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        
+        const responseStream = generateAIResponseStream(prepResult.injectedPrompt, {
+          prepStartTime
+        });
+        
+        let accumulatedText = "";
+        let alreadyStreamedLength = 0;
+        let hasSentStreamStart = false;
+
+        const getSafeToStreamText = (text, len) => {
+          const tags = ["DAILY_SECRET:", "CLIFFHANGER:", "MEMORY_STATE:"];
+          let firstTagIndex = -1;
+          for (const tag of tags) {
+            const idx = text.toUpperCase().indexOf(tag);
+            if (idx !== -1 && (firstTagIndex === -1 || idx < firstTagIndex)) {
+              firstTagIndex = idx;
+            }
+          }
+          if (firstTagIndex !== -1) {
+            return text.slice(len, firstTagIndex);
+          }
+          let maxPrefixLen = 0;
+          const upperText = text.toUpperCase();
+          for (const tag of tags) {
+            for (let l = 1; l <= Math.min(upperText.length, tag.length); l++) {
+              const suffix = upperText.slice(-l);
+              if (tag.startsWith(suffix)) {
+                maxPrefixLen = Math.max(maxPrefixLen, l);
+              }
+            }
+          }
+          return text.slice(len, text.length - maxPrefixLen);
+        };
+        
+        for await (const chunk of responseStream) {
+          if (!hasSentStreamStart) {
+            console.log("STREAM_START");
+            hasSentStreamStart = true;
+          }
+          accumulatedText += chunk;
+          const safeText = getSafeToStreamText(accumulatedText, alreadyStreamedLength);
+          if (safeText.length > 0) {
+            res.write(safeText);
+            alreadyStreamedLength += safeText.length;
+          }
+        }
+        
+        const remainingCleanText = getSafeToStreamText(accumulatedText, alreadyStreamedLength);
+        if (remainingCleanText.length > 0) {
+          res.write(remainingCleanText);
+          alreadyStreamedLength += remainingCleanText.length;
+        }
+
+        console.log("STREAM_END");
+
+        const parsed = extractAndRemoveSecrets(accumulatedText);
+        const cleanText = parsed.cleanText;
+        const cliffhangerText = parsed.cliffhanger;
+        const llmSecret = parsed.dailySecret;
+        const memoryState = parsed.memoryState;
+
+        const finalResponse = await injectSecretAndScore(
+          cleanText, 
+          uid, 
+          userData, 
+          progress, 
+          getSecretCategory(detectedIntent), 
+          pastHistory, 
+          llmSecret
+        );
+
+        const extraText = finalResponse.slice(cleanText.length);
+        if (extraText.length > 0) {
+          res.write(extraText);
+        }
+        res.end();
+
+        // Perform Firestore updates in background
+        try {
+          await db.runTransaction(async (tx) => {
+            const snap = await tx.get(userRef);
+            if (snap.exists()) {
+              if (tierType === 1) {
+                const coins = snap.data()?.coins || 0;
+                if (coins >= AI_QUESTION_COST) {
+                  tx.update(userRef, { coins: coins - AI_QUESTION_COST });
+                }
+              }
+            }
+            if (mode === 'chat' || mode === 'personal') {
+              const latestUserData = snap.data() || {};
+              const latestTopicProgress = getTopicProgress(latestUserData);
+              const latestRevealed = latestUserData.revealedLayers || {};
+              const latestCliffhangers = latestUserData.lastCliffhangers || [];
+              const updateResult = updateTopicProgress(uid, topicState, latestTopicProgress, latestRevealed);
+              let updatedCliffhangersList = [...latestCliffhangers];
+              if (cliffhangerText) {
+                updatedCliffhangersList.push(cliffhangerText);
+              }
+              if (updatedCliffhangersList.length > 3) {
+                updatedCliffhangersList = updatedCliffhangersList.slice(-3);
+              }
+              tx.update(userRef, {
+                topicProgress: updateResult.topicProgress,
+                revealedLayers: updateResult.revealedLayers,
+                lastActiveTopic: activeTopic,
+                lastCliffhangers: updatedCliffhangersList,
+                savedMysteries: savedMysteries
+              });
+            }
+          });
+        } catch (txError) {
+          console.error("Deduction Transaction failed for stream:", txError);
+        }
+        return;
+      } catch (err) {
+        console.error("Streaming error in pandit-ai.js:", err);
+        const friendlyFallbackText = getBackendErrorFallback(resolvedLanguage, isDevanagari, maritalStatus);
+        const fallbackInjected = await injectSecretAndScore(friendlyFallbackText, uid, userData, progress, getSecretCategory(detectedIntent), pastHistory, "");
+        res.write(fallbackInjected);
+        res.end();
+        return;
+      }
+    }
+
     try {
       console.log("Prompt chars:", fullPrompt.length);
       console.log("Calling AI...");
@@ -2977,7 +2958,8 @@ ${sanitizePromptInput(userQueryForLLM || "Tell me about my destiny")}
         maritalStatus,
         updatedFacts,
         isGreeting,
-        isVague
+        isVague,
+        prepStartTime
       });
 
       if (aiResult.isFallback) {

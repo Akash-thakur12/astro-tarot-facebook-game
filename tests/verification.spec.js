@@ -13,6 +13,7 @@ vi.mock('../src/utils/astroEngine.js', () => ({
       planets: { Sun: 'Kanya', Moon: 'Kanya', Jupiter: 'Kanya', Venus: 'Kanya' },
       mahadasha: 'Sun',
       antardasha: 'Moon',
+      mahadashaEnd: '12/2032',
       antardashaEnd: '12/2026',
       gochar: 'Sun in Mesh',
       houses: mockHouses,

@@ -116,7 +116,7 @@ function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) 
     throw new Error(`Failed to calculate Vimshottari Dasha details mathematically. Moon longitude: ${moonLong}`);
   }
   
-  return { mahadasha, antardasha, antardashaEndMs };
+  return { mahadasha, antardasha, mahadashaEndMs, antardashaEndMs };
 }
 
 /**
@@ -128,7 +128,16 @@ function calculateVimshottariDasha(moonLong, birthDate, queryDate = new Date()) 
  * @param {string} params.pob - Place of Birth (City name/state)
  * @returns {Promise<object>} calculated parameters
  */
+const astroCache = {};
+
 export async function getAstrologyData({ dob, tob, pob }) {
+  const cacheKey = `${dob || 'Unknown'}_${tob || 'Unknown'}_${pob || 'Unknown'}`;
+  if (astroCache[cacheKey]) {
+    console.log("ASTRO_CACHE_HIT");
+    return astroCache[cacheKey];
+  }
+  console.log("ASTRO_CACHE_MISS");
+
   try {
     if (!dob || dob === 'Unknown') {
       throw new Error("Missing DOB");
@@ -238,15 +247,18 @@ export async function getAstrologyData({ dob, tob, pob }) {
     });
 
     // Calculate Dasha
-    const { mahadasha, antardasha, antardashaEndMs } = calculateVimshottariDasha(moonLong, birthDate, new Date());
+    const { mahadasha, antardasha, mahadashaEndMs, antardashaEndMs } = calculateVimshottariDasha(moonLong, birthDate, new Date());
 
     swe.swe_get_dasha_end_dates = function() {
       return {
+        mahadasha_end_jd: (mahadashaEndMs + 210866760000000) / 86400000,
         antardasha_end_jd: (antardashaEndMs + 210866760000000) / 86400000
       };
     };
 
     const dashaEndDates = swe.swe_get_dasha_end_dates(jdUT, 'lahiri'); // Use swisseph function
+    const mahadashaEnd = new Date(dashaEndDates.mahadasha_end_jd * 86400000 - 210866760000000);
+    const mahadashaEndStr = `${mahadashaEnd.getMonth()+1}/${mahadashaEnd.getFullYear()}`;
     const antardashaEnd = new Date(dashaEndDates.antardasha_end_jd * 86400000 - 210866760000000);
     const antardashaEndStr = `${antardashaEnd.getMonth()+1}/${antardashaEnd.getFullYear()}`;
 
@@ -288,13 +300,14 @@ export async function getAstrologyData({ dob, tob, pob }) {
     if (diff === 4 || diff === 8) dhaiya = true; // 4th or 8th from Moon
     if (diff === 11 || diff === 0 || diff === 1) sadesati = true; // 12th, 1st, 2nd from Moon
 
-    return {
+    const result = {
       lagna,
       moonSign,
       nakshatra,
       planets,
       mahadasha,
       antardasha,
+      mahadashaEnd: mahadashaEndStr,
       antardashaEnd: antardashaEndStr,
       gochar,
       houses: bhavaPositions,
@@ -302,6 +315,8 @@ export async function getAstrologyData({ dob, tob, pob }) {
       sadesati,
       calculatedAt: now.toISOString()
     };
+    astroCache[cacheKey] = result;
+    return result;
   } catch (error) {
     console.error("CRITICAL ASTROLOGY ENGINE FAILURE:", error);
     throw new Error("CRITICAL_ASTRO_ENGINE_FAILURE: " + error.message, { cause: error });

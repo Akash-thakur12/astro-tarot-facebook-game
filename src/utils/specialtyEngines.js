@@ -271,7 +271,7 @@ export function calculateHealthEngine(astroData) {
 }
 
 export function calculateForeignTravelEngine(astroData) {
-  if (!astroData) return { foreignTravelPotential: "Samanya", settlementPotential: "Mehnat se yog", travelWindows: ["2027 ke beech"] };
+  if (!astroData) return { foreignTravelPotential: "Samanya", settlementPotential: "Mehnat se yog", travelWindows: ["Agle 1-2 saal me"] };
 
   const houses = astroData.houses || {};
   const mahadasha = astroData.mahadasha || "";
