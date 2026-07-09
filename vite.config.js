@@ -31,7 +31,8 @@ export default defineConfig({
       'tests/semanticRouting.spec.js',
       'tests/multiIntent.spec.js',
       'tests/followUp.spec.js',
-      'tests/topicEngine.spec.js'
+      'tests/topicEngine.spec.js',
+      'tests/careerBusiness.spec.js'
     ],
   },
 })

@@ -1546,6 +1546,64 @@ export default async function handler(req, res) {
     console.error("updateProgress failed at start", err);
   }
 
+  // === USER REJECTION ENGINE (PHASE 32.8) ===
+  if (mode === 'chat' || mode === 'personal') {
+    const questionTextRaw = userData.question || '';
+    const questionTextNormalized = questionTextRaw.toLowerCase().trim();
+
+    // 1. Decrement cooldowns for existing rejected paths
+    let recMem = progress.recommendationMemory || {};
+    let rejectedPaths = recMem.rejectedPaths || [];
+
+    rejectedPaths = rejectedPaths.map(item => ({
+      path: item.path,
+      cooldown: item.cooldown - 1
+    })).filter(item => item.cooldown > 0);
+
+    // 2. Check if user is rejecting something (Hinglish + Devanagari regex support)
+    const isConsultingRejection = /\bconsulting\s+(nahi|nahin|nahe|ni|nah|nhi|नहीं|नही)(?!\w)/i.test(questionTextNormalized) || /कंसल्टिंग\s+(नहीं|नही)(?!\w)/i.test(questionTextNormalized);
+    const isInterestRejection = /\binterest\s+(nahi|nahin|nahe|ni|nah|nhi|नहीं|नही)(?!\w)/i.test(questionTextNormalized) || 
+                                 /\bdilchaspi\s+(nahi|nhi|नहीं|नही)(?!\w)/i.test(questionTextNormalized) ||
+                                 /\bdilchaspee\s+(nahi|nhi|नहीं|नही)(?!\w)/i.test(questionTextNormalized) ||
+                                 /\bruchi\s+(nahi|nhi|नहीं|नही)(?!\w)/i.test(questionTextNormalized) ||
+                                 /इंटरेस्ट\s+(नहीं|नही)(?!\w)/i.test(questionTextNormalized) ||
+                                 /दिलचस्पी\s+(नहीं|नही)(?!\w)/i.test(questionTextNormalized) ||
+                                 /रुचि\s+(नहीं|नही)(?!\w)/i.test(questionTextNormalized);
+    const isPasandRejection = /\bpasand\s+(nahi|nahin|nahe|ni|nah|nhi|नहीं|नही)(?!\w)/i.test(questionTextNormalized) || /पसंद\s+(नहीं|नही)(?!\w)/i.test(questionTextNormalized);
+
+    let rejectedPathCandidate = null;
+
+    if (isConsultingRejection) {
+      rejectedPathCandidate = "consulting";
+    } else if (isInterestRejection || isPasandRejection) {
+      // Reject last advised career/business from memory
+      rejectedPathCandidate = recMem.advisedCareer || recMem.advisedBusiness || null;
+    }
+
+    if (rejectedPathCandidate) {
+      const pathName = rejectedPathCandidate.toLowerCase().trim();
+      const idx = rejectedPaths.findIndex(item => item.path === pathName);
+      if (idx !== -1) {
+        rejectedPaths[idx].cooldown = 10;
+      } else {
+        rejectedPaths.push({ path: pathName, cooldown: 10 });
+      }
+    }
+
+    // 3. Update recommendationMemory with the new rejectedPaths
+    recMem.rejectedPaths = rejectedPaths;
+    progress.recommendationMemory = recMem;
+
+    // Update progress in database to persist this immediately
+    try {
+      await updateProgress(progressUid, 'memory_update', {
+        recommendationMemory: recMem
+      });
+    } catch (err) {
+      console.error("Failed to update userProgress rejection cooldowns", err);
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0];
   const dobKey = (userData.dobDay || '') + '' + (userData.dobMonth || '') + '' + (userData.dobYear || '');
   const secret = getDailySecret(dobKey, today);
